@@ -20,7 +20,7 @@ const DEFAULT_DOUYU_DID: &str = "10000000000000000000000000001501";
 const DEFAULT_DOUYU_CDN: &str = "ws-h5";
 const CRYPTO_JS: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../competitors/DTV/src-tauri/src/platforms/douyu/cryptojs.min.js"
+    "/src/platforms/douyu/cryptojs.min.js"
 ));
 
 #[derive(Deserialize, Debug)]

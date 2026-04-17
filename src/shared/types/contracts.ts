@@ -46,6 +46,30 @@ export const streamSourceSchema = z.object({
   isDefault: z.boolean().optional(),
 });
 
+export const replayQualitySchema = z.object({
+  name: z.string(),
+  url: z.string(),
+  bitRate: z.number(),
+  level: z.number(),
+});
+
+export const replayItemSchema = z.object({
+  id: z.string(),
+  platform: platformSchema,
+  roomId: z.string(),
+  title: z.string(),
+  coverUrl: z.string().optional(),
+  durationStr: z.string().optional(),
+  durationSecs: z.number().optional(),
+  recordedAt: z.number(),
+  viewCountText: z.string().optional(),
+  partNum: z.number(),
+  totalParts: z.number(),
+  showId: z.number(),
+  showRemark: z.string().optional(),
+  upId: z.string(),
+});
+
 export const followRecordSchema = z.object({
   id: z.string(),
   platform: platformSchema,

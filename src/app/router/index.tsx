@@ -8,7 +8,11 @@ import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { StatusView } from "@/shared/ui/StatusView";
 
 const PlayerPage = lazy(() =>
-  import("@/pages/player/PlayerPage").then((module) => ({ default: module.PlayerPage })),
+  import("@/pages/player/PlayerPage").then((m) => ({ default: m.PlayerPage })),
+);
+
+const ReplayPage = lazy(() =>
+  import("@/pages/replay/ReplayPage").then((m) => ({ default: m.ReplayPage })),
 );
 
 export const appRouter = createBrowserRouter([
@@ -24,6 +28,14 @@ export const appRouter = createBrowserRouter([
         element: (
           <Suspense fallback={<StatusView title="播放器加载中" tone="loading" />}>
             <PlayerPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: "replay/:platform/:roomId",
+        element: (
+          <Suspense fallback={<StatusView title="录播加载中" tone="loading" />}>
+            <ReplayPage />
           </Suspense>
         ),
       },

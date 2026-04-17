@@ -64,8 +64,13 @@ export function DiscoverPage() {
 
   const query = useQuery({
     queryKey: ["featured", currentPlatform],
-    queryFn: () => getFeatured(currentPlatform),
-    staleTime: 0,
+    // Use the key directly instead of the closure-captured currentPlatform to
+    // avoid a stale-closure race where the value changes between schedule and
+    // execution of this function.
+    queryFn: ({ queryKey }) => getFeatured(queryKey[1] as PlatformId),
+    staleTime: 30_000, // keep data fresh for 30 s — no flicker on back-nav
+    gcTime: 2 * 60_000, // discard cache after 2 min of inactivity
+    refetchOnWindowFocus: false, // avoid spurious refetch when user alt-tabs
   });
 
   useEffect(() => {

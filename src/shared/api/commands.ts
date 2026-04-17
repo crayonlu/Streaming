@@ -3,6 +3,8 @@ import { LazyStore } from "@tauri-apps/plugin-store";
 import {
   appPreferencesSchema,
   followRecordSchema,
+  replayItemSchema,
+  replayQualitySchema,
   roomCardSchema,
   roomDetailSchema,
   searchResultSchema,
@@ -12,6 +14,8 @@ import type {
   AppPreferences,
   FollowRecord,
   PlatformId,
+  ReplayItem,
+  ReplayQuality,
   RoomCard,
   RoomDetail,
   SearchResult,
@@ -62,16 +66,24 @@ function patchFollowed(cards: RoomCard[], records: FollowRecord[]) {
 }
 
 export async function getFeatured(platform: PlatformId): Promise<RoomCard[]> {
-  const result = await safeInvoke<unknown[]>("get_featured", { platform });
+  // Fire both requests concurrently: the Tauri IPC call and the local store read
+  // are independent, so there is no reason to sequence them. Running them in
+  // parallel also closes the race window that existed when the platform could
+  // change between the two sequential awaits.
+  const [result, follows] = await Promise.all([
+    safeInvoke<unknown[]>("get_featured", { platform }),
+    getFollowRecordsFromStore(),
+  ]);
   const cards = roomCardSchema.array().parse(result);
-  const follows = await getFollowRecordsFromStore();
   return patchFollowed(cards, follows);
 }
 
 export async function searchRooms(keyword: string, platform?: PlatformId): Promise<SearchResult> {
-  const result = await safeInvoke<unknown>("search_rooms", { keyword, platform });
+  const [result, follows] = await Promise.all([
+    safeInvoke<unknown>("search_rooms", { keyword, platform }),
+    getFollowRecordsFromStore(),
+  ]);
   const parsed = searchResultSchema.parse(result);
-  const follows = await getFollowRecordsFromStore();
   return {
     ...parsed,
     items: patchFollowed(parsed.items, follows),
@@ -79,9 +91,11 @@ export async function searchRooms(keyword: string, platform?: PlatformId): Promi
 }
 
 export async function getRoomDetail(platform: PlatformId, roomId: string): Promise<RoomDetail> {
-  const result = await safeInvoke<unknown>("get_room_detail", { platform, roomId });
+  const [result, follows] = await Promise.all([
+    safeInvoke<unknown>("get_room_detail", { platform, roomId }),
+    getFollowRecordsFromStore(),
+  ]);
   const parsed = roomDetailSchema.parse(result);
-  const follows = await getFollowRecordsFromStore();
   return {
     ...parsed,
     followed: isFollowed(follows, parsed.platform, parsed.roomId),
@@ -94,6 +108,38 @@ export async function getStreamSources(
 ): Promise<StreamSource[]> {
   const result = await safeInvoke<unknown[]>("get_stream_sources", { platform, roomId });
   return streamSourceSchema.array().parse(result);
+}
+
+export async function getReplayList(
+  platform: PlatformId,
+  roomId: string,
+  page = 1,
+): Promise<ReplayItem[]> {
+  const result = await safeInvoke<unknown[]>("get_replay_list", { platform, roomId, page });
+  return replayItemSchema.array().parse(result);
+}
+
+export async function getReplayParts(
+  platform: PlatformId,
+  roomId: string,
+  hashId: string,
+  upId: string,
+): Promise<ReplayItem[]> {
+  const result = await safeInvoke<unknown[]>("get_replay_parts", {
+    platform,
+    roomId,
+    hashId,
+    upId,
+  });
+  return replayItemSchema.array().parse(result);
+}
+
+export async function getReplayQualities(
+  platform: PlatformId,
+  replayId: string,
+): Promise<ReplayQuality[]> {
+  const result = await safeInvoke<unknown[]>("get_replay_qualities", { platform, replayId });
+  return replayQualitySchema.array().parse(result);
 }
 
 export async function listFollows(): Promise<FollowRecord[]> {

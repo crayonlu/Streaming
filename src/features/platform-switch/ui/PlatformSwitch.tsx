@@ -13,12 +13,20 @@ export function PlatformSwitch() {
   const setCurrentPlatform = usePlatformStore((s) => s.setCurrentPlatform);
 
   const onSwitch = async (platform: PlatformId) => {
+    // Update UI immediately — this is the authoritative source of truth for the
+    // current session; the async preference save is best-effort only.
     setCurrentPlatform(platform);
+
     try {
       const pref = await loadPreferences();
+
+      // Guard: if the user switched again while we were loading prefs, discard
+      // this stale save so we never overwrite a newer platform selection.
+      if (usePlatformStore.getState().currentPlatform !== platform) return;
+
       await savePreferences({ ...pref, defaultPlatform: platform });
     } catch {
-      // ignore preference sync failures
+      // Preference sync is non-critical; swallow errors silently.
     }
   };
 

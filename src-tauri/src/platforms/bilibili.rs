@@ -10,6 +10,8 @@ const DEFAULT_UA: &str =
 const LIVE_REFERER: &str = "https://live.bilibili.com/";
 const FEATURED_ENDPOINT: &str = "https://api.live.bilibili.com/xlive/web-interface/v1/index/getList";
 const SEARCH_ENDPOINT: &str = "https://api.bilibili.com/x/web-interface/search/type";
+const LIVE_SEARCH_ENDPOINT: &str =
+    "https://api.live.bilibili.com/xlive/web-interface/v1/search/liveUsers";
 const FINGERPRINT_ENDPOINT: &str = "https://api.bilibili.com/x/frontend/finger/spi";
 const ROOM_PAGE_ENDPOINT: &str = "https://live.bilibili.com";
 const PLAYINFO_ENDPOINT: &str = "https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo";
@@ -449,6 +451,75 @@ pub async fn get_featured() -> Result<Vec<RoomCard>, String> {
     retry(2, get_featured_once).await
 }
 
+/// Strip Bilibili's `<em>…</em>` highlight tags that appear in search result titles.
+fn strip_em_tags(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '<' {
+            // Consume until the closing '>'
+            for inner in chars.by_ref() {
+                if inner == '>' {
+                    break;
+                }
+            }
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+/// Parse a list of live-search items (works for both `live_room` and `live_user` shapes).
+fn parse_bili_search_items(items: &[Value]) -> Vec<RoomCard> {
+    let mut cards = Vec::with_capacity(items.len());
+    for item in items {
+        let room_id = value_to_string(item.get("roomid").or_else(|| item.get("room_id")));
+        if room_id.is_empty() {
+            continue;
+        }
+        let raw_title = value_to_string(item.get("title"));
+        let title = strip_em_tags(&raw_title);
+        let streamer_name = strip_em_tags(&value_to_string(
+            item.get("uname").or_else(|| item.get("nick_name")),
+        ));
+        let cover_main = value_to_string(item.get("cover"));
+        let cover_fallback = value_to_string(item.get("cover_from_user"));
+        let cover_url = normalize_url(if cover_main.is_empty() {
+            &cover_fallback
+        } else {
+            &cover_main
+        });
+        let viewers = value_to_u64(item.get("online"))
+            .or_else(|| value_to_u64(item.get("online_num")))
+            .and_then(|v| text_u64(Some(v)));
+        let area_name = item
+            .get("cate_name")
+            .or_else(|| item.get("area_v2_name"))
+            .and_then(Value::as_str)
+            .map(|s| s.to_string());
+        let is_live = item
+            .get("live_status")
+            .and_then(Value::as_i64)
+            .unwrap_or(1)
+            == 1;
+
+        cards.push(RoomCard {
+            id: format!("bilibili-{room_id}"),
+            platform: PlatformId::Bilibili,
+            room_id,
+            title,
+            streamer_name,
+            cover_url,
+            area_name,
+            viewer_count_text: viewers,
+            is_live,
+            followed: false,
+        });
+    }
+    cards
+}
+
 async fn search_rooms_once(keyword: &str) -> Result<Vec<RoomCard>, String> {
     let trimmed = keyword.trim();
     if trimmed.is_empty() {
@@ -460,6 +531,43 @@ async fn search_rooms_once(keyword: &str) -> Result<Vec<RoomCard>, String> {
     let mut cookie_header = String::new();
     let _ = ensure_buvid(client, &mut cookie_header).await;
 
+    // ── Strategy 1: dedicated live-user search (less risk-controlled) ──────
+    let live_search_result = {
+        let mut req = client
+            .get(LIVE_SEARCH_ENDPOINT)
+            .header(USER_AGENT, DEFAULT_UA)
+            .header(REFERER, LIVE_REFERER)
+            .query(&[
+                ("keyword", trimmed),
+                ("platform", "pc"),
+                ("pn", "1"),
+                ("ps", "30"),
+            ]);
+        if !cookie_header.is_empty() {
+            req = req.header(COOKIE, &cookie_header);
+        }
+        req.send().await.ok().and_then(|r| {
+            if r.status().is_success() { Some(r) } else { None }
+        })
+    };
+
+    if let Some(resp) = live_search_result {
+        if let Ok(payload) = resp.json::<Value>().await {
+            if payload.get("code").and_then(Value::as_i64).unwrap_or(-1) == 0 {
+                let items = payload
+                    .get("data")
+                    .and_then(|d| d.get("list"))
+                    .and_then(Value::as_array)
+                    .cloned()
+                    .unwrap_or_default();
+                if !items.is_empty() {
+                    return Ok(parse_bili_search_items(&items));
+                }
+            }
+        }
+    }
+
+    // ── Strategy 2: general search API (same as web, with all required params) ─
     let mut request = client
         .get(SEARCH_ENDPOINT)
         .header(USER_AGENT, DEFAULT_UA)
@@ -471,11 +579,12 @@ async fn search_rooms_once(keyword: &str) -> Result<Vec<RoomCard>, String> {
             ("order", ""),
             ("keyword", trimmed),
             ("category_id", ""),
+            ("__refresh__", ""),
+            ("_extra", ""),
             ("highlight", "0"),
             ("single_column", "0"),
             ("page", "1"),
         ]);
-
     if !cookie_header.is_empty() {
         request = request.header(COOKIE, cookie_header);
     }
@@ -504,62 +613,25 @@ async fn search_rooms_once(keyword: &str) -> Result<Vec<RoomCard>, String> {
         .cloned()
         .unwrap_or(Value::Null);
 
-    let room_items = result
-        .get("live_room")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+    // `live_user` is the authoritative field for live-stream search results;
+    // fall back to `live_room` if it is empty.
     let user_items = result
         .get("live_user")
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
-    let source = if room_items.is_empty() { user_items } else { room_items };
+    let room_items = result
+        .get("live_room")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let source = if !user_items.is_empty() {
+        user_items
+    } else {
+        room_items
+    };
 
-    let mut cards = Vec::with_capacity(source.len());
-    for item in source {
-        let room_id = value_to_string(item.get("roomid").or_else(|| item.get("room_id")));
-        if room_id.is_empty() {
-            continue;
-        }
-
-        let title = value_to_string(item.get("title"));
-        let streamer_name = value_to_string(item.get("uname").or_else(|| item.get("nick_name")));
-        let cover_main = value_to_string(item.get("cover"));
-        let cover_fallback = value_to_string(item.get("cover_from_user"));
-        let cover_url = normalize_url(if cover_main.is_empty() {
-            &cover_fallback
-        } else {
-            &cover_main
-        });
-        let viewers = value_to_u64(item.get("online"))
-            .or_else(|| value_to_u64(item.get("online_num")))
-            .and_then(|v| text_u64(Some(v)));
-        let area_name = item
-            .get("cate_name")
-            .and_then(Value::as_str)
-            .map(|s| s.to_string());
-        let is_live = item
-            .get("live_status")
-            .and_then(Value::as_i64)
-            .unwrap_or(1)
-            == 1;
-
-        cards.push(RoomCard {
-            id: format!("bilibili-{room_id}"),
-            platform: PlatformId::Bilibili,
-            room_id,
-            title,
-            streamer_name,
-            cover_url,
-            area_name,
-            viewer_count_text: viewers,
-            is_live,
-            followed: false,
-        });
-    }
-
-    Ok(cards)
+    Ok(parse_bili_search_items(&source))
 }
 
 pub async fn search_rooms(keyword: &str) -> Result<Vec<RoomCard>, String> {

@@ -3,8 +3,8 @@ mod platforms;
 mod proxy;
 
 use models::{
-    AppPreferences, Appearance, PlatformId, ProxyMode, RoomCard, RoomDetail, SearchResult,
-    StreamSource,
+    AppPreferences, Appearance, PlatformId, ProxyMode, ReplayItem, ReplayQuality, RoomCard,
+    RoomDetail, SearchResult, StreamSource,
 };
 
 #[tauri::command]
@@ -24,12 +24,24 @@ async fn search_rooms(
         Some(PlatformId::Bilibili) => platforms::bilibili::search_rooms(&keyword).await?,
         Some(PlatformId::Douyu) => platforms::douyu::search_rooms(&keyword).await?,
         None => {
+            let bili_result = platforms::bilibili::search_rooms(&keyword).await;
+            let douyu_result = platforms::douyu::search_rooms(&keyword).await;
+
             let mut merged = Vec::new();
-            if let Ok(mut items) = platforms::bilibili::search_rooms(&keyword).await {
-                merged.append(&mut items);
+            let mut errors: Vec<String> = Vec::new();
+
+            match bili_result {
+                Ok(mut items) => merged.append(&mut items),
+                Err(e) => errors.push(format!("B站: {e}")),
             }
-            if let Ok(mut items) = platforms::douyu::search_rooms(&keyword).await {
-                merged.append(&mut items);
+            match douyu_result {
+                Ok(mut items) => merged.append(&mut items),
+                Err(e) => errors.push(format!("斗鱼: {e}")),
+            }
+
+            // If both platforms fail and no results were collected, surface the error.
+            if merged.is_empty() && !errors.is_empty() {
+                return Err(errors.join(" | "));
             }
             merged
         }
@@ -61,6 +73,45 @@ async fn get_stream_sources(
     match platform {
         PlatformId::Bilibili => platforms::bilibili::get_stream_sources(&room_id).await,
         PlatformId::Douyu => platforms::douyu::get_stream_sources(&room_id).await,
+    }
+}
+
+#[tauri::command]
+async fn get_replay_list(
+    platform: PlatformId,
+    room_id: String,
+    page: Option<u32>,
+) -> Result<Vec<ReplayItem>, String> {
+    let p = page.unwrap_or(1);
+    match platform {
+        PlatformId::Douyu => platforms::douyu::get_replay_list(&room_id, p).await,
+        PlatformId::Bilibili => Err("B站回放暂未实现".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_replay_parts(
+    platform: PlatformId,
+    room_id: String,
+    hash_id: String,
+    up_id: String,
+) -> Result<Vec<ReplayItem>, String> {
+    match platform {
+        PlatformId::Douyu => {
+            platforms::douyu::get_replay_parts(&room_id, &hash_id, &up_id).await
+        }
+        PlatformId::Bilibili => Err("B站回放暂未实现".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_replay_qualities(
+    platform: PlatformId,
+    replay_id: String,
+) -> Result<Vec<ReplayQuality>, String> {
+    match platform {
+        PlatformId::Douyu => platforms::douyu::get_replay_qualities(&replay_id).await,
+        PlatformId::Bilibili => Err("B站回放暂未实现".to_string()),
     }
 }
 
@@ -107,6 +158,9 @@ pub fn run() {
             search_rooms,
             get_room_detail,
             get_stream_sources,
+            get_replay_list,
+            get_replay_parts,
+            get_replay_qualities,
             load_preferences,
             save_preferences,
             apply_proxy_mode

@@ -10,7 +10,10 @@
 /* ── 1. Stage container & xgplayer root ─────────────────────── */
 .player-stage {
   width: 100%;
+  /* min-height keeps the stage usable in standalone use (PlayerPage);
+     height: 100% lets it fill a flex-1 parent (ReplayPage). */
   min-height: min(60vh, 520px);
+  height: 100%;
   border-radius: 0.5rem;
   overflow: hidden;
   background: #0a0c0e;

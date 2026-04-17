@@ -44,6 +44,30 @@ export interface StreamSource {
   isDefault?: boolean;
 }
 
+export interface ReplayQuality {
+  name: string;
+  url: string;
+  bitRate: number;
+  level: number;
+}
+
+export interface ReplayItem {
+  id: string;
+  platform: PlatformId;
+  roomId: string;
+  title: string;
+  coverUrl?: string;
+  durationStr?: string;
+  durationSecs?: number;
+  recordedAt: number;
+  viewCountText?: string;
+  partNum: number;
+  totalParts: number;
+  showId: number;
+  showRemark?: string;
+  upId: string;
+}
+
 export interface FollowRecord {
   id: string;
   platform: PlatformId;

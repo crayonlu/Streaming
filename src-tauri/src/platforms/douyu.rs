@@ -314,13 +314,15 @@ impl DouyuClient {
     }
 }
 
-async fn get_featured_once() -> Result<Vec<RoomCard>, String> {
+async fn get_featured_once(page: u32) -> Result<Vec<RoomCard>, String> {
     let client = shared_client();
 
+    let endpoint = format!("https://www.douyu.com/gapi/rkc/directory/mixListV1/0_0/{page}");
+
     let payload: Value = client
-        .get(FEATURED_ENDPOINT)
+        .get(&endpoint)
         .header("User-Agent", DEFAULT_UA)
-        .query(&[("limit", "40")])
+        .query(&[("limit", "30")])
         .send()
         .await
         .map_err(|e| format!("douyu featured request failed: {e}"))?
@@ -392,8 +394,9 @@ async fn get_featured_once() -> Result<Vec<RoomCard>, String> {
     Ok(cards)
 }
 
-pub async fn get_featured() -> Result<Vec<RoomCard>, String> {
-    retry(2, get_featured_once).await
+pub async fn get_featured(page: u32) -> Result<Vec<RoomCard>, String> {
+    let p = page;
+    retry(2, || get_featured_once(p)).await
 }
 
 async fn search_rooms_once(keyword: &str) -> Result<Vec<RoomCard>, String> {

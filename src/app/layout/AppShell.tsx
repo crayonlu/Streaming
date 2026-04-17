@@ -75,7 +75,7 @@ function WindowControls() {
         type="button"
         onClick={minimize}
         aria-label="最小化"
-        className="flex h-full w-11 items-center p-2 rounded-sm justify-center text-muted-foreground/70 transition-colors hover:bg-foreground/8 hover:text-foreground active:bg-foreground/14"
+        className="flex border-0 h-full w-11 items-center p-2 rounded-sm justify-center text-muted-foreground/70 transition-colors hover:bg-foreground/8 hover:text-foreground active:bg-foreground/14"
       >
         <Minus size={12} strokeWidth={1.8} />
       </button>
@@ -85,7 +85,7 @@ function WindowControls() {
         type="button"
         onClick={toggleMax}
         aria-label={maximized ? "还原" : "最大化"}
-        className="flex h-full w-11 items-center p-2 rounded-sm justify-center text-muted-foreground/70 transition-colors hover:bg-foreground/8 hover:text-foreground active:bg-foreground/14"
+        className="flex border-0 h-full w-11 items-center p-2 rounded-sm justify-center text-muted-foreground/70 transition-colors hover:bg-foreground/8 hover:text-foreground active:bg-foreground/14"
       >
         {maximized ? (
           <Minimize2 size={11} strokeWidth={1.8} />
@@ -100,7 +100,7 @@ function WindowControls() {
         onClick={close}
         aria-label="关闭"
         className={cn(
-          "flex h-full w-11 items-center p-2 rounded-sm justify-center transition-colors",
+          "flex h-full border-0 w-11 items-center p-2 rounded-sm justify-center transition-colors",
           "text-muted-foreground/70",
           "hover:bg-[#c42b1c] hover:text-white",
           "active:bg-[#b0261a] active:text-white",
@@ -286,7 +286,7 @@ export function AppShell() {
             </div>
 
             {/* Interactive area should not be a drag region */}
-            <div className="flex items-center gap-0.5 pr-1">
+            <div className="flex items-center gap-2 pr-1">
               <ThemeToggle />
               <GlobalSearch />
               <WindowControls />

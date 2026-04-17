@@ -284,6 +284,8 @@ const FEATURED_ENDPOINT: &str = "https://api.live.bilibili.com/xlive/web-interfa
 const SEARCH_ENDPOINT: &str = "https://api.bilibili.com/x/web-interface/search/type";
 const LIVE_SEARCH_ENDPOINT: &str =
     "https://api.live.bilibili.com/xlive/web-interface/v1/search/liveUsers";
+const ROOM_BASE_INFO_ENDPOINT: &str =
+    "https://api.live.bilibili.com/room/v1/Room/get_info_by_id";
 const FINGERPRINT_ENDPOINT: &str = "https://api.bilibili.com/x/frontend/finger/spi";
 const ROOM_PAGE_ENDPOINT: &str = "https://live.bilibili.com";
 const PLAYINFO_ENDPOINT: &str = "https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo";
@@ -306,12 +308,74 @@ fn value_to_u64(value: Option<&Value>) -> Option<u64> {
     }
 }
 
+/// Batch fetch room base info to supplement missing title/cover from search results.
+/// B站 search API sometimes returns empty title/cover, so we fetch them separately.
+async fn fetch_room_base_info_batch(
+    client: &reqwest::Client,
+    room_ids: &[String],
+) -> HashMap<String, (String, String)> {
+    let mut result = HashMap::new();
+    if room_ids.is_empty() {
+        return result;
+    }
+
+    // API supports batch IDs via ids[] parameter
+    // Response format: { "code": 0, "data": { "room_id": { fields... } } }
+    let ids_param: Vec<(&str, String)> = room_ids
+        .iter()
+        .map(|id| ("ids[]", id.clone()))
+        .collect();
+
+    let payload: Value = match client
+        .get(ROOM_BASE_INFO_ENDPOINT)
+        .header(USER_AGENT, DEFAULT_UA)
+        .header(REFERER, LIVE_REFERER)
+        .query(&ids_param)
+        .send()
+        .await
+    {
+        Ok(resp) => match resp.json::<Value>().await {
+            Ok(v) => v,
+            Err(_) => return result,
+        },
+        Err(_) => return result,
+    };
+
+    let data = match payload.get("data") {
+        Some(v) => v,
+        None => return result,
+    };
+
+    if let Some(obj) = data.as_object() {
+        for (room_id, room_data) in obj {
+            let title = room_data
+                .get("title")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            // Prefer room_cover, fall back to user_cover
+            let cover = room_data
+                .get("room_cover")
+                .and_then(Value::as_str)
+                .or_else(|| room_data.get("user_cover").and_then(Value::as_str))
+                .unwrap_or("")
+                .to_string();
+            result.insert(room_id.clone(), (title, cover));
+        }
+    }
+    result
+}
+
 fn value_to_string(value: Option<&Value>) -> String {
     match value {
         Some(Value::String(s)) => s.trim().to_string(),
         Some(Value::Number(n)) => n.to_string(),
         _ => String::new(),
     }
+}
+
+fn non_empty(s: String) -> Option<String> {
+    if s.is_empty() { None } else { Some(s) }
 }
 
 fn normalize_url(raw: &str) -> String {
@@ -641,7 +705,7 @@ async fn ensure_buvid(client: &reqwest::Client, cookie_header: &mut String) -> R
     Ok(())
 }
 
-async fn get_featured_once() -> Result<Vec<RoomCard>, String> {
+async fn get_featured_once(page: u32) -> Result<Vec<RoomCard>, String> {
     let client = shared_client();
 
     let payload: Value = client
@@ -653,7 +717,7 @@ async fn get_featured_once() -> Result<Vec<RoomCard>, String> {
             ("parent_area_id", "0"),
             ("area_id", "0"),
             ("sort_type", "online"),
-            ("page", "1"),
+            ("page", &page.to_string()),
         ])
         .send()
         .await
@@ -724,8 +788,9 @@ async fn get_featured_once() -> Result<Vec<RoomCard>, String> {
     Ok(cards)
 }
 
-pub async fn get_featured() -> Result<Vec<RoomCard>, String> {
-    retry(2, get_featured_once).await
+pub async fn get_featured(page: u32) -> Result<Vec<RoomCard>, String> {
+    let p = page;
+    retry(2, || get_featured_once(p)).await
 }
 
 /// Strip Bilibili's `<em>…</em>` highlight tags that appear in search result titles.
@@ -748,25 +813,48 @@ fn strip_em_tags(s: &str) -> String {
 }
 
 /// Parse a list of live-search items (works for both `live_room` and `live_user` shapes).
-fn parse_bili_search_items(items: &[Value]) -> Vec<RoomCard> {
+/// The `room_info_map` is used to supplement missing title/cover from batch API.
+fn parse_bili_search_items_with_fallback(
+    items: &[Value],
+    room_info_map: &HashMap<String, (String, String)>,
+) -> Vec<RoomCard> {
     let mut cards = Vec::with_capacity(items.len());
     for item in items {
         let room_id = value_to_string(item.get("roomid").or_else(|| item.get("room_id")));
         if room_id.is_empty() {
             continue;
         }
+
+        // Try search result first, then fall back to batch API result
         let raw_title = value_to_string(item.get("title"));
-        let title = strip_em_tags(&raw_title);
+        let fallback_info = room_info_map.get(&room_id);
+        let title = if !raw_title.is_empty() {
+            raw_title.clone()
+        } else {
+            fallback_info
+                .as_ref()
+                .map(|(t, _)| t.clone())
+                .unwrap_or_default()
+        };
+
         let streamer_name = strip_em_tags(&value_to_string(
             item.get("uname").or_else(|| item.get("nick_name")),
         ));
+
         let cover_main = value_to_string(item.get("cover"));
         let cover_fallback = value_to_string(item.get("cover_from_user"));
-        let cover_url = normalize_url(if cover_main.is_empty() {
-            &cover_fallback
+        let cover_url = if !cover_main.is_empty() {
+            normalize_url(&cover_main)
+        } else if let Some((_, c)) = fallback_info {
+            if !c.is_empty() {
+                normalize_url(c)
+            } else {
+                normalize_url(&cover_fallback)
+            }
         } else {
-            &cover_main
-        });
+            normalize_url(&cover_fallback)
+        };
+
         let viewers = value_to_u64(item.get("online"))
             .or_else(|| value_to_u64(item.get("online_num")))
             .and_then(|v| text_u64(Some(v)));
@@ -838,7 +926,16 @@ async fn search_rooms_once(keyword: &str) -> Result<Vec<RoomCard>, String> {
                     .cloned()
                     .unwrap_or_default();
                 if !items.is_empty() {
-                    return Ok(parse_bili_search_items(&items));
+                    // Collect room IDs for batch fetch
+                    let room_ids: Vec<String> = items
+                        .iter()
+                        .filter_map(|item| {
+                            let s = value_to_string(item.get("roomid").or_else(|| item.get("room_id")));
+                            non_empty(s)
+                        })
+                        .collect();
+                    let room_info_map = fetch_room_base_info_batch(client, &room_ids).await;
+                    return Ok(parse_bili_search_items_with_fallback(&items, &room_info_map));
                 }
             }
         }
@@ -908,7 +1005,20 @@ async fn search_rooms_once(keyword: &str) -> Result<Vec<RoomCard>, String> {
         room_items
     };
 
-    Ok(parse_bili_search_items(&source))
+    if !source.is_empty() {
+        // Collect room IDs for batch fetch to supplement missing title/cover
+        let room_ids: Vec<String> = source
+            .iter()
+            .filter_map(|item| {
+                let s = value_to_string(item.get("roomid").or_else(|| item.get("room_id")));
+                non_empty(s)
+            })
+            .collect();
+        let room_info_map = fetch_room_base_info_batch(client, &room_ids).await;
+        return Ok(parse_bili_search_items_with_fallback(&source, &room_info_map));
+    }
+
+    Ok(vec![])
 }
 
 pub async fn search_rooms(keyword: &str) -> Result<Vec<RoomCard>, String> {

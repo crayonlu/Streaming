@@ -65,13 +65,13 @@ function patchFollowed(cards: RoomCard[], records: FollowRecord[]) {
   }));
 }
 
-export async function getFeatured(platform: PlatformId): Promise<RoomCard[]> {
+export async function getFeatured(platform: PlatformId, page = 1): Promise<RoomCard[]> {
   // Fire both requests concurrently: the Tauri IPC call and the local store read
   // are independent, so there is no reason to sequence them. Running them in
   // parallel also closes the race window that existed when the platform could
   // change between the two sequential awaits.
   const [result, follows] = await Promise.all([
-    safeInvoke<unknown[]>("get_featured", { platform }),
+    safeInvoke<unknown[]>("get_featured", { platform, page }),
     getFollowRecordsFromStore(),
   ]);
   const cards = roomCardSchema.array().parse(result);

@@ -9,10 +9,11 @@ use models::{
 use tauri::AppHandle;
 
 #[tauri::command]
-async fn get_featured(platform: PlatformId) -> Result<Vec<RoomCard>, String> {
+async fn get_featured(platform: PlatformId, page: Option<u32>) -> Result<Vec<RoomCard>, String> {
+    let p = page.unwrap_or(1);
     match platform {
-        PlatformId::Bilibili => platforms::bilibili::get_featured().await,
-        PlatformId::Douyu => platforms::douyu::get_featured().await,
+        PlatformId::Bilibili => platforms::bilibili::get_featured(p).await,
+        PlatformId::Douyu => platforms::douyu::get_featured(p).await,
     }
 }
 

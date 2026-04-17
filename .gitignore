@@ -29,3 +29,4 @@ dist-ssr
 .claude/*
 competitors/*
 docs/*
+.bilibili_cookie_store.json

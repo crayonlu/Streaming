@@ -269,7 +269,7 @@ export function PlayerPage() {
       {/* ── Video stage ── */}
       <div className="flex-1 min-h-0 flex flex-col gap-3">
         {isError ? (
-          <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-border/60 bg-muted/30 min-h-[200px]">
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 rounded-lg border border-border/60 bg-muted/30 p-4">
             <StatusView title="暂时无法播放" tone="error" hint="平台风控或房间未开播" />
             <div className="flex gap-2">
               <Button

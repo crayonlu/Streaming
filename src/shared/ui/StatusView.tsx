@@ -24,7 +24,7 @@ export function StatusView({ title, hint, tone }: StatusViewProps) {
   const Icon = tone === "error" ? AlertCircle : WifiOff;
 
   return (
-    <div className="flex flex-col items-center justify-center gap-2 py-16">
+    <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16">
       <Icon size={20} strokeWidth={1.4} className="text-muted-foreground/40" />
       <p className="text-sm text-muted-foreground">{title}</p>
       {hint && (

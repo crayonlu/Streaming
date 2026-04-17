@@ -8,7 +8,7 @@ interface EmptyStateProps {
 
 export function EmptyState({ title, description, icon: Icon = Inbox }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 py-16">
+    <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16">
       <Icon size={28} strokeWidth={1.1} className="text-muted-foreground/30" />
       <p className="text-sm text-muted-foreground">{title}</p>
       {description && (

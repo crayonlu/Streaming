@@ -1,13 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
 import { Flame, Play, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useDiscoverStore } from "@/features/discover/model/useDiscoverStore";
 import { usePlatformStore } from "@/features/platform-switch/model/usePlatformStore";
 import { PlatformSwitch } from "@/features/platform-switch/ui/PlatformSwitch";
 import { RoomCard } from "@/features/room-card/ui/RoomCard";
-import { getFeatured, loadPreferences } from "@/shared/api/commands";
-import type { AppPreferences, PlatformId } from "@/shared/types/domain";
+import { loadPreferences } from "@/shared/api/commands";
+import type { AppPreferences } from "@/shared/types/domain";
 import { EmptyState } from "@/shared/ui/EmptyState";
 import { StatusView } from "@/shared/ui/StatusView";
 
@@ -57,38 +57,77 @@ function ResumeBanner({
   );
 }
 
+function LoadingIndicator() {
+  return (
+    <div className="flex items-center justify-center py-4 gap-2 text-muted-foreground">
+      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+      <span className="text-xs">加载更多...</span>
+    </div>
+  );
+}
+
+function findScrollParent(start: HTMLElement | null): HTMLElement | null {
+  let el: HTMLElement | null = start?.parentElement ?? null;
+  while (el && el !== document.body) {
+    const { overflowY } = window.getComputedStyle(el);
+    if (/(auto|scroll|overlay)/.test(overflowY)) return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
 export function DiscoverPage() {
   const currentPlatform = usePlatformStore((s) => s.currentPlatform);
+  const rooms = useDiscoverStore((s) => s.rooms);
+  const isLoading = useDiscoverStore((s) => s.isLoading);
+  const error = useDiscoverStore((s) => s.error);
+  const hasNextPage = useDiscoverStore((s) => s.hasNextPage);
+  const fetchFirstPage = useDiscoverStore((s) => s.fetchFirstPage);
+  const fetchNextPage = useDiscoverStore((s) => s.fetchNextPage);
   const [resumeEntry, setResumeEntry] = useState<AppPreferences["lastVisited"] | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  const sectionRef = useRef<HTMLElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const query = useQuery({
-    queryKey: ["featured", currentPlatform],
-    // Use the key directly instead of the closure-captured currentPlatform to
-    // avoid a stale-closure race where the value changes between schedule and
-    // execution of this function.
-    queryFn: ({ queryKey }) => getFeatured(queryKey[1] as PlatformId),
-    staleTime: 30_000, // keep data fresh for 30 s — no flicker on back-nav
-    gcTime: 2 * 60_000, // discard cache after 2 min of inactivity
-    refetchOnWindowFocus: false, // avoid spurious refetch when user alt-tabs
-  });
+  useEffect(() => {
+    fetchFirstPage(currentPlatform);
+    const section = sectionRef.current;
+    const scrollRoot = findScrollParent(section);
+    (scrollRoot ?? document.documentElement).scrollTo({ top: 0, behavior: "smooth" });
+  }, [currentPlatform, fetchFirstPage]);
+
+  useEffect(() => {
+    if (isLoading || !rooms.length) return;
+    const sentinel = sentinelRef.current;
+    const section = sectionRef.current;
+    if (!sentinel || !section) return;
+    const scrollRoot = findScrollParent(section);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) fetchNextPage(currentPlatform);
+      },
+      { root: scrollRoot, rootMargin: "320px", threshold: 0 },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [isLoading, rooms.length, hasNextPage, currentPlatform, fetchNextPage]);
 
   useEffect(() => {
     let mounted = true;
-    void loadPreferences().then((pref) => {
+    loadPreferences().then((pref) => {
       if (!mounted) return;
       if (pref.resumeLastSession && pref.lastVisited?.type === "room") {
         setResumeEntry(pref.lastVisited);
       }
     });
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, []);
 
+  const hasData = rooms.length > 0;
+  const isEmpty = !isLoading && !hasData && !error;
+
   return (
-    <section className="page-stack">
-      {/* Header */}
+    <section ref={sectionRef} className="page-stack">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Flame size={16} strokeWidth={1.8} className="text-muted-foreground/70" />
@@ -101,26 +140,29 @@ export function DiscoverPage() {
         <ResumeBanner lastVisited={resumeEntry} onDismiss={() => setDismissed(true)} />
       )}
 
-      {query.isLoading ? (
+      {!hasData && isLoading ? (
         <div className="cards-grid">
           {Array.from({ length: 12 }, (_, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: static-length skeleton placeholder
             <CardSkeleton key={i} />
           ))}
         </div>
-      ) : query.isError ? (
+      ) : error ? (
         <StatusView title="加载失败" tone="error" hint="请稍后重试" />
-      ) : !query.data?.length ? (
+      ) : isEmpty ? (
         <EmptyState title="暂无内容" description="可切换平台或稍后刷新" icon={Flame} />
       ) : (
-        <div
-          className="cards-grid transition-opacity duration-150"
-          style={{ opacity: query.isFetching ? 0.5 : 1 }}
-        >
-          {query.data.map((room) => (
-            <RoomCard key={room.id} room={room} />
-          ))}
-        </div>
+        <>
+          <div className="cards-grid">
+            {rooms.map((room) => (
+              <RoomCard key={room.id} room={room} />
+            ))}
+          </div>
+          <div ref={sentinelRef} className="h-1 w-full shrink-0" aria-hidden />
+          {hasData && isLoading && <LoadingIndicator />}
+          {!hasNextPage && hasData && !isLoading && (
+            <p className="text-center text-xs text-muted-foreground py-4">已加载全部内容</p>
+          )}
+        </>
       )}
     </section>
   );

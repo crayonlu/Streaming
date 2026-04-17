@@ -6,6 +6,7 @@ use models::{
     AppPreferences, Appearance, PlatformId, ProxyMode, ReplayItem, ReplayQuality, RoomCard,
     RoomDetail, SearchResult, StreamSource,
 };
+use tauri::AppHandle;
 
 #[tauri::command]
 async fn get_featured(platform: PlatformId) -> Result<Vec<RoomCard>, String> {
@@ -58,9 +59,10 @@ async fn search_rooms(
 async fn get_room_detail(
     platform: PlatformId,
     room_id: String,
+    app_handle: AppHandle,
 ) -> Result<RoomDetail, String> {
     match platform {
-        PlatformId::Bilibili => platforms::bilibili::get_room_detail(&room_id).await,
+        PlatformId::Bilibili => platforms::bilibili::get_room_detail(&app_handle, &room_id).await,
         PlatformId::Douyu => platforms::douyu::get_room_detail(&room_id).await,
     }
 }
@@ -69,9 +71,10 @@ async fn get_room_detail(
 async fn get_stream_sources(
     platform: PlatformId,
     room_id: String,
+    app_handle: AppHandle,
 ) -> Result<Vec<StreamSource>, String> {
     match platform {
-        PlatformId::Bilibili => platforms::bilibili::get_stream_sources(&room_id).await,
+        PlatformId::Bilibili => platforms::bilibili::get_stream_sources(&app_handle, &room_id).await,
         PlatformId::Douyu => platforms::douyu::get_stream_sources(&room_id).await,
     }
 }
@@ -81,11 +84,14 @@ async fn get_replay_list(
     platform: PlatformId,
     room_id: String,
     page: Option<u32>,
+    app_handle: AppHandle,
 ) -> Result<Vec<ReplayItem>, String> {
     let p = page.unwrap_or(1);
     match platform {
         PlatformId::Douyu => platforms::douyu::get_replay_list(&room_id, p).await,
-        PlatformId::Bilibili => Err("B站回放暂未实现".to_string()),
+        PlatformId::Bilibili => {
+            platforms::bilibili::get_replay_list(&app_handle, &room_id, p).await
+        }
     }
 }
 
@@ -100,7 +106,9 @@ async fn get_replay_parts(
         PlatformId::Douyu => {
             platforms::douyu::get_replay_parts(&room_id, &hash_id, &up_id).await
         }
-        PlatformId::Bilibili => Err("B站回放暂未实现".to_string()),
+        PlatformId::Bilibili => {
+            platforms::bilibili::get_replay_parts(&room_id, &hash_id, &up_id).await
+        }
     }
 }
 
@@ -108,11 +116,44 @@ async fn get_replay_parts(
 async fn get_replay_qualities(
     platform: PlatformId,
     replay_id: String,
+    app_handle: AppHandle,
 ) -> Result<Vec<ReplayQuality>, String> {
     match platform {
         PlatformId::Douyu => platforms::douyu::get_replay_qualities(&replay_id).await,
-        PlatformId::Bilibili => Err("B站回放暂未实现".to_string()),
+        PlatformId::Bilibili => {
+            platforms::bilibili::get_replay_qualities(&app_handle, &replay_id).await
+        }
     }
+}
+
+#[tauri::command]
+async fn set_bilibili_sessdata(sessdata: String) -> Result<(), String> {
+    platforms::bilibili::persist_sessdata(&sessdata).await;
+    Ok(())
+}
+
+/// Reads cookies from the app WebView (all open windows + a hidden bootstrap window).
+/// Returns the merged cookie string and whether SESSDATA / bili_jct were found.
+#[tauri::command]
+async fn get_bilibili_cookie(
+    app_handle: AppHandle,
+) -> platforms::bilibili::BilibiliCookieResult {
+    platforms::bilibili::cookie::get_bilibili_cookie(&app_handle).await
+}
+
+/// Opens a visible login window at passport.bilibili.com. The frontend polls
+/// get_bilibili_cookie until login is detected, then closes the window.
+#[tauri::command]
+async fn open_bilibili_login_window(
+    app_handle: AppHandle,
+) -> Result<String, String> {
+    platforms::bilibili::cookie::open_bilibili_login_window(&app_handle).await
+}
+
+/// Closes the visible login window if it is still open.
+#[tauri::command]
+async fn close_bilibili_login_window(app_handle: AppHandle) {
+    platforms::bilibili::cookie::close_bilibili_login_window(&app_handle).await
 }
 
 #[tauri::command]
@@ -163,7 +204,11 @@ pub fn run() {
             get_replay_qualities,
             load_preferences,
             save_preferences,
-            apply_proxy_mode
+            apply_proxy_mode,
+            set_bilibili_sessdata,
+            get_bilibili_cookie,
+            open_bilibili_login_window,
+            close_bilibili_login_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

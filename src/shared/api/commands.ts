@@ -142,6 +142,26 @@ export async function getReplayQualities(
   return replayQualitySchema.array().parse(result);
 }
 
+export async function setBilibiliSessdata(sessdata: string): Promise<void> {
+  await safeInvoke("set_bilibili_sessdata", { sessdata });
+}
+
+export async function getBilibiliCookie(): Promise<{
+  cookie: string | null;
+  hasSessdata: boolean;
+  hasBiliJct: boolean;
+}> {
+  return safeInvoke("get_bilibili_cookie");
+}
+
+export async function openBilibiliLoginWindow(): Promise<string> {
+  return safeInvoke<string>("open_bilibili_login_window");
+}
+
+export async function closeBilibiliLoginWindow(): Promise<void> {
+  return safeInvoke("close_bilibili_login_window");
+}
+
 export async function listFollows(): Promise<FollowRecord[]> {
   const records = await getFollowRecordsFromStore();
   return [...records].sort((a, b) => (a.followedAt < b.followedAt ? 1 : -1));

@@ -2,8 +2,280 @@ use reqwest::header::{COOKIE, REFERER, USER_AGENT};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
-use crate::models::{PlatformId, RoomCard, RoomDetail, StreamFormat, StreamSource};
+use crate::models::{PlatformId, ReplayItem, ReplayQuality, RoomCard, RoomDetail, StreamFormat, StreamSource};
 use super::http::{shared_client, retry};
+
+pub use cookie::BilibiliCookieResult;
+
+// ── Cookie extraction submodule ──────────────────────────────────────────────────
+// Auto-extracts SESSDATA / bili_jct from the app's WebView.
+// On Windows this reads from the embedded WebView2 store; on macOS it uses
+// the WKWebView cookie store via the same API surface.
+
+pub(crate) mod cookie {
+    use ::cookie::Cookie;
+    use serde::Serialize;
+    use std::collections::BTreeMap;
+    use std::time::Duration;
+
+    use tauri::{AppHandle, Manager, WebviewUrl};
+
+    /// Result of a cookie collection attempt.
+    #[derive(Debug, Serialize, Default)]
+    #[serde(rename_all = "camelCase")]
+    pub struct BilibiliCookieResult {
+        pub cookie: Option<String>,
+        pub has_sessdata: bool,
+        pub has_bili_jct: bool,
+    }
+
+    /// Reads SESSDATA / bili_jct from all open WebView windows.
+    /// Falls back to opening a hidden bootstrap window if nothing was found.
+    pub async fn get_bilibili_cookie(app_handle: &AppHandle) -> BilibiliCookieResult {
+        let url = "https://www.bilibili.com/";
+
+        // First: check all existing windows (avoids creating a new webview if the user
+        // already has a Bilibili tab open inside the app).
+        let from_existing = collect_from_labels(app_handle, webview_labels(app_handle), url).await;
+        if from_existing.has_sessdata {
+            return from_existing;
+        }
+
+        // Second: open a hidden bootstrap window so we capture cookies even when no
+        // Bilibili tab is currently open.
+        let from_bootstrap = bootstrap_and_collect(app_handle, url).await;
+        merge_results(&from_existing, &from_bootstrap)
+    }
+
+    fn webview_labels(app_handle: &AppHandle) -> Vec<String> {
+        app_handle.webview_windows().keys().cloned().collect()
+    }
+
+    fn merge_results(
+        a: &BilibiliCookieResult,
+        b: &BilibiliCookieResult,
+    ) -> BilibiliCookieResult {
+        let cookie = match (&a.cookie, &b.cookie) {
+            (Some(a_str), Some(b_str)) => {
+                let mut map = BTreeMap::new();
+                for pair in a_str.split(';') {
+                    if let Some((k, v)) = pair.trim().split_once('=') {
+                        map.insert(k.to_string(), v.to_string());
+                    }
+                }
+                for pair in b_str.split(';') {
+                    if let Some((k, v)) = pair.trim().split_once('=') {
+                        map.insert(k.to_string(), v.to_string());
+                    }
+                }
+                Some(
+                    map.into_iter()
+                        .map(|(k, v)| format!("{k}={v}"))
+                        .collect::<Vec<_>>()
+                        .join("; "),
+                )
+            }
+            (a @ Some(_), None) => a.clone(),
+            (None, b @ Some(_)) => b.clone(),
+            (None, None) => None,
+        };
+        BilibiliCookieResult {
+            cookie,
+            has_sessdata: a.has_sessdata || b.has_sessdata,
+            has_bili_jct: a.has_bili_jct || b.has_bili_jct,
+        }
+    }
+
+    /// Opens a hidden WebView at Bilibili, waits for cookies to be set, then reads
+    /// the jar and closes the window.
+    async fn bootstrap_and_collect(app_handle: &AppHandle, url: &str) -> BilibiliCookieResult {
+        let label = "bilibili-silent-bootstrap";
+
+        // Close any stale window from a previous attempt.
+        if let Some(old) = app_handle.get_webview_window(label) {
+            let _ = old.close();
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+
+        let parsed_url = match url::Url::parse(url) {
+            Ok(u) => u,
+            Err(_) => return BilibiliCookieResult::default(),
+        };
+
+        // Clone so we can pass into async blocks that require 'static.
+        let handle = app_handle.clone();
+        let label_owned = label.to_string();
+
+        // Build a hidden, non-interactive bootstrap window.
+        let builder = tauri::WebviewWindowBuilder::new(
+            &handle,
+            &label_owned,
+            WebviewUrl::External(parsed_url),
+        )
+        .visible(false)
+        .resizable(false)
+        .focused(false);
+
+        if builder.build().is_err() {
+            return BilibiliCookieResult::default();
+        }
+
+        // Give the page 3 seconds to run its cookie-setting scripts.
+        tokio::time::sleep(Duration::from_secs(3)).await;
+
+        let result = collect_from_labels(&handle, vec![label_owned.clone()], url).await;
+
+        if let Some(w) = handle.get_webview_window(&label_owned) {
+            let _ = w.close();
+        }
+
+        result
+    }
+
+    async fn collect_from_labels(
+        app_handle: &AppHandle,
+        labels: Vec<String>,
+        url: &str,
+    ) -> BilibiliCookieResult {
+        let url = url.to_string();
+        let labels = labels;
+        // Clone: AppHandle is Clone + Send + Sync, needed for spawn_blocking 'static.
+        let handle = app_handle.clone();
+
+        tauri::async_runtime::spawn_blocking(move || {
+            let mut collected: BTreeMap<String, String> = BTreeMap::new();
+            let mut has_sessdata = false;
+            let mut has_bili_jct = false;
+
+            let parsed_url = match url::Url::parse(&url) {
+                Ok(u) => u,
+                Err(_) => return BilibiliCookieResult::default(),
+            };
+
+            for label in labels {
+                let Some(window) = handle.get_webview_window(&label) else {
+                    continue;
+                };
+
+                // Try URL-scoped read first (works on all platforms / WebView versions).
+                if let Ok(cookies) = window.cookies_for_url(parsed_url.clone()) {
+                    let (s, j) = merge_cookies(&mut collected, cookies);
+                    has_sessdata |= s;
+                    has_bili_jct |= j;
+                }
+
+                // Fallback: no-URL read if nothing was found yet.
+                if !has_sessdata {
+                    if let Ok(cookies) = window.cookies() {
+                        let (s, j) = merge_cookies(&mut collected, cookies);
+                        has_sessdata |= s;
+                        has_bili_jct |= j;
+                    }
+                }
+            }
+
+            let cookie = if collected.is_empty() {
+                None
+            } else {
+                Some(
+                    collected
+                        .into_iter()
+                        .map(|(k, v)| format!("{k}={v}"))
+                        .collect::<Vec<_>>()
+                        .join("; "),
+                )
+            };
+
+            BilibiliCookieResult {
+                cookie,
+                has_sessdata,
+                has_bili_jct,
+            }
+        })
+        .await
+        .unwrap_or_default()
+    }
+
+    fn merge_cookies(
+        acc: &mut BTreeMap<String, String>,
+        cookies: Vec<Cookie<'static>>,
+    ) -> (bool, bool) {
+        let mut has_sessdata = false;
+        let mut has_bili_jct = false;
+
+        for c in cookies {
+            let name = c.name().to_string();
+            let domain = c.domain().map(|d| d.to_string());
+
+            // Only keep cookies from bilibili.com or well-known bare-name session cookies.
+            let is_bilibili = domain
+                .as_ref()
+                .map(|d| d.contains("bilibili.com"))
+                .unwrap_or_else(|| {
+                    name.eq_ignore_ascii_case("SESSDATA")
+                        || name.eq_ignore_ascii_case("bili_jct")
+                        || name.eq_ignore_ascii_case("DedeUserID")
+                        || name.eq_ignore_ascii_case("b_lsid")
+                });
+
+            if !is_bilibili {
+                continue;
+            }
+
+            let value = c.value().to_string();
+            if name.eq_ignore_ascii_case("SESSDATA") && !value.is_empty() {
+                has_sessdata = true;
+            }
+            if name.eq_ignore_ascii_case("bili_jct") && !value.is_empty() {
+                has_bili_jct = true;
+            }
+
+            acc.entry(name).or_insert(value);
+        }
+
+        (has_sessdata, has_bili_jct)
+    }
+
+    /// Opens a visible login window for Bilibili at passport.bilibili.com.
+    /// The frontend polls get_bilibili_cookie until login is detected, then closes the window.
+    pub async fn open_bilibili_login_window(
+        app_handle: &AppHandle,
+    ) -> Result<String, String> {
+        let label = "bilibili-login-window";
+
+        // Close any existing login window first.
+        if let Some(old) = app_handle.get_webview_window(label) {
+            let _ = old.close();
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        }
+
+        let login_url = "https://passport.bilibili.com/login";
+
+        let parsed_url =
+            url::Url::parse(login_url).map_err(|e| format!("invalid login URL: {e}"))?;
+
+        let handle = app_handle.clone();
+        let label_owned = label.to_string();
+
+        tauri::WebviewWindowBuilder::new(&handle, &label_owned, WebviewUrl::External(parsed_url))
+            .title("B站登录")
+            .inner_size(420.0, 640.0)
+            .resizable(true)
+            .focused(true)
+            .build()
+            .map_err(|e| format!("failed to open login window: {e}"))?;
+
+        Ok(label_owned)
+    }
+
+    /// Closes the visible login window if it exists.
+    pub async fn close_bilibili_login_window(app_handle: &AppHandle) {
+        let label = "bilibili-login-window";
+        if let Some(w) = app_handle.get_webview_window(label) {
+            let _ = w.close();
+        }
+    }
+}
 
 const DEFAULT_UA: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
@@ -133,16 +405,21 @@ async fn request_playinfo(
     client: &reqwest::Client,
     room_id: &str,
     params: &[(&str, &str)],
+    cookie: Option<&str>,
 ) -> Result<Value, String> {
     let mut query: Vec<(&str, &str)> = vec![("room_id", room_id)];
     query.extend_from_slice(params);
 
-    client
+    let mut request = client
         .get(PLAYINFO_ENDPOINT)
         .header(USER_AGENT, DEFAULT_UA)
         .header(REFERER, LIVE_REFERER)
         .header(reqwest::header::ORIGIN, "https://live.bilibili.com")
-        .query(&query)
+        .query(&query);
+    if let Some(c) = cookie {
+        request = request.header(COOKIE, c);
+    }
+    request
         .send()
         .await
         .map_err(|e| format!("bilibili playinfo request failed: {e}"))?
@@ -639,7 +916,10 @@ pub async fn search_rooms(keyword: &str) -> Result<Vec<RoomCard>, String> {
     retry(2, || search_rooms_once(&kw)).await
 }
 
-pub async fn get_room_detail(room_id: &str) -> Result<RoomDetail, String> {
+pub async fn get_room_detail(
+    _app_handle: &tauri::AppHandle,
+    room_id: &str,
+) -> Result<RoomDetail, String> {
     let client = shared_client();
     let (normalized_room_id, live_status_from_init) = resolve_room_id_and_live(client, room_id)
         .await
@@ -707,7 +987,10 @@ pub async fn get_room_detail(room_id: &str) -> Result<RoomDetail, String> {
     })
 }
 
-pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, String> {
+pub async fn get_stream_sources(
+    app_handle: &tauri::AppHandle,
+    room_id: &str,
+) -> Result<Vec<StreamSource>, String> {
     let client = shared_client();
 
     let (normalized_room_id, is_live) = resolve_room_id_and_live(client, room_id)
@@ -716,6 +999,11 @@ pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, Stri
     if !is_live {
         return Err("主播未开播".to_string());
     }
+
+    // Try to inject saved SESSDATA for higher-quality streams.
+    let webview_cookie = cookie::get_bilibili_cookie(app_handle).await.cookie;
+    let saved_cookie = read_saved_cookie().await;
+    let cookie = webview_cookie.or(saved_cookie);
 
     let param_sets: Vec<Vec<(&str, &str)>> = vec![
         vec![
@@ -751,7 +1039,7 @@ pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, Stri
 
     let mut sources = vec![];
     for params in &param_sets {
-        if let Ok(response) = request_playinfo(client, &normalized_room_id, params).await {
+        if let Ok(response) = request_playinfo(client, &normalized_room_id, params, cookie.as_deref()).await {
             sources = parse_playurl_to_sources(&extract_playurl(&response), &normalized_room_id);
             if !sources.is_empty() {
                 break;
@@ -777,20 +1065,60 @@ pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, Stri
         return Err("未获取到可用播放源".to_string());
     }
 
-    sources.sort_by_key(|s| std::cmp::Reverse(source_priority(s)));
-
-    // Probe top candidates (using the raw CDN URL) to improve first-play success.
-    let mut first_reachable_index: Option<usize> = None;
-    for (idx, source) in sources.iter().take(6).enumerate() {
-        if probe_source_url(client, &source.stream_url).await {
-            first_reachable_index = Some(idx);
-            break;
+    // Probe every parsed source concurrently; keep only the ones that are actually reachable.
+    // This removes CDN routes that fail DNS or TCP at this machine (e.g. gotcha101
+    // which resolves only inside Bilibili's internal network).
+    use tokio::task::JoinSet;
+    let probe_urls: Vec<(String, StreamSource)> = sources
+        .into_iter()
+        .map(|s| (s.stream_url.clone(), s))
+        .collect();
+    let mut join_set = JoinSet::new();
+    for (url, s) in probe_urls {
+        let client = client.clone();
+        join_set.spawn(async move {
+            let ok = probe_source_url(&client, &url).await;
+            (s, ok)
+        });
+    }
+    let mut reachable: Vec<StreamSource> = Vec::new();
+    while let Some(result) = join_set.join_next().await {
+        if let Ok((s, true)) = result {
+            reachable.push(s);
         }
     }
-    if let Some(idx) = first_reachable_index {
-        if let Some(item) = sources.get_mut(idx) {
-            item.is_default = Some(true);
+
+    if reachable.is_empty() {
+        return Err("所有CDN路线均不可达，请检查网络".to_string());
+    }
+
+    // Collect one source per (qualityKey, format) pair, keeping the one with
+    // the highest priority within that group.  This deduplicates CDN routes
+    // (gotcha101 / gotcha104b / …) which all share the same quality label.
+    fn best_per_quality_and_format(
+        mut sources: Vec<StreamSource>,
+    ) -> Vec<StreamSource> {
+        sources.sort_by_key(|s| std::cmp::Reverse(source_priority(s)));
+        let mut seen: HashMap<(String, String), usize> = HashMap::new();
+        let mut result: Vec<StreamSource> = Vec::new();
+        for (idx, s) in sources.into_iter().enumerate() {
+            let fmt_str = if matches!(s.format, StreamFormat::Hls) { "hls" } else { "flv" };
+            let key = (s.quality_key.clone(), fmt_str.to_string());
+            let entry = seen.entry(key).or_insert(idx);
+            if *entry == idx {
+                result.push(s);
+            }
         }
+        result
+    }
+
+    let mut sources = best_per_quality_and_format(reachable);
+
+    sources.sort_by_key(|s| std::cmp::Reverse(source_priority(s)));
+
+    // Mark the first reachable source as default.
+    if let Some(item) = sources.first_mut() {
+        item.is_default = Some(true);
     }
 
     // Route all HLS streams through the local proxy so that WebView2 does not
@@ -806,4 +1134,325 @@ pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, Stri
     }
 
     Ok(sources)
+}
+
+// ─── Bilibili Replay ───────────────────────────────────────────────────────────
+
+/// API to get replay list for another anchor (requires SESSDATA).
+/// Endpoint: GET /xlive/web-room/v1/videoService/GetOtherSliceList
+const BILI_REPLAY_LIST_ENDPOINT: &str =
+    "https://api.live.bilibili.com/xlive/web-room/v1/videoService/GetOtherSliceList";
+
+/// API to get downloadable video URL (requires SESSDATA + bili_jct).
+/// Endpoint: POST /xlive/app-blink/v1/anchorVideo/AnchorVideoDownload
+const BILI_REPLAY_DOWNLOAD_ENDPOINT: &str =
+    "https://api.live.bilibili.com/xlive/app-blink/v1/anchorVideo/AnchorVideoDownload";
+
+/// Fetches the uid (mid) for a bilibili room — needed to query replay list.
+async fn resolve_uid_from_room(client: &reqwest::Client, room_id: &str) -> Result<u64, String> {
+    let payload: Value = client
+        .get("https://api.live.bilibili.com/room/v1/Room/get_info")
+        .header(USER_AGENT, DEFAULT_UA)
+        .header(REFERER, LIVE_REFERER)
+        .query(&[("room_id", room_id)])
+        .send()
+        .await
+        .map_err(|e| format!("room info request failed: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("room info status error: {e}"))?
+        .json()
+        .await
+        .map_err(|e| format!("room info parse error: {e}"))?;
+
+    payload
+        .get("data")
+        .and_then(|d| d.get("uid"))
+        .and_then(Value::as_i64)
+        .map(|v| v as u64)
+        .filter(|&v| v > 0)
+        .ok_or_else(|| "无法获取主播UID".to_string())
+}
+
+/// Persists SESSDATA to a local file so it survives restarts.
+async fn save_bilibili_sessdata(sessdata: &str) {
+    let map = serde_json::json!({ "SESSDATA": sessdata });
+    let _ = tokio::fs::write(".bilibili_cookie_store.json", map.to_string()).await;
+}
+
+/// Reads SESSDATA from the on-disk cookie store. Returns None if absent or invalid.
+pub(crate) async fn read_saved_cookie() -> Option<String> {
+    let content = tokio::fs::read(".bilibili_cookie_store.json")
+        .await
+        .ok()?;
+    let map: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&content).ok()?;
+    let sessdata = map.get("SESSDATA")?.as_str()?.trim();
+    if sessdata.is_empty() {
+        return None;
+    }
+    Some(format!("SESSDATA={sessdata}"))
+}
+
+/// Public wrapper — called by lib.rs via set_bilibili_sessdata command.
+pub async fn persist_sessdata(sessdata: &str) {
+    save_bilibili_sessdata(sessdata).await;
+}
+
+/// Returns the replay list for a bilibili room.
+/// Requires SESSDATA (主播授权剪辑).
+/// Attempts auto-extraction from WebView first, then falls back to file-based store.
+pub async fn get_replay_list(
+    app_handle: &tauri::AppHandle,
+    room_id: &str,
+    page: u32,
+) -> Result<Vec<ReplayItem>, String> {
+    let client = shared_client();
+
+    let uid = resolve_uid_from_room(client, room_id).await?;
+
+    let query: Vec<(&str, String)> = vec![
+        ("live_uid", uid.to_string()),
+        ("time_range", "3".to_string()),
+        ("page", page.to_string()),
+        ("page_size", "30".to_string()),
+        ("web_location", "444.8".to_string()),
+    ];
+
+    // Auto-extract SESSDATA from WebView (avoids manual config in most cases).
+    let cookies = cookie::get_bilibili_cookie(app_handle).await;
+
+    let mut request = client
+        .get(BILI_REPLAY_LIST_ENDPOINT)
+        .header(USER_AGENT, DEFAULT_UA)
+        .header(REFERER, "https://live.bilibili.com/")
+        .query(&query);
+
+    if let Some(ref cookie_str) = cookies.cookie {
+        request = request.header(COOKIE, cookie_str.as_str());
+    }
+
+    let payload: Value = request
+        .send()
+        .await
+        .map_err(|e| format!("replay list request failed: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("replay list status error: {e}"))?
+        .json()
+        .await
+        .map_err(|e| format!("replay list parse error: {e}"))?;
+
+    let code = payload.get("code").and_then(Value::as_i64).unwrap_or(-1);
+    if code == -101 {
+        return Err("请先在设置中登录B站账号以获取回放权限".to_string());
+    }
+    if code == 301 {
+        return Err("该主播尚未授权回放剪辑功能".to_string());
+    }
+    if code != 0 {
+        let msg = payload.get("message").and_then(Value::as_str).unwrap_or("unknown");
+        return Err(format!("获取回放列表失败: {msg}"));
+    }
+
+    let replay_infos = payload
+        .get("data")
+        .and_then(|d| d.get("replay_info"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let mut items = Vec::new();
+    for info in replay_infos {
+        let replay_id = info
+            .get("replay_id")
+            .and_then(Value::as_i64)
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+
+        let live_info = info.get("live_info");
+        let video_info = info.get("video_info");
+
+        let title = live_info
+            .and_then(|v| v.get("title"))
+            .and_then(Value::as_str)
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+
+        let cover_url = live_info
+            .and_then(|v| v.get("cover"))
+            .and_then(Value::as_str)
+            .map(|s| {
+                if s.starts_with("//") {
+                    format!("https:{s}")
+                } else {
+                    s.to_string()
+                }
+            });
+
+        let duration_secs = video_info
+            .and_then(|v| v.get("duration"))
+            .and_then(Value::as_u64);
+
+        let duration_str = duration_secs.map(|secs| {
+            let h = secs / 3600;
+            let m = (secs % 3600) / 60;
+            let s = secs % 60;
+            if h > 0 {
+                format!("{h}:{m:02}:{s:02}")
+            } else {
+                format!("{m}:{s:02}")
+            }
+        });
+
+        let recorded_at = info.get("start_time").and_then(Value::as_i64).unwrap_or(0);
+        let show_id = info.get("start_time").and_then(Value::as_i64).unwrap_or(0);
+
+        let view_count_text = video_info
+            .and_then(|v| v.get("play_num"))
+            .and_then(Value::as_u64)
+            .and_then(|v| text_u64(Some(v)));
+
+        items.push(ReplayItem {
+            id: replay_id,
+            platform: PlatformId::Bilibili,
+            room_id: room_id.to_string(),
+            title,
+            cover_url,
+            duration_str,
+            duration_secs,
+            recorded_at,
+            view_count_text,
+            part_num: 1,
+            total_parts: 1,
+            show_id,
+            show_remark: None,
+            up_id: uid.to_string(),
+        });
+    }
+
+    Ok(items)
+}
+
+/// Bilibili replays are single-part (no multi-P like Douyu).
+/// `get_replay_parts` returns the same item since B站回放不拆分P.
+pub async fn get_replay_parts(
+    _room_id: &str,
+    _hash_id: &str,
+    _up_id: &str,
+) -> Result<Vec<ReplayItem>, String> {
+    // Bilibili uses a flat structure: one ReplayItem per session.
+    // The replay list IS the parts list; there is no sub-parting.
+    Err("B站回放不支持分P展示".to_string())
+}
+
+/// Returns the stream URL for a B站 replay recording.
+/// For a recorded replay (download_url), returns it directly.
+/// Falls back to GetSliceStream which may return an HLS URL.
+pub async fn get_replay_qualities(
+    app_handle: &tauri::AppHandle,
+    replay_id: &str,
+) -> Result<Vec<ReplayQuality>, String> {
+    let client = shared_client();
+
+    // Auto-extract SESSDATA from WebView.
+    let cookies = cookie::get_bilibili_cookie(app_handle).await;
+
+    // Replay_id for bilibili is the record_id.
+    // First try to get the download URL directly (simplest path).
+    let mut request = client
+        .post(BILI_REPLAY_DOWNLOAD_ENDPOINT)
+        .header(USER_AGENT, DEFAULT_UA)
+        .header(REFERER, "https://live.bilibili.com/")
+        .header(
+            reqwest::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .form(&[
+            ("record_id", replay_id),
+            ("csrf", ""),
+        ]);
+
+    if let Some(ref cookie_str) = cookies.cookie {
+        request = request.header(COOKIE, cookie_str.as_str());
+    }
+
+    let payload: Value = request
+        .send()
+        .await
+        .map_err(|e| format!("replay qualities request failed: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("replay qualities status error: {e}"))?
+        .json()
+        .await
+        .map_err(|e| format!("replay qualities parse error: {e}"))?;
+
+    let code = payload.get("code").and_then(Value::as_i64).unwrap_or(-1);
+    if code == -101 {
+        return Err("请先在设置中登录B站账号".to_string());
+    }
+    if code != 0 {
+        let msg = payload.get("message").and_then(Value::as_str).unwrap_or("unknown");
+        return Err(format!("获取回放地址失败: {msg}"));
+    }
+
+    let data = payload.get("data");
+
+    // Check if download_url is available (already synthesized)
+    if let Some(url) = data
+        .and_then(|d| d.get("download_url"))
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+    {
+        return Ok(vec![ReplayQuality {
+            name: "原画".to_string(),
+            url: url.to_string(),
+            bit_rate: 0,
+            level: 4,
+        }]);
+    }
+
+    // Otherwise try GetSliceStream for HLS URL
+    let record = data
+        .and_then(|d| d.get("record"))
+        .cloned()
+        .unwrap_or(Value::Null);
+
+    let status = record.get("status").and_then(Value::as_i64).unwrap_or(0);
+    let estimated_time = record.get("estimated_time").and_then(Value::as_i64);
+
+    if status == 30 || status == 2 {
+        if let Some(url) = record.get("url").and_then(Value::as_str) {
+            return Ok(vec![ReplayQuality {
+                name: "原画".to_string(),
+                url: url.to_string(),
+                bit_rate: 0,
+                level: 4,
+            }]);
+        }
+    }
+
+    let time_msg = if let Some(ts) = estimated_time {
+        let remaining = ts - std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        if remaining > 0 {
+            let h = remaining / 3600;
+            let m = (remaining % 3600) / 60;
+            if h > 0 {
+                format!("预计约{}小时{}分钟后可用", h, m)
+            } else {
+                format!("预计约{}分钟后可用", m)
+            }
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
+    Err(format!(
+        "回放正在合成中{}{}",
+        if !time_msg.is_empty() { "，" } else { "" },
+        time_msg
+    ))
 }

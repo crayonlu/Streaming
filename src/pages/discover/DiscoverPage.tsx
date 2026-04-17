@@ -7,7 +7,7 @@ import { usePlatformStore } from "@/features/platform-switch/model/usePlatformSt
 import { PlatformSwitch } from "@/features/platform-switch/ui/PlatformSwitch";
 import { RoomCard } from "@/features/room-card/ui/RoomCard";
 import { getFeatured, loadPreferences } from "@/shared/api/commands";
-import type { AppPreferences } from "@/shared/types/domain";
+import type { AppPreferences, PlatformId } from "@/shared/types/domain";
 import { EmptyState } from "@/shared/ui/EmptyState";
 import { StatusView } from "@/shared/ui/StatusView";
 

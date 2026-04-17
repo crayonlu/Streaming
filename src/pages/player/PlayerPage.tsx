@@ -11,9 +11,13 @@ import { VideoPlayer } from "@/features/player/ui/VideoPlayer";
 import { cn } from "@/lib/utils";
 import {
   buildRoomWebUrl,
+  closeBilibiliLoginWindow,
+  getBilibiliCookie,
   getRoomDetail,
   getStreamSources,
+  openBilibiliLoginWindow,
   recordLastVisited,
+  setBilibiliSessdata,
 } from "@/shared/api/commands";
 import type { PlatformId, StreamSource } from "@/shared/types/domain";
 import { StatusView } from "@/shared/ui/StatusView";
@@ -40,6 +44,9 @@ export function PlayerPage() {
   const [manualSourceId, setManualSourceId] = useState<string | null>(null);
   const [failedSourceIds, setFailedSourceIds] = useState<Set<string>>(new Set());
   const [retryKey, setRetryKey] = useState(0);
+  const [bilibiliLoginState, setBilibiliLoginState] = useState<"idle" | "logging-in" | "logged-in">(
+    "idle",
+  );
 
   const validRoute = isPlatform(platform) && !!roomId;
 
@@ -90,6 +97,39 @@ export function PlayerPage() {
     setRetryKey((k) => k + 1);
   };
 
+  // Check login state on mount and whenever room changes (for B站).
+  useEffect(() => {
+    if (platform !== "bilibili") return;
+    void getBilibiliCookie()
+      .then((r) => setBilibiliLoginState(r.hasSessdata ? "logged-in" : "idle"))
+      .catch(() => setBilibiliLoginState("idle"));
+  }, [platform]);
+
+  // Opens the visible login window and polls until SESSDATA arrives.
+  const handleBilibiliLogin = useCallback(async () => {
+    if (bilibiliLoginState === "logging-in") return;
+    setBilibiliLoginState("logging-in");
+    try {
+      await openBilibiliLoginWindow();
+      // Poll every 1.5s for up to 120s.
+      const deadline = Date.now() + 120_000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const result = await getBilibiliCookie();
+        if (result.hasSessdata) {
+          if (result.cookie) await setBilibiliSessdata(result.cookie);
+          await closeBilibiliLoginWindow();
+          setBilibiliLoginState("logged-in");
+          return;
+        }
+      }
+      // Timeout — user may have closed the window without logging in.
+      setBilibiliLoginState("idle");
+    } catch {
+      setBilibiliLoginState("idle");
+    }
+  }, [bilibiliLoginState]);
+
   // ── Early return after all hooks ──────────────────────────────────────────
   if (!validRoute) {
     return <StatusView title="无效的播放链接" tone="error" />;
@@ -100,7 +140,7 @@ export function PlayerPage() {
 
   const openExternal = () => void openUrl(buildRoomWebUrl(platform, roomId));
 
-  const supportsReplay = platform === "douyu";
+  const supportsReplay = platform === "douyu" || platform === "bilibili";
   const isRoomOffline =
     !isLoading &&
     (streamQuery.isError ||
@@ -159,6 +199,49 @@ export function PlayerPage() {
 
         {room && (
           <div className="shrink-0 flex items-center gap-1.5">
+            {platform === "bilibili" && (
+              <button
+                type="button"
+                disabled={bilibiliLoginState === "logging-in"}
+                onClick={() => void handleBilibiliLogin()}
+                className={cn(
+                  "flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition-colors",
+                  bilibiliLoginState === "logged-in"
+                    ? "border border-emerald-500/40 bg-emerald-500/10 text-emerald-500/80 hover:bg-emerald-500/15"
+                    : "border border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
+                  bilibiliLoginState === "logging-in" && "opacity-60 cursor-not-allowed",
+                )}
+              >
+                {bilibiliLoginState === "logging-in" ? (
+                  <>
+                    <div className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+                    登录中…
+                  </>
+                ) : bilibiliLoginState === "logged-in" ? (
+                  <>
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 10 10"
+                      fill="none"
+                      role="img"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M2 5l2.5 2.5L8 3"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    已登录
+                  </>
+                ) : (
+                  "登录B站"
+                )}
+              </button>
+            )}
             {supportsReplay && (
               <Button
                 variant="ghost"

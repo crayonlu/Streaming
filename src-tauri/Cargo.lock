@@ -4108,6 +4108,7 @@ name = "streaming"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "cookie",
  "deno_core",
  "html-escape",
  "regex",
@@ -4119,6 +4120,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-store",
  "tokio",
+ "url",
 ]
 
 [[package]]

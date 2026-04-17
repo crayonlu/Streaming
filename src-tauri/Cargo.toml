@@ -29,4 +29,6 @@ deno_core = "0.288.0"
 html-escape = "0.2.13"
 axum = "0.7"
 regex = "1"
+cookie = "0.18"
+url = "2.5"
 

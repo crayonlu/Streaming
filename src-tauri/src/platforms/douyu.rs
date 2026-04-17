@@ -24,6 +24,7 @@ const CRYPTO_JS: &str = include_str!(concat!(
 ));
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 struct BetardRoomInfo {
     room_id: Option<Value>,
     show_status: Option<Value>,

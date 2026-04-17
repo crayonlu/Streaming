@@ -305,7 +305,6 @@ img {
   min-height: min(60vh, 520px);
   border-radius: var(--radius);
   overflow: hidden;
-  /* 与浅色页面对比用的深底；暗色下改为与主题一致的冷灰 */
   background: oklch(11% 0.01 65);
 }
 .dark .player-stage {

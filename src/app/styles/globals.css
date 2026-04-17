@@ -1,0 +1,232 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ─────────────────────────────────────────────
+   Theme token mapping → Tailwind utility names
+   ───────────────────────────────────────────── */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-live: var(--live);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-base);
+}
+
+/* ─────────────────────────────────────────────
+   Root palette — Cool-slate · Light-first
+   Philosophy: crisp, clear, fresh — zero warm hue.
+   All neutrals sit at hue 230-240 (cool slate/blue).
+   Depth via surface lightness, not shadows.
+   ───────────────────────────────────────────── */
+:root {
+  /* ── geometry ── */
+  --radius: 0.5rem;
+
+  /* ── typography ── */
+  --font-base:
+    "MiSans", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui,
+    sans-serif;
+
+  /* ── surfaces ──────────────────────────────────────────────────────
+     bg-background = cool light-gray base (replaces warm #f4f0ea)
+     bg-card       = near-white elevated surface (sidebar, topbar, cards)
+     ------------------------------------------------------------------ */
+  --background: oklch(96.8% 0.005 232); /* cool slate-white */
+  --foreground: oklch(12% 0.008 232); /* cool near-black  */
+
+  --card: oklch(99.2% 0.002 232); /* crisp white      */
+  --card-foreground: oklch(12% 0.008 232);
+
+  --popover: oklch(99.6% 0.001 232);
+  --popover-foreground: oklch(12% 0.008 232);
+
+  /* ── primary: crisp blue-gray — kept from original ── */
+  --primary: oklch(46% 0.051 218);
+  --primary-foreground: oklch(99% 0.002 232);
+
+  /* ── secondary: cool light surface ── */
+  --secondary: oklch(94.5% 0.005 232);
+  --secondary-foreground: oklch(28% 0.009 232);
+
+  /* ── muted: one step darker, still cool ── */
+  --muted: oklch(93.2% 0.005 232);
+  --muted-foreground: oklch(50% 0.01 232);
+
+  /* ── accent: soft cool-blue tint for selected / active ── */
+  --accent: oklch(92.5% 0.018 220);
+  --accent-foreground: oklch(36% 0.046 218);
+
+  /* ── destructive ── */
+  --destructive: oklch(53% 0.19 24);
+
+  /* ── borders: cool slate, faint but crisper than warm ── */
+  --border: oklch(91% 0.006 232);
+  --input: oklch(91.5% 0.006 232);
+  --ring: oklch(46% 0.051 218);
+
+  /* ── sidebar shares the card surface ── */
+  --sidebar: var(--card);
+  --sidebar-foreground: oklch(46% 0.01 232);
+
+  /* ── live badge red — kept neutral ── */
+  --live: oklch(55% 0.168 24);
+}
+
+/* ─────────────────────────────────────────────
+   Resets
+   ───────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-base);
+  background-color: var(--background);
+  color: var(--foreground);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+button,
+input {
+  font: inherit;
+}
+img {
+  display: block;
+}
+
+/* ─────────────────────────────────────────────
+   Scrollbar — minimal, cool-toned
+   ───────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(86% 0.006 232);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(74% 0.008 232);
+}
+
+/* ─────────────────────────────────────────────
+   Transition defaults — applied to key
+   interactive targets via Tailwind utilities.
+   All transitions use ease cubic bezier.
+   ───────────────────────────────────────────── */
+:root {
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --t-fast: 120ms;
+  --t-base: 160ms;
+  --t-slow: 240ms;
+}
+
+/* ─────────────────────────────────────────────
+   Layout helpers
+   ───────────────────────────────────────────── */
+.page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cards-grid {
+  display: grid;
+  gap: 0.875rem;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+/* ─────────────────────────────────────────────
+   Card cover — 16:9 image container
+   ───────────────────────────────────────────── */
+.card-cover {
+  aspect-ratio: 16 / 9;
+  position: relative;
+  overflow: hidden;
+  /* subtle gradient placeholder so skeleton feels intentional */
+  background: linear-gradient(
+    135deg,
+    var(--muted) 0%,
+    color-mix(in oklch, var(--muted) 90%, var(--accent)) 100%
+  );
+}
+.card-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform var(--t-slow) var(--ease-smooth);
+}
+
+/* ─────────────────────────────────────────────
+   Player stage — dark, full-bleed
+   ───────────────────────────────────────────── */
+.player-stage {
+  width: 100%;
+  min-height: min(60vh, 520px);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: oklch(11% 0.01 65);
+}
+
+/* ─────────────────────────────────────────────
+   Text utilities
+   ───────────────────────────────────────────── */
+.clamp-1 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clamp-2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}

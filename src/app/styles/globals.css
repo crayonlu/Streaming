@@ -97,12 +97,99 @@
 }
 
 /* ─────────────────────────────────────────────
+   Dark palette — Cool-slate · Soft night (清新夜色)
+   Lifted mid-tones + a touch more chroma: less “纯黑”，
+   更接近雾蓝灰，层次更透气。
+   ───────────────────────────────────────────── */
+.dark {
+  --background: oklch(24% 0.014 230);
+  --foreground: oklch(95% 0.005 232);
+
+  --card: oklch(30% 0.016 230);
+  --card-foreground: oklch(95% 0.005 232);
+
+  --popover: oklch(33% 0.016 230);
+  --popover-foreground: oklch(95% 0.005 232);
+
+  --primary: oklch(62% 0.05 218);
+  --primary-foreground: oklch(17% 0.012 232);
+
+  --secondary: oklch(36% 0.016 230);
+  --secondary-foreground: oklch(84% 0.007 232);
+
+  --muted: oklch(38% 0.015 230);
+  --muted-foreground: oklch(58% 0.012 232);
+
+  --accent: oklch(40% 0.03 218);
+  --accent-foreground: oklch(78% 0.04 218);
+
+  --destructive: oklch(55% 0.19 24);
+
+  --border: oklch(42% 0.014 230);
+  --input: oklch(42% 0.014 230);
+  --ring: oklch(58% 0.048 218);
+
+  --sidebar: var(--card);
+  --sidebar-foreground: oklch(58% 0.012 232);
+
+  --live: oklch(58% 0.18 24);
+}
+
+/* ─────────────────────────────────────────────
    Resets
    ───────────────────────────────────────────── */
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+/* ─────────────────────────────────────────────
+   Theme-switch transition
+   Applied only when html[data-theme-transitioning]
+   is present — never slows down hover / active.
+   Placed AFTER the * reset so specificity wins.
+   ───────────────────────────────────────────── */
+html[data-theme-transitioning] *,
+html[data-theme-transitioning] *::before,
+html[data-theme-transitioning] *::after {
+  transition:
+    background-color 240ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 240ms cubic-bezier(0.4, 0, 0.2, 1),
+    fill 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 240ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* View Transition crossfade (Tauri WebView2 supports Chrome 111+) */
+@supports (view-transition-name: none) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 280ms;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  ::view-transition-old(root) {
+    animation-name: theme-fade-out;
+  }
+  ::view-transition-new(root) {
+    animation-name: theme-fade-in;
+  }
+  @keyframes theme-fade-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes theme-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
 }
 
 html,
@@ -151,6 +238,13 @@ img {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: oklch(74% 0.008 232);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: oklch(46% 0.014 230);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: oklch(56% 0.014 230);
 }
 
 /* ─────────────────────────────────────────────
@@ -211,7 +305,11 @@ img {
   min-height: min(60vh, 520px);
   border-radius: var(--radius);
   overflow: hidden;
+  /* 与浅色页面对比用的深底；暗色下改为与主题一致的冷灰 */
   background: oklch(11% 0.01 65);
+}
+.dark .player-stage {
+  background: oklch(20% 0.016 228);
 }
 
 /* ─────────────────────────────────────────────

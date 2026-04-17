@@ -5,9 +5,11 @@ import {
   Maximize2,
   Minimize2,
   Minus,
+  Moon,
   Radio,
   Search,
   Settings,
+  Sun,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -16,6 +18,7 @@ import streamingLogo from "@/assets/Streaming.svg";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { GlobalSearch } from "@/features/global-search/ui/GlobalSearch";
 import { usePlatformStore } from "@/features/platform-switch/model/usePlatformStore";
+import { useThemeStore } from "@/features/theme/model/useThemeStore";
 import { cn } from "@/lib/utils";
 import { loadPreferences } from "@/shared/api/commands";
 
@@ -146,10 +149,64 @@ function NavItem({ to, label, icon: Icon, end }: (typeof NAV_ITEMS)[0]) {
 
 // ── AppShell ─────────────────────────────────────────────────────────────────
 
+// ── ThemeToggle ───────────────────────────────────────────────────────────────
+
+function ThemeToggle() {
+  const { theme, toggle } = useThemeStore();
+  const isDark = theme === "dark";
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={isDark ? "切换为亮色模式" : "切换为暗色模式"}
+          className={cn(
+            "relative flex h-7 w-7 items-center justify-center rounded-md",
+            "text-muted-foreground/70 transition-colors duration-150",
+            "hover:bg-foreground/8 hover:text-foreground",
+          )}
+        >
+          {/* Sun — visible in dark mode */}
+          <Sun
+            size={14}
+            strokeWidth={1.9}
+            className={cn(
+              "absolute transition-all duration-300",
+              isDark ? "opacity-100 rotate-0 scale-100" : "opacity-0 -rotate-90 scale-75",
+            )}
+          />
+          {/* Moon — visible in light mode */}
+          <Moon
+            size={13}
+            strokeWidth={1.9}
+            className={cn(
+              "absolute transition-all duration-300",
+              isDark ? "opacity-0 rotate-90 scale-75" : "opacity-100 rotate-0 scale-100",
+            )}
+          />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="text-xs">
+        {isDark ? "亮色模式" : "暗色模式"}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+// ── AppShell ─────────────────────────────────────────────────────────────────
+
 export function AppShell() {
   const location = useLocation();
   const hydratePlatform = usePlatformStore((s) => s.hydratePlatform);
+  const initTheme = useThemeStore((s) => s.init);
   const isPlayer = location.pathname.startsWith("/player/");
+
+  // Init theme before first paint
+  useEffect(() => {
+    initTheme();
+  }, [initTheme]);
 
   useEffect(() => {
     let ok = true;
@@ -179,7 +236,7 @@ export function AppShell() {
             </TooltipContent>
           </Tooltip>
 
-          <nav className="flex flex-1 flex-col items-center gap-0.5" aria-label="主导航">
+          <nav className="flex flex-1 flex-col items-center gap-1" aria-label="主导航">
             {NAV_ITEMS.map((item) => (
               <NavItem key={item.to} {...item} />
             ))}
@@ -229,7 +286,8 @@ export function AppShell() {
             </div>
 
             {/* Interactive area should not be a drag region */}
-            <div className="flex items-center pr-1">
+            <div className="flex items-center gap-0.5 pr-1">
+              <ThemeToggle />
               <GlobalSearch />
               <WindowControls />
             </div>

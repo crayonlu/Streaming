@@ -1,6 +1,6 @@
-import { AlertCircle, WifiOff } from "lucide-react";
+import { AlertCircle, FileQuestion, WifiOff } from "lucide-react";
 
-type StatusTone = "loading" | "error" | "offline";
+type StatusTone = "loading" | "error" | "offline" | "empty";
 
 interface StatusViewProps {
   title: string;
@@ -21,7 +21,7 @@ export function StatusView({ title, hint, tone }: StatusViewProps) {
     );
   }
 
-  const Icon = tone === "error" ? AlertCircle : WifiOff;
+  const Icon = tone === "error" ? AlertCircle : tone === "empty" ? FileQuestion : WifiOff;
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16">

@@ -139,19 +139,14 @@ pub enum Appearance {
     Light,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ProxyMode {
     /// Disable all proxy (default, safe for most users).
+    #[default]
     None,
     /// Use OS / environment variable proxy settings.
     System,
-}
-
-impl Default for ProxyMode {
-    fn default() -> Self {
-        ProxyMode::None
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -120,7 +120,9 @@ export function DiscoverPage() {
         setResumeEntry(pref.lastVisited);
       }
     });
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const hasData = rooms.length > 0;

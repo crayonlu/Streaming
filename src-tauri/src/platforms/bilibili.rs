@@ -2,8 +2,10 @@ use reqwest::header::{COOKIE, REFERER, USER_AGENT};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
-use crate::models::{PlatformId, ReplayItem, ReplayQuality, RoomCard, RoomDetail, StreamFormat, StreamSource};
-use super::http::{shared_client, retry};
+use super::http::{retry, shared_client};
+use crate::models::{
+    PlatformId, ReplayItem, ReplayQuality, RoomCard, RoomDetail, StreamFormat, StreamSource,
+};
 
 pub use cookie::BilibiliCookieResult;
 
@@ -51,10 +53,7 @@ pub(crate) mod cookie {
         app_handle.webview_windows().keys().cloned().collect()
     }
 
-    fn merge_results(
-        a: &BilibiliCookieResult,
-        b: &BilibiliCookieResult,
-    ) -> BilibiliCookieResult {
+    fn merge_results(a: &BilibiliCookieResult, b: &BilibiliCookieResult) -> BilibiliCookieResult {
         let cookie = match (&a.cookie, &b.cookie) {
             (Some(a_str), Some(b_str)) => {
                 let mut map = BTreeMap::new();
@@ -138,8 +137,6 @@ pub(crate) mod cookie {
         url: &str,
     ) -> BilibiliCookieResult {
         let url = url.to_string();
-        let labels = labels;
-        // Clone: AppHandle is Clone + Send + Sync, needed for spawn_blocking 'static.
         let handle = app_handle.clone();
 
         tauri::async_runtime::spawn_blocking(move || {
@@ -238,9 +235,7 @@ pub(crate) mod cookie {
 
     /// Opens a visible login window for Bilibili at passport.bilibili.com.
     /// The frontend polls get_bilibili_cookie until login is detected, then closes the window.
-    pub async fn open_bilibili_login_window(
-        app_handle: &AppHandle,
-    ) -> Result<String, String> {
+    pub async fn open_bilibili_login_window(app_handle: &AppHandle) -> Result<String, String> {
         let label = "bilibili-login-window";
 
         // Close any existing login window first.
@@ -280,15 +275,16 @@ pub(crate) mod cookie {
 const DEFAULT_UA: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
 const LIVE_REFERER: &str = "https://live.bilibili.com/";
-const FEATURED_ENDPOINT: &str = "https://api.live.bilibili.com/xlive/web-interface/v1/index/getList";
+const FEATURED_ENDPOINT: &str =
+    "https://api.live.bilibili.com/xlive/web-interface/v1/index/getList";
 const SEARCH_ENDPOINT: &str = "https://api.bilibili.com/x/web-interface/search/type";
 const LIVE_SEARCH_ENDPOINT: &str =
     "https://api.live.bilibili.com/xlive/web-interface/v1/search/liveUsers";
-const ROOM_BASE_INFO_ENDPOINT: &str =
-    "https://api.live.bilibili.com/room/v1/Room/get_info_by_id";
+const ROOM_BASE_INFO_ENDPOINT: &str = "https://api.live.bilibili.com/room/v1/Room/get_info_by_id";
 const FINGERPRINT_ENDPOINT: &str = "https://api.bilibili.com/x/frontend/finger/spi";
 const ROOM_PAGE_ENDPOINT: &str = "https://live.bilibili.com";
-const PLAYINFO_ENDPOINT: &str = "https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo";
+const PLAYINFO_ENDPOINT: &str =
+    "https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo";
 const ROOM_INIT_ENDPOINT: &str = "https://api.live.bilibili.com/room/v1/Room/room_init";
 
 fn text_u64(v: Option<u64>) -> Option<String> {
@@ -321,10 +317,7 @@ async fn fetch_room_base_info_batch(
 
     // API supports batch IDs via ids[] parameter
     // Response format: { "code": 0, "data": { "room_id": { fields... } } }
-    let ids_param: Vec<(&str, String)> = room_ids
-        .iter()
-        .map(|id| ("ids[]", id.clone()))
-        .collect();
+    let ids_param: Vec<(&str, String)> = room_ids.iter().map(|id| ("ids[]", id.clone())).collect();
 
     let payload: Value = match client
         .get(ROOM_BASE_INFO_ENDPOINT)
@@ -375,7 +368,11 @@ fn value_to_string(value: Option<&Value>) -> String {
 }
 
 fn non_empty(s: String) -> Option<String> {
-    if s.is_empty() { None } else { Some(s) }
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
 }
 
 fn normalize_url(raw: &str) -> String {
@@ -570,7 +567,10 @@ fn parse_playurl_to_sources(playurl: &Value, room_id: &str) -> Vec<StreamSource>
                 .unwrap_or_default();
 
             for codec_item in codecs {
-                let qn = codec_item.get("current_qn").and_then(Value::as_i64).unwrap_or(0);
+                let qn = codec_item
+                    .get("current_qn")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(0);
                 let quality_label = qn_map
                     .get(&qn)
                     .cloned()
@@ -596,8 +596,9 @@ fn parse_playurl_to_sources(playurl: &Value, room_id: &str) -> Vec<StreamSource>
                         continue;
                     }
 
-                    let is_hls =
-                        protocol_name.contains("hls") || format_name == "ts" || stream_url.contains(".m3u8");
+                    let is_hls = protocol_name.contains("hls")
+                        || format_name == "ts"
+                        || stream_url.contains(".m3u8");
 
                     sources.push(StreamSource {
                         id: format!("bili-{qn}-{}", sources.len()),
@@ -863,11 +864,7 @@ fn parse_bili_search_items_with_fallback(
             .or_else(|| item.get("area_v2_name"))
             .and_then(Value::as_str)
             .map(|s| s.to_string());
-        let is_live = item
-            .get("live_status")
-            .and_then(Value::as_i64)
-            .unwrap_or(1)
-            == 1;
+        let is_live = item.get("live_status").and_then(Value::as_i64).unwrap_or(1) == 1;
 
         cards.push(RoomCard {
             id: format!("bilibili-{room_id}"),
@@ -885,7 +882,7 @@ fn parse_bili_search_items_with_fallback(
     cards
 }
 
-async fn search_rooms_once(keyword: &str) -> Result<Vec<RoomCard>, String> {
+async fn search_rooms_once(keyword: &str, page: u32) -> Result<Vec<RoomCard>, String> {
     let trimmed = keyword.trim();
     if trimmed.is_empty() {
         return Ok(vec![]);
@@ -905,14 +902,18 @@ async fn search_rooms_once(keyword: &str) -> Result<Vec<RoomCard>, String> {
             .query(&[
                 ("keyword", trimmed),
                 ("platform", "pc"),
-                ("pn", "1"),
+                ("pn", &page.to_string()),
                 ("ps", "30"),
             ]);
         if !cookie_header.is_empty() {
             req = req.header(COOKIE, &cookie_header);
         }
         req.send().await.ok().and_then(|r| {
-            if r.status().is_success() { Some(r) } else { None }
+            if r.status().is_success() {
+                Some(r)
+            } else {
+                None
+            }
         })
     };
 
@@ -930,12 +931,16 @@ async fn search_rooms_once(keyword: &str) -> Result<Vec<RoomCard>, String> {
                     let room_ids: Vec<String> = items
                         .iter()
                         .filter_map(|item| {
-                            let s = value_to_string(item.get("roomid").or_else(|| item.get("room_id")));
+                            let s =
+                                value_to_string(item.get("roomid").or_else(|| item.get("room_id")));
                             non_empty(s)
                         })
                         .collect();
                     let room_info_map = fetch_room_base_info_batch(client, &room_ids).await;
-                    return Ok(parse_bili_search_items_with_fallback(&items, &room_info_map));
+                    return Ok(parse_bili_search_items_with_fallback(
+                        &items,
+                        &room_info_map,
+                    ));
                 }
             }
         }
@@ -957,7 +962,7 @@ async fn search_rooms_once(keyword: &str) -> Result<Vec<RoomCard>, String> {
             ("_extra", ""),
             ("highlight", "0"),
             ("single_column", "0"),
-            ("page", "1"),
+            ("page", &page.to_string()),
         ]);
     if !cookie_header.is_empty() {
         request = request.header(COOKIE, cookie_header);
@@ -1015,15 +1020,18 @@ async fn search_rooms_once(keyword: &str) -> Result<Vec<RoomCard>, String> {
             })
             .collect();
         let room_info_map = fetch_room_base_info_batch(client, &room_ids).await;
-        return Ok(parse_bili_search_items_with_fallback(&source, &room_info_map));
+        return Ok(parse_bili_search_items_with_fallback(
+            &source,
+            &room_info_map,
+        ));
     }
 
     Ok(vec![])
 }
 
-pub async fn search_rooms(keyword: &str) -> Result<Vec<RoomCard>, String> {
+pub async fn search_rooms(keyword: &str, page: u32) -> Result<Vec<RoomCard>, String> {
     let kw = keyword.to_owned();
-    retry(2, || search_rooms_once(&kw)).await
+    retry(2, || search_rooms_once(&kw, page)).await
 }
 
 pub async fn get_room_detail(
@@ -1062,7 +1070,8 @@ pub async fn get_room_detail(
             .and_then(|v| v.get("title"))
             .or_else(|| room_init.get("title")),
     );
-    let streamer_name = value_to_string(anchor_info.get("uname").or_else(|| room_init.get("uname")));
+    let streamer_name =
+        value_to_string(anchor_info.get("uname").or_else(|| room_init.get("uname")));
     let avatar_url = normalize_url(&value_to_string(anchor_info.get("face")));
     let cover_url = normalize_url(&value_to_string(
         room_info
@@ -1080,7 +1089,11 @@ pub async fn get_room_detail(
         .and_then(|v| v.get("description"))
         .and_then(Value::as_str)
         .map(|s| s.to_string());
-    let live_status = room_init.get("live_status").and_then(Value::as_i64).unwrap_or(0) == 1;
+    let live_status = room_init
+        .get("live_status")
+        .and_then(Value::as_i64)
+        .unwrap_or(0)
+        == 1;
 
     Ok(RoomDetail {
         id: format!("bilibili-{normalized_room_id}"),
@@ -1088,8 +1101,16 @@ pub async fn get_room_detail(
         room_id: normalized_room_id,
         title,
         streamer_name,
-        avatar_url: if avatar_url.is_empty() { None } else { Some(avatar_url) },
-        cover_url: if cover_url.is_empty() { None } else { Some(cover_url) },
+        avatar_url: if avatar_url.is_empty() {
+            None
+        } else {
+            Some(avatar_url)
+        },
+        cover_url: if cover_url.is_empty() {
+            None
+        } else {
+            Some(cover_url)
+        },
         area_name,
         description,
         is_live: live_status || live_status_from_init,
@@ -1149,7 +1170,9 @@ pub async fn get_stream_sources(
 
     let mut sources = vec![];
     for params in &param_sets {
-        if let Ok(response) = request_playinfo(client, &normalized_room_id, params, cookie.as_deref()).await {
+        if let Ok(response) =
+            request_playinfo(client, &normalized_room_id, params, cookie.as_deref()).await
+        {
             sources = parse_playurl_to_sources(&extract_playurl(&response), &normalized_room_id);
             if !sources.is_empty() {
                 break;
@@ -1205,14 +1228,16 @@ pub async fn get_stream_sources(
     // Collect one source per (qualityKey, format) pair, keeping the one with
     // the highest priority within that group.  This deduplicates CDN routes
     // (gotcha101 / gotcha104b / …) which all share the same quality label.
-    fn best_per_quality_and_format(
-        mut sources: Vec<StreamSource>,
-    ) -> Vec<StreamSource> {
+    fn best_per_quality_and_format(mut sources: Vec<StreamSource>) -> Vec<StreamSource> {
         sources.sort_by_key(|s| std::cmp::Reverse(source_priority(s)));
         let mut seen: HashMap<(String, String), usize> = HashMap::new();
         let mut result: Vec<StreamSource> = Vec::new();
         for (idx, s) in sources.into_iter().enumerate() {
-            let fmt_str = if matches!(s.format, StreamFormat::Hls) { "hls" } else { "flv" };
+            let fmt_str = if matches!(s.format, StreamFormat::Hls) {
+                "hls"
+            } else {
+                "flv"
+            };
             let key = (s.quality_key.clone(), fmt_str.to_string());
             let entry = seen.entry(key).or_insert(idx);
             if *entry == idx {
@@ -1291,11 +1316,8 @@ async fn save_bilibili_sessdata(sessdata: &str) {
 
 /// Reads SESSDATA from the on-disk cookie store. Returns None if absent or invalid.
 pub(crate) async fn read_saved_cookie() -> Option<String> {
-    let content = tokio::fs::read(".bilibili_cookie_store.json")
-        .await
-        .ok()?;
-    let map: serde_json::Map<String, serde_json::Value> =
-        serde_json::from_slice(&content).ok()?;
+    let content = tokio::fs::read(".bilibili_cookie_store.json").await.ok()?;
+    let map: serde_json::Map<String, serde_json::Value> = serde_json::from_slice(&content).ok()?;
     let sessdata = map.get("SESSDATA")?.as_str()?.trim();
     if sessdata.is_empty() {
         return None;
@@ -1359,7 +1381,10 @@ pub async fn get_replay_list(
         return Err("该主播尚未授权回放剪辑功能".to_string());
     }
     if code != 0 {
-        let msg = payload.get("message").and_then(Value::as_str).unwrap_or("unknown");
+        let msg = payload
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
         return Err(format!("获取回放列表失败: {msg}"));
     }
 
@@ -1476,10 +1501,7 @@ pub async fn get_replay_qualities(
             reqwest::header::CONTENT_TYPE,
             "application/x-www-form-urlencoded",
         )
-        .form(&[
-            ("record_id", replay_id),
-            ("csrf", ""),
-        ]);
+        .form(&[("record_id", replay_id), ("csrf", "")]);
 
     if let Some(ref cookie_str) = cookies.cookie {
         request = request.header(COOKIE, cookie_str.as_str());
@@ -1500,7 +1522,10 @@ pub async fn get_replay_qualities(
         return Err("请先在设置中登录B站账号".to_string());
     }
     if code != 0 {
-        let msg = payload.get("message").and_then(Value::as_str).unwrap_or("unknown");
+        let msg = payload
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
         return Err(format!("获取回放地址失败: {msg}"));
     }
 
@@ -1541,10 +1566,11 @@ pub async fn get_replay_qualities(
     }
 
     let time_msg = if let Some(ts) = estimated_time {
-        let remaining = ts - std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs() as i64)
-            .unwrap_or(0);
+        let remaining = ts
+            - std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0);
         if remaining > 0 {
             let h = remaining / 3600;
             let m = (remaining % 3600) / 60;
@@ -1565,4 +1591,34 @@ pub async fn get_replay_qualities(
         if !time_msg.is_empty() { "，" } else { "" },
         time_msg
     ))
+}
+
+pub async fn check_rooms_live(room_ids: &[String]) -> HashMap<String, bool> {
+    let client = shared_client();
+    let mut result = HashMap::new();
+
+    for chunk in room_ids.chunks(50) {
+        let ids_param = chunk.join(",");
+        let resp = client
+            .get(ROOM_INIT_ENDPOINT)
+            .header(USER_AGENT, DEFAULT_UA)
+            .header(REFERER, LIVE_REFERER)
+            .query(&[("id", &ids_param)])
+            .send()
+            .await;
+
+        if let Ok(resp) = resp {
+            if let Ok(payload) = resp.json::<Value>().await {
+                if let Some(data) = payload.get("data").and_then(Value::as_object) {
+                    for (rid, info) in data {
+                        let live =
+                            info.get("live_status").and_then(Value::as_i64).unwrap_or(0) == 1;
+                        result.insert(rid.clone(), live);
+                    }
+                }
+            }
+        }
+    }
+
+    result
 }

@@ -271,7 +271,7 @@ export function SettingsPage() {
         {/* ── 关于 ── */}
         <div className="flex items-center justify-between text-[11px] text-muted-foreground/55">
           <div className="space-y-0.5">
-            <p>Streaming · v0.1.0</p>
+            <p>Streaming · v0.2.0</p>
             <p>支持 Bilibili · 斗鱼</p>
           </div>
           <div className="text-right space-y-0.5 text-[10px]">

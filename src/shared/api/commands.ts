@@ -78,9 +78,13 @@ export async function getFeatured(platform: PlatformId, page = 1): Promise<RoomC
   return patchFollowed(cards, follows);
 }
 
-export async function searchRooms(keyword: string, platform?: PlatformId): Promise<SearchResult> {
+export async function searchRooms(
+  keyword: string,
+  platform?: PlatformId,
+  page = 1,
+): Promise<SearchResult> {
   const [result, follows] = await Promise.all([
-    safeInvoke<unknown>("search_rooms", { keyword, platform }),
+    safeInvoke<unknown>("search_rooms", { keyword, platform, page }),
     getFollowRecordsFromStore(),
   ]);
   const parsed = searchResultSchema.parse(result);
@@ -242,4 +246,11 @@ export async function recordLastVisited(
 export function buildRoomWebUrl(platform: PlatformId, roomId: string) {
   if (platform === "bilibili") return `https://live.bilibili.com/${roomId}`;
   return `https://www.douyu.com/${roomId}`;
+}
+
+export async function checkRoomsLiveStatus(
+  rooms: { platform: PlatformId; roomId: string }[],
+): Promise<Record<string, boolean>> {
+  if (rooms.length === 0) return {};
+  return safeInvoke<Record<string, boolean>>("check_rooms_live_status", { rooms });
 }

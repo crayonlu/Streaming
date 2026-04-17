@@ -247,6 +247,49 @@ function ControlsOverlay({
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
 
+  // ── Keyboard shortcuts (Space, M, F) ───────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
+        return;
+
+      const p = playerRef.current;
+      if (!p) return;
+
+      switch (e.key) {
+        case " ":
+          e.preventDefault();
+          if (p.paused) {
+            p.play?.();
+            setPlaying(true);
+          } else {
+            p.pause?.();
+            setPlaying(false);
+          }
+          break;
+        case "m":
+        case "M": {
+          e.preventDefault();
+          const next = !muted;
+          p.muted = next;
+          setMuted(next);
+          break;
+        }
+        case "f":
+        case "F":
+          e.preventDefault();
+          if (stageRef.current) {
+            if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+            else void stageRef.current.requestFullscreen().catch(() => undefined);
+          }
+          break;
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [playerRef, stageRef, muted]);
+
   // ── Idle timer ──────────────────────────────────────────────────────────────
   const resetIdle = useCallback(() => {
     setVisible(true);
@@ -546,9 +589,46 @@ export function VideoPlayer({
       instanceRef.current = inst;
       if (externalRef) externalRef.current = inst;
 
+      // ── Auto-retry on error (up to 3 times with increasing delay) ───────
+      let retryCount = 0;
+      const maxRetries = 3;
+      const retryDelays = [1000, 3000, 5000];
+
       inst.on?.("error", () => {
-        if (!disposed) onError?.();
+        if (disposed) return;
+        if (retryCount < maxRetries) {
+          const delay = retryDelays[retryCount] ?? 5000;
+          retryCount++;
+          setTimeout(() => {
+            if (disposed) return;
+            inst?.reload?.();
+          }, delay);
+        } else {
+          onError?.();
+        }
       });
+
+      // ── Stream recovery: reload if waiting > 10s ─────────────────────
+      if (isLive) {
+        let waitingTimer: ReturnType<typeof setTimeout> | null = null;
+
+        inst.on?.("waiting", () => {
+          if (disposed) return;
+          if (waitingTimer) return;
+          waitingTimer = setTimeout(() => {
+            waitingTimer = null;
+            if (disposed) return;
+            inst?.reload?.();
+          }, 10_000);
+        });
+
+        inst.on?.("playing", () => {
+          if (waitingTimer) {
+            clearTimeout(waitingTimer);
+            waitingTimer = null;
+          }
+        });
+      }
     };
 
     void boot();

@@ -9,12 +9,11 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use super::http::{custom_client_builder, retry, shared_client};
 use crate::models::{PlatformId, RoomCard, RoomDetail, StreamFormat, StreamSource};
-use super::http::{custom_client_builder, shared_client, retry};
 
 const DEFAULT_UA: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
-const FEATURED_ENDPOINT: &str = "https://www.douyu.com/gapi/rkc/directory/mixListV1/0_0/1";
 const SEARCH_ENDPOINT: &str = "https://www.douyu.com/japi/search/api/searchUser";
 const DEFAULT_DOUYU_DID: &str = "10000000000000000000000000001501";
 const DEFAULT_DOUYU_CDN: &str = "ws-h5";
@@ -138,8 +137,10 @@ impl DouyuClient {
             .execute_script("[douyu]", FastString::from(script.to_string()))
             .map_err(|e| format!("inject sign script failed: {e}"))?;
 
-        let rid_js = serde_json::to_string(rid).map_err(|e| format!("serialize rid failed: {e}"))?;
-        let did_js = serde_json::to_string(did).map_err(|e| format!("serialize did failed: {e}"))?;
+        let rid_js =
+            serde_json::to_string(rid).map_err(|e| format!("serialize rid failed: {e}"))?;
+        let did_js =
+            serde_json::to_string(did).map_err(|e| format!("serialize did failed: {e}"))?;
         let call_expr = format!("ub98484234({rid_js},{did_js},{ts});");
         let js_result = runtime
             .execute_script("[douyu]", FastString::from(call_expr))
@@ -165,7 +166,9 @@ impl DouyuClient {
             .await
             .map_err(|e| format!("douyu betard parse failed: {e}"))?;
 
-        let room = json.room.ok_or_else(|| "douyu room data missing".to_string())?;
+        let room = json
+            .room
+            .ok_or_else(|| "douyu room data missing".to_string())?;
         let room_id_value = room
             .room_id
             .ok_or_else(|| "douyu room_id missing".to_string())?;
@@ -188,7 +191,9 @@ impl DouyuClient {
     async fn get_h5_enc(&self, room_id: &str) -> Result<String, String> {
         let json = self
             .client
-            .get(format!("https://www.douyu.com/swf_api/homeH5Enc?rids={room_id}"))
+            .get(format!(
+                "https://www.douyu.com/swf_api/homeH5Enc?rids={room_id}"
+            ))
             .header("Referer", format!("https://www.douyu.com/{room_id}"))
             .send()
             .await
@@ -220,13 +225,18 @@ impl DouyuClient {
         self.execute_js_sign(&crptext, room_id, &self.did, ts).await
     }
 
-    async fn get_play_qualities(&self, room_id: &str, sign_data: &str) -> Result<DouyuPlayInfo, String> {
-        let payload = format!(
-            "{sign_data}&cdn=&rate=-1&ver=Douyu_223061205&iar=1&ive=1&hevc=0&fa=0"
-        );
+    async fn get_play_qualities(
+        &self,
+        room_id: &str,
+        sign_data: &str,
+    ) -> Result<DouyuPlayInfo, String> {
+        let payload =
+            format!("{sign_data}&cdn=&rate=-1&ver=Douyu_223061205&iar=1&ive=1&hevc=0&fa=0");
         let json = self
             .client
-            .post(format!("https://www.douyu.com/lapi/live/getH5Play/{room_id}"))
+            .post(format!(
+                "https://www.douyu.com/lapi/live/getH5Play/{room_id}"
+            ))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(payload)
             .send()
@@ -248,7 +258,11 @@ impl DouyuClient {
             .and_then(Value::as_array)
             .map(|arr| {
                 arr.iter()
-                    .filter_map(|item| item.get("cdn").and_then(Value::as_str).map(|s| s.to_string()))
+                    .filter_map(|item| {
+                        item.get("cdn")
+                            .and_then(Value::as_str)
+                            .map(|s| s.to_string())
+                    })
                     .collect::<Vec<String>>()
             })
             .unwrap_or_default();
@@ -283,7 +297,9 @@ impl DouyuClient {
         let payload = format!("{sign_data}&cdn={cdn}&rate={rate}");
         let json = self
             .client
-            .post(format!("https://www.douyu.com/lapi/live/getH5Play/{room_id}"))
+            .post(format!(
+                "https://www.douyu.com/lapi/live/getH5Play/{room_id}"
+            ))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .header("Referer", format!("https://www.douyu.com/{room_id}"))
             .body(payload)
@@ -356,9 +372,9 @@ async fn get_featured_once(page: u32) -> Result<Vec<RoomCard>, String> {
 
         let title = value_to_string(item.get("rn").or_else(|| item.get("roomName")));
         let streamer_name = value_to_string(item.get("nn").or_else(|| item.get("nickName")));
-        let cover_url = normalize_url(
-            &value_to_string(item.get("rs16").or_else(|| item.get("roomSrc"))),
-        );
+        let cover_url = normalize_url(&value_to_string(
+            item.get("rs16").or_else(|| item.get("roomSrc")),
+        ));
         let area_name = item
             .get("c2name")
             .or_else(|| item.get("cateName"))
@@ -399,16 +415,19 @@ pub async fn get_featured(page: u32) -> Result<Vec<RoomCard>, String> {
     retry(2, || get_featured_once(p)).await
 }
 
-async fn search_rooms_once(keyword: &str) -> Result<Vec<RoomCard>, String> {
+async fn search_rooms_once(keyword: &str, page: u32) -> Result<Vec<RoomCard>, String> {
     let trimmed = keyword.trim();
     if trimmed.is_empty() {
         return Ok(vec![]);
     }
 
-    let did = format!("{:x}", std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|e| format!("time error: {e}"))?
-        .as_nanos());
+    let did = format!(
+        "{:x}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| format!("time error: {e}"))?
+            .as_nanos()
+    );
 
     let client = shared_client();
 
@@ -419,7 +438,7 @@ async fn search_rooms_once(keyword: &str) -> Result<Vec<RoomCard>, String> {
         .header("Cookie", format!("dy_did={did}; acf_did={did}"))
         .query(&[
             ("kw", trimmed),
-            ("page", "1"),
+            ("page", &page.to_string()),
             ("pageSize", "20"),
             ("filterType", "0"),
         ])
@@ -467,11 +486,10 @@ async fn search_rooms_once(keyword: &str) -> Result<Vec<RoomCard>, String> {
             continue;
         }
         let title = value_to_string(anchor.get("rn").or_else(|| anchor.get("roomName")));
-        let streamer_name =
-            value_to_string(anchor.get("nn").or_else(|| anchor.get("nickName")));
-        let cover_url = normalize_url(
-            &value_to_string(anchor.get("roomSrc").or_else(|| anchor.get("avatar"))),
-        );
+        let streamer_name = value_to_string(anchor.get("nn").or_else(|| anchor.get("nickName")));
+        let cover_url = normalize_url(&value_to_string(
+            anchor.get("roomSrc").or_else(|| anchor.get("avatar")),
+        ));
         let area_name = anchor
             .get("cateName")
             .or_else(|| anchor.get("c2name"))
@@ -498,18 +516,15 @@ async fn search_rooms_once(keyword: &str) -> Result<Vec<RoomCard>, String> {
     // Shape 2: flat list (only used when relateUser was empty)
     if cards.is_empty() {
         for item in &flat_list {
-            let room_id =
-                value_to_string(item.get("rid").or_else(|| item.get("roomId")));
+            let room_id = value_to_string(item.get("rid").or_else(|| item.get("roomId")));
             if room_id.is_empty() {
                 continue;
             }
-            let title =
-                value_to_string(item.get("roomName").or_else(|| item.get("rn")));
-            let streamer_name =
-                value_to_string(item.get("nickname").or_else(|| item.get("nn")));
-            let cover_url = normalize_url(
-                &value_to_string(item.get("roomSrc").or_else(|| item.get("avatar"))),
-            );
+            let title = value_to_string(item.get("roomName").or_else(|| item.get("rn")));
+            let streamer_name = value_to_string(item.get("nickname").or_else(|| item.get("nn")));
+            let cover_url = normalize_url(&value_to_string(
+                item.get("roomSrc").or_else(|| item.get("avatar")),
+            ));
             let area_name = item
                 .get("cateName")
                 .or_else(|| item.get("c2name"))
@@ -537,9 +552,9 @@ async fn search_rooms_once(keyword: &str) -> Result<Vec<RoomCard>, String> {
     Ok(cards)
 }
 
-pub async fn search_rooms(keyword: &str) -> Result<Vec<RoomCard>, String> {
+pub async fn search_rooms(keyword: &str, page: u32) -> Result<Vec<RoomCard>, String> {
     let kw = keyword.to_owned();
-    retry(2, || search_rooms_once(&kw)).await
+    retry(2, || search_rooms_once(&kw, page)).await
 }
 
 pub async fn get_room_detail(room_id: &str) -> Result<RoomDetail, String> {
@@ -582,7 +597,10 @@ pub async fn get_room_detail(room_id: &str) -> Result<RoomDetail, String> {
         .or_else(|| room.get("cate2_name"))
         .and_then(Value::as_str)
         .map(|s| s.to_string());
-    let description = room.get("show_details").and_then(Value::as_str).map(|s| s.to_string());
+    let description = room
+        .get("show_details")
+        .and_then(Value::as_str)
+        .map(|s| s.to_string());
     let is_live = room.get("show_status").and_then(Value::as_i64).unwrap_or(0) == 1;
 
     Ok(RoomDetail {
@@ -591,8 +609,16 @@ pub async fn get_room_detail(room_id: &str) -> Result<RoomDetail, String> {
         room_id: rid,
         title,
         streamer_name,
-        avatar_url: if avatar_url.is_empty() { None } else { Some(avatar_url) },
-        cover_url: if cover_url.is_empty() { None } else { Some(cover_url) },
+        avatar_url: if avatar_url.is_empty() {
+            None
+        } else {
+            Some(avatar_url)
+        },
+        cover_url: if cover_url.is_empty() {
+            None
+        } else {
+            Some(cover_url)
+        },
         area_name,
         description,
         is_live,
@@ -617,7 +643,10 @@ pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, Stri
             }
         };
 
-        let play_info = match douyu.get_play_qualities(&normalized_room_id, &sign_data).await {
+        let play_info = match douyu
+            .get_play_qualities(&normalized_room_id, &sign_data)
+            .await
+        {
             Ok(info) => info,
             Err(err) => {
                 last_error = err;
@@ -640,7 +669,10 @@ pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, Stri
         let mut sources: Vec<StreamSource> = Vec::new();
         for cdn in cdns {
             for variant in &variants {
-                if sources.iter().any(|s| s.quality_key == variant.rate.to_string()) {
+                if sources
+                    .iter()
+                    .any(|s| s.quality_key == variant.rate.to_string())
+                {
                     continue;
                 }
 
@@ -670,7 +702,10 @@ pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, Stri
 
         if !sources.is_empty() {
             if attempt > 0 {
-                eprintln!("[douyu] recovered stream sources on retry attempt {}", attempt + 1);
+                eprintln!(
+                    "[douyu] recovered stream sources on retry attempt {}",
+                    attempt + 1
+                );
             }
             return Ok(sources);
         }
@@ -685,10 +720,8 @@ pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, Stri
 
 // ── Replay ────────────────────────────────────────────────────────────────────
 
-const REPLAY_LIST_ENDPOINT: &str =
-    "https://v.douyu.com/wgapi/vod/center/authorShowVideoList";
-const REPLAY_STREAM_ENDPOINT: &str =
-    "https://v.douyu.com/wgapi/vodnc/front/stream/getStreamUrlWeb";
+const REPLAY_LIST_ENDPOINT: &str = "https://v.douyu.com/wgapi/vod/center/authorShowVideoList";
+const REPLAY_STREAM_ENDPOINT: &str = "https://v.douyu.com/wgapi/vodnc/front/stream/getStreamUrlWeb";
 const VOD_REFERER: &str = "https://v.douyu.com/";
 
 /// Parse a duration display string ("MM:SS" or "HH:MM:SS") into total seconds.
@@ -747,7 +780,11 @@ fn build_replay_item_from_part(
     let title = value_to_string(part.get("title"));
     let cover_url = {
         let raw = value_to_string(part.get("cover"));
-        if raw.is_empty() { None } else { Some(raw) }
+        if raw.is_empty() {
+            None
+        } else {
+            Some(raw)
+        }
     };
     let duration_str_raw = value_to_string(part.get("video_duration"));
     let duration_secs = if duration_str_raw.is_empty() {
@@ -757,19 +794,21 @@ fn build_replay_item_from_part(
     };
     let show_remark = {
         let s = value_to_string(part.get("show_remark"));
-        if s.is_empty() { None } else { Some(s) }
+        if s.is_empty() {
+            None
+        } else {
+            Some(s)
+        }
     };
-    let part_num = part
-        .get("rank")
-        .and_then(Value::as_u64)
-        .unwrap_or(1) as u32;
-    let show_id = part
-        .get("show_id")
-        .and_then(Value::as_i64)
-        .unwrap_or(0);
+    let part_num = part.get("rank").and_then(Value::as_u64).unwrap_or(1) as u32;
+    let show_id = part.get("show_id").and_then(Value::as_i64).unwrap_or(0);
     let view_count_text = {
         let v = part.get("view_num").and_then(Value::as_u64).unwrap_or(0);
-        if v == 0 { None } else { Some(v.to_string()) }
+        if v == 0 {
+            None
+        } else {
+            Some(v.to_string())
+        }
     };
 
     Some(crate::models::ReplayItem {
@@ -778,7 +817,11 @@ fn build_replay_item_from_part(
         room_id: room_id.to_string(),
         title,
         cover_url,
-        duration_str: if duration_str_raw.is_empty() { None } else { Some(duration_str_raw) },
+        duration_str: if duration_str_raw.is_empty() {
+            None
+        } else {
+            Some(duration_str_raw)
+        },
         duration_secs,
         recorded_at,
         view_count_text,
@@ -866,30 +909,46 @@ pub async fn get_replay_list(
 
         let cover_url = {
             let raw = value_to_string(first_video.get("video_pic"));
-            if raw.is_empty() { None } else { Some(raw) }
+            if raw.is_empty() {
+                None
+            } else {
+                Some(raw)
+            }
         };
 
         // Use total replay_duration for the session
         let (duration_str, duration_secs) = {
             let rd = value_to_string(show.get("replay_duration"));
-            let secs = if rd.is_empty() { None } else { parse_duration_str(&rd) };
+            let secs = if rd.is_empty() {
+                None
+            } else {
+                parse_duration_str(&rd)
+            };
             (if rd.is_empty() { None } else { Some(rd) }, secs)
         };
 
         let show_remark = {
-            let s = value_to_string(first_video.get("show_remark")
-                .or_else(|| show.get("time_format")));
-            if s.is_empty() { None } else { Some(s) }
+            let s = value_to_string(
+                first_video
+                    .get("show_remark")
+                    .or_else(|| show.get("time_format")),
+            );
+            if s.is_empty() {
+                None
+            } else {
+                Some(s)
+            }
         };
 
-        let show_id = show
-            .get("show_id")
-            .and_then(Value::as_i64)
-            .unwrap_or(0);
+        let show_id = show.get("show_id").and_then(Value::as_i64).unwrap_or(0);
 
         let view_count_text = {
             let v = value_to_string(first_video.get("view_num"));
-            if v.is_empty() { None } else { Some(v) }
+            if v.is_empty() {
+                None
+            } else {
+                Some(v)
+            }
         };
 
         items.push(crate::models::ReplayItem {
@@ -913,8 +972,7 @@ pub async fn get_replay_list(
     Ok(items)
 }
 
-const REPLAY_PARTS_ENDPOINT: &str =
-    "https://v.douyu.com/wgapi/vod/center/getShowReplayList";
+const REPLAY_PARTS_ENDPOINT: &str = "https://v.douyu.com/wgapi/vod/center/getShowReplayList";
 
 /// Returns ALL parts (P1 / P2 / P3 …) for a specific live session.
 ///
@@ -970,7 +1028,9 @@ pub async fn get_replay_parts(
 /// Returns all available quality options for a replay segment.
 /// The caller should present these to the user; the highest `level` is
 /// the best quality (typically 超清 level=4).
-pub async fn get_replay_qualities(hash_id: &str) -> Result<Vec<crate::models::ReplayQuality>, String> {
+pub async fn get_replay_qualities(
+    hash_id: &str,
+) -> Result<Vec<crate::models::ReplayQuality>, String> {
     let client = shared_client();
 
     // 1. Fetch the VOD show page and extract signing params
@@ -1060,8 +1120,16 @@ pub async fn get_replay_qualities(hash_id: &str) -> Result<Vec<crate::models::Re
         .await
         .map_err(|e| format!("stream url parse failed: {e}"))?;
 
-    if stream_resp.get("error").and_then(Value::as_i64).unwrap_or(-1) != 0 {
-        let msg = stream_resp.get("msg").and_then(Value::as_str).unwrap_or("unknown");
+    if stream_resp
+        .get("error")
+        .and_then(Value::as_i64)
+        .unwrap_or(-1)
+        != 0
+    {
+        let msg = stream_resp
+            .get("msg")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
         return Err(format!("stream url api error: {msg}"));
     }
 
@@ -1078,7 +1146,11 @@ pub async fn get_replay_qualities(hash_id: &str) -> Result<Vec<crate::models::Re
 
     for &qname in QUALITY_ORDER {
         if let Some(v) = thumb_video.get(qname) {
-            let url = v.get("url").and_then(Value::as_str).unwrap_or("").to_string();
+            let url = v
+                .get("url")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
             if url.is_empty() {
                 continue;
             }
@@ -1098,7 +1170,11 @@ pub async fn get_replay_qualities(hash_id: &str) -> Result<Vec<crate::models::Re
         if QUALITY_ORDER.contains(&key.as_str()) {
             continue;
         }
-        let url = v.get("url").and_then(Value::as_str).unwrap_or("").to_string();
+        let url = v
+            .get("url")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
         if url.is_empty() {
             continue;
         }
@@ -1117,4 +1193,32 @@ pub async fn get_replay_qualities(hash_id: &str) -> Result<Vec<crate::models::Re
     }
 
     Ok(qualities)
+}
+
+pub async fn check_rooms_live(room_ids: &[String]) -> std::collections::HashMap<String, bool> {
+    let client = shared_client();
+    let mut result = std::collections::HashMap::new();
+
+    for rid in room_ids {
+        let resp = client
+            .get(format!("https://www.douyu.com/betard/{rid}"))
+            .header("User-Agent", DEFAULT_UA)
+            .header("Referer", format!("https://www.douyu.com/{rid}"))
+            .send()
+            .await;
+
+        if let Ok(resp) = resp {
+            if let Ok(payload) = resp.json::<Value>().await {
+                let is_live = payload
+                    .get("room")
+                    .and_then(|r| r.get("show_status"))
+                    .and_then(Value::as_i64)
+                    .unwrap_or(0)
+                    == 1;
+                result.insert(rid.clone(), is_live);
+            }
+        }
+    }
+
+    result
 }

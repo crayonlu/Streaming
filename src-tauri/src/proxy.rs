@@ -12,13 +12,13 @@
 //!                      URL so the browser fetches it through `/seg` below
 //!   `/seg?url=…`     — HLS segment proxy; streams TS / fMP4 bytes
 
+use axum::body::Body;
 use axum::{
     extract::Query,
     http::{header, HeaderValue, Response, StatusCode},
     routing::get,
     Router,
 };
-use axum::body::Body;
 use serde::Deserialize;
 use std::sync::OnceLock;
 
@@ -39,7 +39,10 @@ pub fn proxify(original: &str) -> String {
         return String::new();
     }
     let port = proxy_port();
-    format!("http://127.0.0.1:{port}/img?url={}", percent_encode(original))
+    format!(
+        "http://127.0.0.1:{port}/img?url={}",
+        percent_encode(original)
+    )
 }
 
 /// Wrap a Bilibili HLS M3U8 URL so the browser fetches it through the local
@@ -49,7 +52,10 @@ pub fn proxify_stream(original: &str) -> String {
         return String::new();
     }
     let port = proxy_port();
-    format!("http://127.0.0.1:{port}/stream?url={}", percent_encode(original))
+    format!(
+        "http://127.0.0.1:{port}/stream?url={}",
+        percent_encode(original)
+    )
 }
 
 /// Minimal percent-encoding for query-parameter values (RFC 3986).
@@ -57,13 +63,9 @@ fn percent_encode(s: &str) -> String {
     let mut out = String::with_capacity(s.len() * 3);
     for b in s.bytes() {
         match b {
-            b'0'..=b'9'
-            | b'a'..=b'z'
-            | b'A'..=b'Z'
-            | b'-'
-            | b'_'
-            | b'.'
-            | b'~' => out.push(b as char),
+            b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
             _ => {
                 use std::fmt::Write;
                 let _ = write!(out, "%{b:02X}");
@@ -92,9 +94,7 @@ pub fn start() {
             .route("/stream", get(stream_handler))
             .route("/seg", get(seg_handler));
 
-        let listener = match tokio::net::TcpListener::bind(
-            format!("127.0.0.1:{port}")
-        ).await {
+        let listener = match tokio::net::TcpListener::bind(format!("127.0.0.1:{port}")).await {
             Ok(l) => l,
             Err(e) => {
                 eprintln!("[proxy] bind failed on port {port}: {e}");
@@ -130,9 +130,7 @@ struct ImgQuery {
     url: String,
 }
 
-async fn image_handler(
-    Query(params): Query<ImgQuery>,
-) -> Response<Body> {
+async fn image_handler(Query(params): Query<ImgQuery>) -> Response<Body> {
     let url = params.url.trim().to_string();
     if url.is_empty() {
         return simple_error(StatusCode::BAD_REQUEST, "missing url");
@@ -140,13 +138,10 @@ async fn image_handler(
 
     let client = crate::platforms::http::shared_client();
 
-    let mut req = client
-        .get(&url)
-        .header("User-Agent", PROXY_UA)
-        .header(
-            "Accept",
-            "image/avif,image/webp,image/apng,image/*;q=0.8,*/*;q=0.5",
-        );
+    let mut req = client.get(&url).header("User-Agent", PROXY_UA).header(
+        "Accept",
+        "image/avif,image/webp,image/apng,image/*;q=0.8,*/*;q=0.5",
+    );
 
     // Inject platform-specific Referer / Origin to bypass CDN hotlink checks.
     if url.contains("hdslb.com") || url.contains("bilibili.com") {
@@ -189,9 +184,7 @@ async fn image_handler(
         .status(StatusCode::OK)
         .header(
             header::CONTENT_TYPE,
-            HeaderValue::from_str(&ct).unwrap_or_else(|_| {
-                HeaderValue::from_static("image/jpeg")
-            }),
+            HeaderValue::from_str(&ct).unwrap_or_else(|_| HeaderValue::from_static("image/jpeg")),
         )
         .header(header::CONTENT_LENGTH, bytes.len().to_string())
         .header(header::CACHE_CONTROL, "public, max-age=3600")
@@ -226,7 +219,10 @@ async fn stream_handler(Query(params): Query<StreamQuery>) -> Response<Body> {
         .header("User-Agent", PROXY_UA)
         .header("Referer", "https://live.bilibili.com/")
         .header("Origin", "https://live.bilibili.com")
-        .header("Accept", "application/vnd.apple.mpegurl, application/x-mpegurl, */*")
+        .header(
+            "Accept",
+            "application/vnd.apple.mpegurl, application/x-mpegurl, */*",
+        )
         .send()
         .await
     {
@@ -238,7 +234,11 @@ async fn stream_handler(Query(params): Query<StreamQuery>) -> Response<Body> {
     };
 
     if !upstream.status().is_success() {
-        eprintln!("[proxy/stream] upstream {} → {}", m3u8_url, upstream.status());
+        eprintln!(
+            "[proxy/stream] upstream {} → {}",
+            m3u8_url,
+            upstream.status()
+        );
         return simple_error(StatusCode::BAD_GATEWAY, "upstream returned non-2xx");
     }
 
@@ -314,7 +314,12 @@ fn rewrite_tag_uri(attrs: &str, base: &str, port: u16) -> Option<String> {
     let original_uri = &attrs[start..end];
     let full = resolve_url(original_uri, base);
     let proxied = format!("http://127.0.0.1:{port}/seg?url={}", percent_encode(&full));
-    Some(format!("{}URI=\"{}\"{}", &attrs[..start - uri_key.len()], proxied, &attrs[end + 1..]))
+    Some(format!(
+        "{}URI=\"{}\"{}",
+        &attrs[..start - uri_key.len()],
+        proxied,
+        &attrs[end + 1..]
+    ))
 }
 
 // ── HLS segment proxy ─────────────────────────────────────────────────────────

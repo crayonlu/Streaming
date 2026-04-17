@@ -1,5 +1,5 @@
 import { Search } from "lucide-react";
-import { type FormEvent, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +16,26 @@ export function GlobalSearch() {
     navigate(`/search?q=${encodeURIComponent(keyword)}`);
     inputRef.current?.blur();
   };
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+      e.preventDefault();
+      inputRef.current?.focus();
+    }
+    if (e.key === "Escape") {
+      const active = document.activeElement;
+      if (active === inputRef.current) {
+        e.preventDefault();
+        inputRef.current?.blur();
+        setValue("");
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
 
   return (
     <form
@@ -46,7 +66,6 @@ export function GlobalSearch() {
           "min-w-0 w-44 bg-transparent text-sm text-foreground",
           "placeholder:text-muted-foreground/50",
           "focus:outline-none",
-          // Remove browser default search input styling
           "[&::-webkit-search-cancel-button]:hidden",
         )}
       />

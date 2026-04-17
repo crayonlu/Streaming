@@ -1,10 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { SearchX } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useSearchStore } from "@/features/search/model/useSearchStore";
 import { RoomCard } from "@/features/room-card/ui/RoomCard";
-import { searchRooms } from "@/shared/api/commands";
 import type { PlatformId } from "@/shared/types/domain";
 import { EmptyState } from "@/shared/ui/EmptyState";
 import { StatusView } from "@/shared/ui/StatusView";
@@ -29,21 +29,67 @@ function CardSkeleton() {
   );
 }
 
+function LoadingIndicator() {
+  return (
+    <div className="flex items-center justify-center py-4 gap-2 text-muted-foreground">
+      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+      <span className="text-xs">加载更多...</span>
+    </div>
+  );
+}
+
+function findScrollParent(start: HTMLElement | null): HTMLElement | null {
+  let el: HTMLElement | null = start?.parentElement ?? null;
+  while (el && el !== document.body) {
+    const { overflowY } = window.getComputedStyle(el);
+    if (/(auto|scroll|overlay)/.test(overflowY)) return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
 export function SearchPage() {
   const [params] = useSearchParams();
   const keyword = params.get("q")?.trim() ?? "";
   const scope = (params.get("scope") as SearchScope | null) ?? "all";
   const scopedPlatform = scope === "all" ? undefined : scope;
 
-  const query = useQuery({
-    queryKey: ["search", keyword, scopedPlatform],
-    queryFn: () => searchRooms(keyword, scopedPlatform),
-    enabled: keyword.length > 0,
-  });
+  const rooms = useSearchStore((s) => s.rooms);
+  const isLoading = useSearchStore((s) => s.isLoading);
+  const error = useSearchStore((s) => s.error);
+  const hasNextPage = useSearchStore((s) => s.hasNextPage);
+  const searchFirstPage = useSearchStore((s) => s.searchFirstPage);
+  const searchNextPage = useSearchStore((s) => s.searchNextPage);
+
+  const sectionRef = useRef<HTMLElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!keyword) return;
+    searchFirstPage(keyword, scopedPlatform);
+  }, [keyword, scopedPlatform, searchFirstPage]);
+
+  useEffect(() => {
+    if (isLoading || !rooms.length) return;
+    const sentinel = sentinelRef.current;
+    const section = sectionRef.current;
+    if (!sentinel || !section) return;
+    const scrollRoot = findScrollParent(section);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) searchNextPage();
+      },
+      { root: scrollRoot, rootMargin: "320px", threshold: 0 },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [isLoading, rooms.length, hasNextPage, searchNextPage]);
+
+  const hasData = rooms.length > 0;
+  const isEmpty = !isLoading && !hasData && !error;
 
   return (
-    <section className="page-stack">
-      {/* Header — only shown when there's a keyword */}
+    <section ref={sectionRef} className="page-stack">
       {keyword && (
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <p className="text-sm text-muted-foreground truncate max-w-xs">
@@ -70,23 +116,29 @@ export function SearchPage() {
 
       {!keyword ? (
         <EmptyState title="输入关键词开始搜索" icon={SearchX} />
-      ) : query.isLoading ? (
+      ) : !hasData && isLoading ? (
         <div className="cards-grid">
           {Array.from({ length: 8 }, (_, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: static-length skeleton placeholder
             <CardSkeleton key={i} />
           ))}
         </div>
-      ) : query.isError ? (
+      ) : error ? (
         <StatusView title="搜索失败" tone="error" />
-      ) : !query.data?.items.length ? (
+      ) : isEmpty ? (
         <EmptyState title={`"${keyword}" 无结果`} description="换个关键词试试" icon={SearchX} />
       ) : (
-        <div className="cards-grid">
-          {query.data.items.map((room) => (
-            <RoomCard key={room.id} room={room} />
-          ))}
-        </div>
+        <>
+          <div className="cards-grid">
+            {rooms.map((room) => (
+              <RoomCard key={room.id} room={room} />
+            ))}
+          </div>
+          <div ref={sentinelRef} className="h-1 w-full shrink-0" aria-hidden />
+          {hasData && isLoading && <LoadingIndicator />}
+          {!hasNextPage && hasData && !isLoading && (
+            <p className="text-center text-xs text-muted-foreground py-4">已加载全部结果</p>
+          )}
+        </>
       )}
     </section>
   );

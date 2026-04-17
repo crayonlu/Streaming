@@ -21,13 +21,15 @@ async fn get_featured(platform: PlatformId, page: Option<u32>) -> Result<Vec<Roo
 async fn search_rooms(
     keyword: String,
     platform: Option<PlatformId>,
+    page: Option<u32>,
 ) -> Result<SearchResult, String> {
+    let p = page.unwrap_or(1);
     let items = match platform {
-        Some(PlatformId::Bilibili) => platforms::bilibili::search_rooms(&keyword).await?,
-        Some(PlatformId::Douyu) => platforms::douyu::search_rooms(&keyword).await?,
+        Some(PlatformId::Bilibili) => platforms::bilibili::search_rooms(&keyword, p).await?,
+        Some(PlatformId::Douyu) => platforms::douyu::search_rooms(&keyword, p).await?,
         None => {
-            let bili_result = platforms::bilibili::search_rooms(&keyword).await;
-            let douyu_result = platforms::douyu::search_rooms(&keyword).await;
+            let bili_result = platforms::bilibili::search_rooms(&keyword, p).await;
+            let douyu_result = platforms::douyu::search_rooms(&keyword, p).await;
 
             let mut merged = Vec::new();
             let mut errors: Vec<String> = Vec::new();
@@ -75,7 +77,9 @@ async fn get_stream_sources(
     app_handle: AppHandle,
 ) -> Result<Vec<StreamSource>, String> {
     match platform {
-        PlatformId::Bilibili => platforms::bilibili::get_stream_sources(&app_handle, &room_id).await,
+        PlatformId::Bilibili => {
+            platforms::bilibili::get_stream_sources(&app_handle, &room_id).await
+        }
         PlatformId::Douyu => platforms::douyu::get_stream_sources(&room_id).await,
     }
 }
@@ -104,9 +108,7 @@ async fn get_replay_parts(
     up_id: String,
 ) -> Result<Vec<ReplayItem>, String> {
     match platform {
-        PlatformId::Douyu => {
-            platforms::douyu::get_replay_parts(&room_id, &hash_id, &up_id).await
-        }
+        PlatformId::Douyu => platforms::douyu::get_replay_parts(&room_id, &hash_id, &up_id).await,
         PlatformId::Bilibili => {
             platforms::bilibili::get_replay_parts(&room_id, &hash_id, &up_id).await
         }
@@ -136,18 +138,14 @@ async fn set_bilibili_sessdata(sessdata: String) -> Result<(), String> {
 /// Reads cookies from the app WebView (all open windows + a hidden bootstrap window).
 /// Returns the merged cookie string and whether SESSDATA / bili_jct were found.
 #[tauri::command]
-async fn get_bilibili_cookie(
-    app_handle: AppHandle,
-) -> platforms::bilibili::BilibiliCookieResult {
+async fn get_bilibili_cookie(app_handle: AppHandle) -> platforms::bilibili::BilibiliCookieResult {
     platforms::bilibili::cookie::get_bilibili_cookie(&app_handle).await
 }
 
 /// Opens a visible login window at passport.bilibili.com. The frontend polls
 /// get_bilibili_cookie until login is detected, then closes the window.
 #[tauri::command]
-async fn open_bilibili_login_window(
-    app_handle: AppHandle,
-) -> Result<String, String> {
+async fn open_bilibili_login_window(app_handle: AppHandle) -> Result<String, String> {
     platforms::bilibili::cookie::open_bilibili_login_window(&app_handle).await
 }
 
@@ -183,6 +181,38 @@ fn apply_proxy_mode(system: bool) {
     platforms::http::set_proxy_mode(system);
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RoomStatusEntry {
+    platform: PlatformId,
+    room_id: String,
+}
+
+#[tauri::command]
+async fn check_rooms_live_status(
+    rooms: Vec<RoomStatusEntry>,
+) -> Result<std::collections::HashMap<String, bool>, String> {
+    let mut bili_ids = Vec::new();
+    let mut douyu_ids = Vec::new();
+
+    for entry in &rooms {
+        match entry.platform {
+            PlatformId::Bilibili => bili_ids.push(entry.room_id.clone()),
+            PlatformId::Douyu => douyu_ids.push(entry.room_id.clone()),
+        }
+    }
+
+    let mut result = std::collections::HashMap::new();
+
+    let bili_map = platforms::bilibili::check_rooms_live(&bili_ids).await;
+    result.extend(bili_map);
+
+    let douyu_map = platforms::douyu::check_rooms_live(&douyu_ids).await;
+    result.extend(douyu_map);
+
+    Ok(result)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -209,7 +239,8 @@ pub fn run() {
             set_bilibili_sessdata,
             get_bilibili_cookie,
             open_bilibili_login_window,
-            close_bilibili_login_window
+            close_bilibili_login_window,
+            check_rooms_live_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

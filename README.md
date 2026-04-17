@@ -13,7 +13,7 @@
 
 ## 安装
 
-从 [Releases](https://github.com/crayon/Streaming/releases) 下载对应系统的安装包。
+从 [Releases](https://github.com/crayonlu/Streaming/releases) 下载对应系统的安装包。
 
 ## 注意事项
 

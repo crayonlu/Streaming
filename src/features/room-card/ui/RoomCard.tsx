@@ -2,16 +2,12 @@ import { Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { FollowButton } from "@/features/follow-button/ui/FollowButton";
 import { cn } from "@/lib/utils";
+import { PLATFORM_LABEL } from "@/shared/lib/platform";
 import type { RoomCard as RoomCardModel } from "@/shared/types/domain";
 
 interface RoomCardProps {
   room: RoomCardModel;
 }
-
-const PLATFORM_LABEL: Record<string, string> = {
-  bilibili: "B站",
-  douyu: "斗鱼",
-};
 
 export function RoomCard({ room }: RoomCardProps) {
   return (

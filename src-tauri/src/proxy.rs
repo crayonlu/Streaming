@@ -21,6 +21,7 @@ use axum::{
 };
 use serde::Deserialize;
 use std::sync::OnceLock;
+use tower_http::cors::CorsLayer;
 
 const DEFAULT_PORT: u16 = 34729;
 const PROXY_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
@@ -92,7 +93,8 @@ pub fn start() {
         let app = Router::new()
             .route("/img", get(image_handler))
             .route("/stream", get(stream_handler))
-            .route("/seg", get(seg_handler));
+            .route("/seg", get(seg_handler))
+            .layer(CorsLayer::very_permissive());
 
         let listener = match tokio::net::TcpListener::bind(format!("127.0.0.1:{port}")).await {
             Ok(l) => l,
@@ -388,8 +390,9 @@ async fn seg_handler(Query(params): Query<SegQuery>) -> Response<Body> {
 }
 
 fn simple_error(status: StatusCode, msg: &'static str) -> Response<Body> {
+    // This should never fail in practice, but avoid unwrap for safety
     Response::builder()
         .status(status)
         .body(Body::from(msg))
-        .unwrap()
+        .unwrap_or_else(|_| Response::new(Body::from(msg)))
 }

@@ -1074,9 +1074,7 @@ pub async fn get_replay_qualities(
         .find(|s| s.contains("ub98484234"))
         .ok_or_else(|| "signing script not found in show page".to_string())?;
 
-    // 3. Execute ub98484234(point_id, did, timestamp) via Deno.
-    //    JsRuntime is NOT Send, so all Deno work is done in a scoped block that
-    //    drops the runtime before the next `.await` point below.
+    // 3. Execute ub98484234(point_id, did, timestamp) via deno_core V8 engine.
     let post_body: String = {
         let did = DEFAULT_DOUYU_DID;
         let ts = SystemTime::now()
@@ -1092,17 +1090,15 @@ pub async fn get_replay_qualities(
             .execute_script("[douyu-vod]", FastString::from(sign_script))
             .map_err(|e| format!("inject sign script failed: {e}"))?;
 
-        let call_expr = format!("ub98484234({point_id},\"{did}\",{ts});");
+        let call_expr = format!("ub98484234({point_id:?},{did:?},{ts})");
         let js_result = runtime
             .execute_script("[douyu-vod]", FastString::from(call_expr))
             .map_err(|e| format!("execute sign function failed: {e}"))?;
 
-        let params = {
-            let scope = &mut runtime.handle_scope();
-            let result = js_result.open(scope);
-            result.to_rust_string_lossy(scope)
-        };
-        // runtime and js_result are dropped here — safe to .await below
+        let scope = &mut runtime.handle_scope();
+        let result = js_result.open(scope);
+        let params = result.to_rust_string_lossy(scope);
+
         format!("{params}&vid={vid}")
     };
 

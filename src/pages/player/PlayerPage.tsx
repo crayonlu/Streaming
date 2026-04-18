@@ -19,19 +19,9 @@ import {
   recordLastVisited,
   setBilibiliSessdata,
 } from "@/shared/api/commands";
+import { isPlatform, PLATFORM_LABEL } from "@/shared/lib/platform";
 import type { PlatformId, StreamSource } from "@/shared/types/domain";
 import { StatusView } from "@/shared/ui/StatusView";
-
-// ── Utilities ─────────────────────────────────────────────────────────────────
-
-function isPlatform(value: string | undefined): value is PlatformId {
-  return value === "bilibili" || value === "douyu";
-}
-
-const PLATFORM_LABEL: Record<string, string> = {
-  bilibili: "Bilibili",
-  douyu: "斗鱼",
-};
 
 // ── PlayerPage ────────────────────────────────────────────────────────────────
 
@@ -178,7 +168,7 @@ export function PlayerPage() {
             <div className="min-w-0">
               <h1 className="clamp-1 text-sm font-semibold leading-snug">{room.title}</h1>
               <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-                <span className="clamp-1 max-w-[120px]">{room.streamerName}</span>
+                <span className="clamp-1 max-w-30">{room.streamerName}</span>
                 <span className="text-border shrink-0">·</span>
                 <Badge
                   variant="outline"
@@ -189,7 +179,7 @@ export function PlayerPage() {
                 {room.areaName && (
                   <>
                     <span className="text-border shrink-0">·</span>
-                    <span className="clamp-1 max-w-[100px] shrink-0">{room.areaName}</span>
+                    <span className="clamp-1 max-w-25 shrink-0">{room.areaName}</span>
                   </>
                 )}
               </div>
@@ -238,7 +228,7 @@ export function PlayerPage() {
                     已登录
                   </>
                 ) : (
-                  "登录B站"
+                  "登录Bilibili"
                 )}
               </button>
             )}

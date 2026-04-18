@@ -2,51 +2,22 @@ import { SearchX } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { RoomCard } from "@/features/room-card/ui/RoomCard";
 import { useSearchStore } from "@/features/search/model/useSearchStore";
+import { findScrollParent } from "@/shared/lib/dom";
 import type { PlatformId } from "@/shared/types/domain";
+import { CardSkeleton } from "@/shared/ui/CardSkeleton";
 import { EmptyState } from "@/shared/ui/EmptyState";
+import { LoadingIndicator } from "@/shared/ui/LoadingIndicator";
 import { StatusView } from "@/shared/ui/StatusView";
 
 type SearchScope = "all" | PlatformId;
 
 const SCOPE_OPTIONS: { value: SearchScope; label: string }[] = [
   { value: "all", label: "全部" },
-  { value: "bilibili", label: "B站" },
+  { value: "bilibili", label: "Bilibili" },
   { value: "douyu", label: "斗鱼" },
 ];
-
-function CardSkeleton() {
-  return (
-    <div className="rounded-lg overflow-hidden bg-card ring-1 ring-transparent">
-      <Skeleton className="aspect-video w-full rounded-none" />
-      <div className="px-3 pb-2.5 pt-2 flex flex-col gap-1.5">
-        <Skeleton className="h-3.5 w-4/5" />
-        <Skeleton className="h-2.5 w-2/5" />
-      </div>
-    </div>
-  );
-}
-
-function LoadingIndicator() {
-  return (
-    <div className="flex items-center justify-center py-4 gap-2 text-muted-foreground">
-      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-      <span className="text-xs">加载更多...</span>
-    </div>
-  );
-}
-
-function findScrollParent(start: HTMLElement | null): HTMLElement | null {
-  let el: HTMLElement | null = start?.parentElement ?? null;
-  while (el && el !== document.body) {
-    const { overflowY } = window.getComputedStyle(el);
-    if (/(auto|scroll|overlay)/.test(overflowY)) return el;
-    el = el.parentElement;
-  }
-  return null;
-}
 
 export function SearchPage() {
   const [params] = useSearchParams();

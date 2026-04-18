@@ -22,40 +22,9 @@ import {
   getRoomDetail,
   setBilibiliSessdata,
 } from "@/shared/api/commands";
+import { fmtDate, fmtDuration } from "@/shared/lib/dom";
+import { isPlatform } from "@/shared/lib/platform";
 import type { PlatformId, ReplayItem, ReplayQuality } from "@/shared/types/domain";
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-function fmtDate(unix: number): string {
-  if (!unix) return "";
-  const d = new Date(unix * 1000);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-function fmtDuration(str?: string): string {
-  if (!str) return "";
-  const parts = str.split(":").map(Number);
-  if (parts.length === 3) {
-    const [h, m, s] = parts;
-    return h > 0
-      ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
-      : `${m}:${String(s).padStart(2, "0")}`;
-  }
-  if (parts.length === 2) {
-    const [m, s] = parts;
-    if (m >= 60) {
-      const h = Math.floor(m / 60);
-      return `${h}:${String(m % 60).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-    }
-    return `${m}:${String(s).padStart(2, "0")}`;
-  }
-  return str;
-}
-
-function isPlatform(v: string | undefined): v is PlatformId {
-  return v === "bilibili" || v === "douyu";
-}
 
 // ── PartRow ───────────────────────────────────────────────────────────────────
 
@@ -131,11 +100,11 @@ function SessionRow({
           <img
             src={session.coverUrl}
             alt=""
-            className="h-10 w-[72px] shrink-0 rounded object-cover bg-muted"
+            className="h-10 w-18 shrink-0 rounded object-cover bg-muted"
             loading="lazy"
           />
         ) : (
-          <div className="h-10 w-[72px] shrink-0 rounded bg-muted flex items-center justify-center">
+          <div className="h-10 w-18 shrink-0 rounded bg-muted flex items-center justify-center">
             <Film size={14} className="text-muted-foreground/30" />
           </div>
         )}
@@ -274,7 +243,7 @@ function ReplayList({
         {Array.from({ length: 6 }, (_, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton
           <div key={i} className="flex gap-2.5 rounded-lg px-2.5 py-2">
-            <div className="h-10 w-[72px] rounded bg-muted animate-pulse shrink-0" />
+            <div className="h-10 w-18  rounded bg-muted animate-pulse shrink-0" />
             <div className="flex flex-col gap-1.5 flex-1 pt-0.5">
               <div className="h-3 w-4/5 rounded bg-muted animate-pulse" />
               <div className="h-2 w-2/5 rounded bg-muted animate-pulse" />
@@ -480,7 +449,7 @@ export function ReplayPage() {
 
         {/* Currently playing */}
         {activeItem && (
-          <span className="hidden sm:block truncate max-w-[220px] text-[11px] text-muted-foreground">
+          <span className="hidden sm:block truncate max-w-55 text-[11px] text-muted-foreground">
             {activeItem.showRemark || activeItem.title}
           </span>
         )}
@@ -564,7 +533,6 @@ export function ReplayPage() {
             )}
           </div>
 
-          {/* B站未登录认证提示 */}
           {authMessage && platform === "bilibili" && (
             <div className="shrink-0 border-b border-border/50 bg-destructive/8 px-3 py-3">
               <p className="mb-2 text-xs text-destructive/90">{authMessage}</p>

@@ -1,8 +1,19 @@
-import { Check, Globe, Monitor, Network, Settings2, Tv2 } from "lucide-react";
+import {
+  Check,
+  Globe,
+  Monitor,
+  Moon,
+  Network,
+  Paintbrush,
+  Settings2,
+  Sun,
+  Tv2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { type ThemeMode, useThemeStore } from "@/features/theme/model/useThemeStore";
 import { cn } from "@/lib/utils";
 import { loadPreferences, savePreferences } from "@/shared/api/commands";
 import type { AppPreferences, PlatformId, ProxyMode } from "@/shared/types/domain";
@@ -151,6 +162,58 @@ function createDefault(): AppPreferences {
   };
 }
 
+// ── Appearance selector ──────────────────────────────────────────────────────
+
+const APPEARANCE_OPTIONS: {
+  value: ThemeMode;
+  label: string;
+  icon: React.ElementType;
+}[] = [
+  { value: "system", label: "跟随系统", icon: Monitor },
+  { value: "light", label: "亮色", icon: Sun },
+  { value: "dark", label: "暗色", icon: Moon },
+];
+
+function AppearanceSelector({
+  value,
+  onChange,
+}: {
+  value: ThemeMode;
+  onChange: (v: ThemeMode) => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-2 p-1">
+      {APPEARANCE_OPTIONS.map((opt) => {
+        const Icon = opt.icon;
+        const active = value === opt.value;
+        return (
+          <button
+            type="button"
+            key={opt.value}
+            onClick={() => onChange(opt.value)}
+            className={cn(
+              "flex flex-col items-center gap-1.5 rounded-md p-3 transition-all duration-150 cursor-pointer",
+              "border",
+              active
+                ? "border-primary/40 bg-accent/60 text-accent-foreground"
+                : "border-border/60 bg-transparent text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+            )}
+          >
+            <Icon
+              size={16}
+              strokeWidth={1.8}
+              className={active ? "text-primary" : "text-muted-foreground/70"}
+            />
+            <p className={cn("text-[11px] font-medium leading-none", active && "text-foreground")}>
+              {opt.label}
+            </p>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── SettingsPage ─────────────────────────────────────────────────────────────
 
 export function SettingsPage() {
@@ -186,6 +249,8 @@ export function SettingsPage() {
     try {
       const result = await savePreferences(prefs);
       setPrefs(result);
+      // Sync theme store with saved appearance
+      useThemeStore.getState().syncFromPreference(result.appearance as ThemeMode);
       setSaved(true);
       setTimeout(() => setSaved(false), 2200);
     } finally {
@@ -249,6 +314,22 @@ export function SettingsPage() {
         </div>
 
         <div>
+          <SectionLabel icon={Paintbrush} label="外观" />
+          <div className="rounded-lg bg-card ring-1 ring-border/40 overflow-hidden">
+            <div className="px-4 pt-3.5 pb-1">
+              <p className="text-sm font-medium leading-none">主题模式</p>
+              <p className="mt-1 text-[11px] text-muted-foreground leading-snug">
+                选择亮色、暗色或跟随系统设置。保存后生效。
+              </p>
+            </div>
+            <AppearanceSelector
+              value={prefs.appearance as ThemeMode}
+              onChange={(v: ThemeMode) => setPrefs((p) => ({ ...p, appearance: v }))}
+            />
+          </div>
+        </div>
+
+        <div>
           <SectionLabel icon={Monitor} label="网络" />
           <div className="rounded-lg bg-card ring-1 ring-border/40 overflow-hidden">
             <div className="px-4 pt-3.5 pb-1">
@@ -268,7 +349,7 @@ export function SettingsPage() {
 
         <div className="flex items-center justify-between text-[11px] text-muted-foreground/55">
           <div className="space-y-0.5">
-            <p>Streaming · v0.2.1</p>
+            <p>Streaming · v{__APP_VERSION__}</p>
             <p>支持 Bilibili · 斗鱼</p>
           </div>
           <div className="text-right space-y-0.5 text-[10px]">

@@ -102,27 +102,31 @@ async fn bootstrap_and_collect(
         Err(_) => return BilibiliCookieResult::default(),
     };
 
-    // Build an invisible, non-interactive window.
-    let builder = match tauri::WebviewWindowBuilder::new(
-        app_handle,
-        label.clone(),
-        WebviewUrl::External(parsed_url),
-    ) {
-        Ok(b) => b,
-        Err(_) => return BilibiliCookieResult::default(),
-    };
+    // Clone so we can pass into async blocks that require 'static.
+    let handle = app_handle.clone();
+    let label_owned = label.to_string();
 
-    if let Err(_) = builder.visible(false).resizable(false).focused(false).build() {
+    // Build a hidden, non-interactive bootstrap window.
+    let builder = tauri::WebviewWindowBuilder::new(
+        &handle,
+        &label_owned,
+        WebviewUrl::External(parsed_url),
+    )
+    .visible(false)
+    .resizable(false)
+    .focused(false);
+
+    if builder.build().is_err() {
         return BilibiliCookieResult::default();
     }
 
     // Give the page ~3 seconds to run its cookie-setting scripts.
     tokio::time::sleep(Duration::from_secs(3)).await;
 
-    let result = collect_from_labels(app_handle, vec![label.clone()], url).await;
+    let result = collect_from_labels(&handle, vec![label_owned.clone()], url).await;
 
     // Clean up the bootstrap window.
-    if let Some(w) = app_handle.get_webview_window(&label) {
+    if let Some(w) = handle.get_webview_window(&label_owned) {
         let _ = w.close();
     }
 
@@ -137,7 +141,7 @@ async fn collect_from_labels(
     url: &str,
 ) -> BilibiliCookieResult {
     let url = url.to_string();
-    let labels = labels;
+    let handle = app_handle.clone();
 
     tauri::async_runtime::spawn_blocking(move || {
         let mut collected: BTreeMap<String, String> = BTreeMap::new();
@@ -150,7 +154,7 @@ async fn collect_from_labels(
         };
 
         for label in labels {
-            let Some(window) = app_handle.get_webview_window(&label) else {
+            let Some(window) = handle.get_webview_window(&label) else {
                 continue;
             };
 
@@ -238,4 +242,41 @@ fn merge_cookies(
     }
 
     (has_sessdata, has_bili_jct)
+}
+
+/// Opens a visible login window for Bilibili at passport.bilibili.com.
+/// The frontend polls get_bilibili_cookie until login is detected, then closes the window.
+pub async fn open_bilibili_login_window(app_handle: &AppHandle) -> Result<String, String> {
+    let label = "bilibili-login-window";
+
+    // Close any existing login window first.
+    if let Some(old) = app_handle.get_webview_window(label) {
+        let _ = old.close();
+        tokio::time::sleep(Duration::from_millis(300)).await;
+    }
+
+    let login_url = "https://passport.bilibili.com/login";
+    let parsed_url =
+        url::Url::parse(login_url).map_err(|e| format!("invalid login URL: {e}"))?;
+
+    let handle = app_handle.clone();
+    let label_owned = label.to_string();
+
+    tauri::WebviewWindowBuilder::new(&handle, &label_owned, WebviewUrl::External(parsed_url))
+        .title("B站登录")
+        .inner_size(420.0, 640.0)
+        .resizable(true)
+        .focused(true)
+        .build()
+        .map_err(|e| format!("failed to open login window: {e}"))?;
+
+    Ok(label_owned)
+}
+
+/// Closes the visible login window if it exists.
+pub async fn close_bilibili_login_window(app_handle: &AppHandle) {
+    let label = "bilibili-login-window";
+    if let Some(w) = app_handle.get_webview_window(label) {
+        let _ = w.close();
+    }
 }

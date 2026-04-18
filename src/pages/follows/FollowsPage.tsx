@@ -1,16 +1,16 @@
 import { Heart } from "lucide-react";
 import { useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
-import { FollowButton } from "@/features/follow-button/ui/FollowButton";
 import { useFollowStore } from "@/features/follows/model/useFollowStore";
-import { PLATFORM_LABEL } from "@/shared/lib/platform";
+import { RoomCard } from "@/features/room-card/ui/RoomCard";
 import { CardSkeleton } from "@/shared/ui/CardSkeleton";
 import { EmptyState } from "@/shared/ui/EmptyState";
+import { StatusView } from "@/shared/ui/StatusView";
 
 export function FollowsPage() {
   const follows = useFollowStore((s) => s.follows);
   const liveStatusMap = useFollowStore((s) => s.liveStatusMap);
   const isLoading = useFollowStore((s) => s.isLoading);
+  const error = useFollowStore((s) => s.error);
   const sortByLive = useFollowStore((s) => s.sortByLive);
   const loadFollows = useFollowStore((s) => s.loadFollows);
   const loadedRef = useRef(false);
@@ -44,70 +44,36 @@ export function FollowsPage() {
             <CardSkeleton key={i} />
           ))}
         </div>
+      ) : error && !follows.length ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 py-16">
+          <StatusView title="加载失败" tone="error" />
+          <button
+            type="button"
+            onClick={() => loadFollows()}
+            className="text-xs text-primary hover:underline cursor-pointer"
+          >
+            点击重试
+          </button>
+        </div>
       ) : !follows.length ? (
         <EmptyState title="暂无关注" description="在发现或搜索页点击 ♥" icon={Heart} />
       ) : (
         <div className="cards-grid">
-          {sorted.map((follow) => {
-            const isLive = liveStatusMap[follow.roomId] ?? false;
-            return (
-              <div
-                key={follow.id}
-                className="group relative rounded-lg bg-card overflow-hidden cursor-pointer ring-1 ring-transparent transition-all duration-150 ease-out hover:ring-border hover:shadow-sm"
-              >
-                <Link to={`/player/${follow.platform}/${follow.roomId}`} className="block">
-                  <div className="card-cover">
-                    {follow.coverUrl ? (
-                      <img
-                        src={follow.coverUrl}
-                        alt={follow.title}
-                        className={`h-full w-full object-cover transition-transform duration-300 ${!isLive ? "opacity-60" : ""}`}
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="h-full w-full bg-muted" />
-                    )}
-
-                    {isLive && (
-                      <div className="absolute top-2 left-2 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5">
-                        <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-                        <span className="text-[10px] text-white font-medium">直播中</span>
-                      </div>
-                    )}
-
-                    <FollowButton
-                      room={{
-                        platform: follow.platform,
-                        roomId: follow.roomId,
-                        followed: true,
-                        title: follow.title,
-                        streamerName: follow.streamerName,
-                        coverUrl: follow.coverUrl,
-                      }}
-                      compact
-                    />
-                  </div>
-                </Link>
-
-                <div className="px-3 pb-2.5 pt-2 flex flex-col gap-1">
-                  <Link to={`/player/${follow.platform}/${follow.roomId}`}>
-                    <p className="clamp-2 text-[13px] font-medium leading-snug text-foreground transition-colors duration-150 group-hover:text-primary">
-                      {follow.title}
-                    </p>
-                  </Link>
-                  <div className="flex items-center gap-1 min-w-0">
-                    <span className="clamp-1 text-[11px] text-muted-foreground">
-                      {follow.streamerName}
-                    </span>
-                    <span className="shrink-0 text-border select-none">·</span>
-                    <span className="text-[11px] text-muted-foreground shrink-0">
-                      {PLATFORM_LABEL[follow.platform] ?? follow.platform}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {sorted.map((follow) => (
+            <RoomCard
+              key={follow.id}
+              room={{
+                id: follow.id,
+                platform: follow.platform,
+                roomId: follow.roomId,
+                title: follow.title,
+                streamerName: follow.streamerName,
+                coverUrl: follow.coverUrl,
+                isLive: liveStatusMap[follow.roomId] ?? false,
+                followed: true,
+              }}
+            />
+          ))}
         </div>
       )}
     </section>

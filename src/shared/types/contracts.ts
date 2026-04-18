@@ -83,7 +83,7 @@ export const followRecordSchema = z.object({
 export const appPreferencesSchema = z.object({
   defaultPlatform: platformSchema,
   resumeLastSession: z.boolean(),
-  appearance: z.enum(["system", "light"]),
+  appearance: z.enum(["system", "light", "dark"]),
   proxy: z.enum(["none", "system"]).default("none"),
   lastVisited: z
     .object({

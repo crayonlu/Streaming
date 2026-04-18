@@ -137,6 +137,7 @@ pub struct StreamSource {
 pub enum Appearance {
     System,
     Light,
+    Dark,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -172,4 +173,16 @@ pub struct AppPreferences {
     pub proxy: ProxyMode,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_visited: Option<LastVisited>,
+}
+
+impl Default for AppPreferences {
+    fn default() -> Self {
+        Self {
+            default_platform: PlatformId::Bilibili,
+            resume_last_session: true,
+            appearance: Appearance::System,
+            proxy: ProxyMode::None,
+            last_visited: None,
+        }
+    }
 }

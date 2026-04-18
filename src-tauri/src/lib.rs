@@ -3,10 +3,11 @@ mod platforms;
 mod proxy;
 
 use models::{
-    AppPreferences, Appearance, PlatformId, ProxyMode, ReplayItem, ReplayQuality, RoomCard,
-    RoomDetail, SearchResult, StreamSource,
+    AppPreferences, PlatformId, ProxyMode, ReplayItem, ReplayQuality, RoomCard, RoomDetail,
+    SearchResult, StreamSource,
 };
 use tauri::AppHandle;
+use tauri_plugin_store::StoreExt;
 
 #[tauri::command]
 async fn get_featured(platform: PlatformId, page: Option<u32>) -> Result<Vec<RoomCard>, String> {
@@ -155,22 +156,39 @@ async fn close_bilibili_login_window(app_handle: AppHandle) {
     platforms::bilibili::cookie::close_bilibili_login_window(&app_handle).await
 }
 
+const STORE_FILE: &str = "preferences.json";
+const STORE_KEY: &str = "app_preferences";
+
 #[tauri::command]
-fn load_preferences() -> AppPreferences {
-    AppPreferences {
-        default_platform: PlatformId::Bilibili,
-        resume_last_session: true,
-        appearance: Appearance::System,
-        proxy: ProxyMode::None,
-        last_visited: None,
+async fn load_preferences(app: AppHandle) -> Result<AppPreferences, String> {
+    let store = app
+        .store(STORE_FILE)
+        .map_err(|e| format!("failed to open store: {e}"))?;
+    match store.get(STORE_KEY) {
+        Some(value) => serde_json::from_value(value.clone())
+            .map_err(|e| format!("failed to deserialize preferences: {e}")),
+        None => Ok(AppPreferences::default()),
     }
 }
 
 #[tauri::command]
-fn save_preferences(preferences: AppPreferences) -> AppPreferences {
-    // Immediately apply proxy mode so subsequent HTTP calls use the new setting.
+async fn save_preferences(
+    app: AppHandle,
+    preferences: AppPreferences,
+) -> Result<AppPreferences, String> {
+    let store = app
+        .store(STORE_FILE)
+        .map_err(|e| format!("failed to open store: {e}"))?;
+    let value = serde_json::to_value(&preferences)
+        .map_err(|e| format!("failed to serialize preferences: {e}"))?;
+    store.set(STORE_KEY, value);
+    store
+        .save()
+        .map_err(|e| format!("failed to persist preferences: {e}"))?;
+
+    // Apply proxy mode immediately so subsequent HTTP calls use the new setting.
     platforms::http::set_proxy_mode(preferences.proxy == ProxyMode::System);
-    preferences
+    Ok(preferences)
 }
 
 /// Called by the frontend on startup after reading saved preferences from the
@@ -215,11 +233,17 @@ async fn check_rooms_live_status(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "streaming=info".parse().unwrap()),
+        )
+        .with_target(false)
+        .init();
+
     tauri::Builder::default()
         .setup(|_app| {
-            // Start the local image-proxy server before the first window opens.
-            // This ensures Bilibili CDN images load correctly by injecting the
-            // proper Referer/Origin headers (avoids hdslb.com 403).
+            tracing::info!("starting image proxy");
             proxy::start();
             Ok(())
         })

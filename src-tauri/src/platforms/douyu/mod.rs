@@ -9,13 +9,20 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::http::{custom_client_builder, retry, shared_client};
-use crate::models::{PlatformId, RoomCard, RoomDetail, StreamFormat, StreamSource};
+use super::http::{custom_client_builder, shared_client};
+use crate::models::{PlatformId, RoomDetail, StreamFormat, StreamSource};
 
-const DEFAULT_UA: &str =
+// ── Submodules ────────────────────────────────────────────────────────────────
+pub(crate) mod featured;
+pub(crate) mod search;
+
+pub use featured::get_featured;
+pub use search::search_rooms;
+
+pub(crate) const DEFAULT_UA: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
-const SEARCH_ENDPOINT: &str = "https://www.douyu.com/japi/search/api/searchUser";
-const DEFAULT_DOUYU_DID: &str = "10000000000000000000000000001501";
+pub(crate) const SEARCH_ENDPOINT: &str = "https://www.douyu.com/japi/search/api/searchUser";
+pub(crate) const DEFAULT_DOUYU_DID: &str = "10000000000000000000000000001501";
 const DEFAULT_DOUYU_CDN: &str = "ws-h5";
 const CRYPTO_JS: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -54,7 +61,7 @@ struct DouyuClient {
     client: Client,
 }
 
-fn value_to_string(value: Option<&Value>) -> String {
+pub(crate) fn value_to_string(value: Option<&Value>) -> String {
     match value {
         Some(Value::String(s)) => s.trim().to_string(),
         Some(Value::Number(n)) => n.to_string(),
@@ -62,7 +69,7 @@ fn value_to_string(value: Option<&Value>) -> String {
     }
 }
 
-fn value_to_u64(value: Option<&Value>) -> Option<u64> {
+pub(crate) fn value_to_u64(value: Option<&Value>) -> Option<u64> {
     match value {
         Some(Value::Number(n)) => n.as_u64(),
         Some(Value::String(s)) => s.parse::<u64>().ok(),
@@ -70,7 +77,7 @@ fn value_to_u64(value: Option<&Value>) -> Option<u64> {
     }
 }
 
-fn value_to_i32(value: &Value) -> Option<i32> {
+pub(crate) fn value_to_i32(value: &Value) -> Option<i32> {
     match value {
         Value::Number(num) => num.as_i64().map(|n| n as i32),
         Value::String(s) => s.parse::<i32>().ok(),
@@ -78,7 +85,7 @@ fn value_to_i32(value: &Value) -> Option<i32> {
     }
 }
 
-fn text_u64(v: Option<u64>) -> Option<String> {
+pub(crate) fn text_u64(v: Option<u64>) -> Option<String> {
     let number = v?;
     if number >= 10_000 {
         Some(format!("{:.1}万", number as f64 / 10_000.0))
@@ -87,7 +94,7 @@ fn text_u64(v: Option<u64>) -> Option<String> {
     }
 }
 
-fn normalize_url(raw: &str) -> String {
+pub(crate) fn normalize_url(raw: &str) -> String {
     if raw.is_empty() {
         return String::new();
     }
@@ -330,232 +337,6 @@ impl DouyuClient {
     }
 }
 
-async fn get_featured_once(page: u32) -> Result<Vec<RoomCard>, String> {
-    let client = shared_client();
-
-    let endpoint = format!("https://www.douyu.com/gapi/rkc/directory/mixListV1/0_0/{page}");
-
-    let payload: Value = client
-        .get(&endpoint)
-        .header("User-Agent", DEFAULT_UA)
-        .query(&[("limit", "30")])
-        .send()
-        .await
-        .map_err(|e| format!("douyu featured request failed: {e}"))?
-        .error_for_status()
-        .map_err(|e| format!("douyu featured status error: {e}"))?
-        .json()
-        .await
-        .map_err(|e| format!("douyu featured parse error: {e}"))?;
-
-    if payload.get("code").and_then(Value::as_i64).unwrap_or(-1) != 0 {
-        let msg = payload
-            .get("msg")
-            .and_then(Value::as_str)
-            .unwrap_or("unknown");
-        return Err(format!("douyu featured api error: {msg}"));
-    }
-
-    let mut cards = Vec::new();
-    let items = payload
-        .get("data")
-        .and_then(|d| d.get("rl"))
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-
-    for item in items {
-        let room_id = value_to_string(item.get("rid"));
-        if room_id.is_empty() {
-            continue;
-        }
-
-        let title = value_to_string(item.get("rn").or_else(|| item.get("roomName")));
-        let streamer_name = value_to_string(item.get("nn").or_else(|| item.get("nickName")));
-        let cover_url = normalize_url(&value_to_string(
-            item.get("rs16").or_else(|| item.get("roomSrc")),
-        ));
-        let area_name = item
-            .get("c2name")
-            .or_else(|| item.get("cateName"))
-            .and_then(Value::as_str)
-            .map(|s| s.to_string());
-        let viewers = text_u64(
-            value_to_u64(item.get("ol"))
-                .or_else(|| value_to_u64(item.get("hn")))
-                .or_else(|| {
-                    item.get("hn")
-                        .and_then(Value::as_str)
-                        .map(|s| s.to_string())
-                        .and_then(|s| s.replace('万', "").parse::<f64>().ok())
-                        .map(|f| (f * 10_000.0) as u64)
-                }),
-        );
-        let is_live = item.get("type").and_then(Value::as_i64).unwrap_or(1) == 1;
-
-        cards.push(RoomCard {
-            id: format!("douyu-{room_id}"),
-            platform: PlatformId::Douyu,
-            room_id,
-            title,
-            streamer_name,
-            cover_url,
-            area_name,
-            viewer_count_text: viewers,
-            is_live,
-            followed: false,
-        });
-    }
-
-    Ok(cards)
-}
-
-pub async fn get_featured(page: u32) -> Result<Vec<RoomCard>, String> {
-    let p = page;
-    retry(2, || get_featured_once(p)).await
-}
-
-async fn search_rooms_once(keyword: &str, page: u32) -> Result<Vec<RoomCard>, String> {
-    let trimmed = keyword.trim();
-    if trimmed.is_empty() {
-        return Ok(vec![]);
-    }
-
-    let did = format!(
-        "{:x}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| format!("time error: {e}"))?
-            .as_nanos()
-    );
-
-    let client = shared_client();
-
-    let payload: Value = client
-        .get(SEARCH_ENDPOINT)
-        .header("User-Agent", DEFAULT_UA)
-        .header("Referer", "https://www.douyu.com/search/")
-        .header("Cookie", format!("dy_did={did}; acf_did={did}"))
-        .query(&[
-            ("kw", trimmed),
-            ("page", &page.to_string()),
-            ("pageSize", "20"),
-            ("filterType", "0"),
-        ])
-        .send()
-        .await
-        .map_err(|e| format!("douyu search request failed: {e}"))?
-        .error_for_status()
-        .map_err(|e| format!("douyu search status error: {e}"))?
-        .json()
-        .await
-        .map_err(|e| format!("douyu search parse error: {e}"))?;
-
-    if payload.get("error").and_then(Value::as_i64).unwrap_or(-1) != 0 {
-        let msg = payload
-            .get("msg")
-            .and_then(Value::as_str)
-            .unwrap_or("unknown");
-        return Err(format!("douyu search api error: {msg}"));
-    }
-
-    let data = payload.get("data").cloned().unwrap_or(Value::Null);
-
-    // The `searchUser` API can return results in two shapes depending on version:
-    //   1. `relateUser: [{ anchorInfo: { rid, rn, nn, … } }]`  (nested)
-    //   2. `list: [{ rid, roomName, nickname, … }]`            (flat)
-    // Try both so we gracefully handle API changes.
-    let relate_users = data
-        .get("relateUser")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let flat_list = data
-        .get("list")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-
-    let mut cards = Vec::new();
-
-    // Shape 1: nested anchorInfo
-    for user in &relate_users {
-        let anchor = user.get("anchorInfo").unwrap_or(&Value::Null);
-        let room_id = value_to_string(anchor.get("rid"));
-        if room_id.is_empty() {
-            continue;
-        }
-        let title = value_to_string(anchor.get("rn").or_else(|| anchor.get("roomName")));
-        let streamer_name = value_to_string(anchor.get("nn").or_else(|| anchor.get("nickName")));
-        let cover_url = normalize_url(&value_to_string(
-            anchor.get("roomSrc").or_else(|| anchor.get("avatar")),
-        ));
-        let area_name = anchor
-            .get("cateName")
-            .or_else(|| anchor.get("c2name"))
-            .and_then(Value::as_str)
-            .map(|s| s.to_string());
-        let viewers =
-            text_u64(value_to_u64(anchor.get("ol")).or_else(|| value_to_u64(anchor.get("hn"))));
-        let is_live = anchor.get("isLive").and_then(Value::as_i64).unwrap_or(1) == 1;
-
-        cards.push(RoomCard {
-            id: format!("douyu-{room_id}"),
-            platform: PlatformId::Douyu,
-            room_id,
-            title,
-            streamer_name,
-            cover_url,
-            area_name,
-            viewer_count_text: viewers,
-            is_live,
-            followed: false,
-        });
-    }
-
-    // Shape 2: flat list (only used when relateUser was empty)
-    if cards.is_empty() {
-        for item in &flat_list {
-            let room_id = value_to_string(item.get("rid").or_else(|| item.get("roomId")));
-            if room_id.is_empty() {
-                continue;
-            }
-            let title = value_to_string(item.get("roomName").or_else(|| item.get("rn")));
-            let streamer_name = value_to_string(item.get("nickname").or_else(|| item.get("nn")));
-            let cover_url = normalize_url(&value_to_string(
-                item.get("roomSrc").or_else(|| item.get("avatar")),
-            ));
-            let area_name = item
-                .get("cateName")
-                .or_else(|| item.get("c2name"))
-                .and_then(Value::as_str)
-                .map(|s| s.to_string());
-            let viewers =
-                text_u64(value_to_u64(item.get("hn")).or_else(|| value_to_u64(item.get("ol"))));
-            let is_live = item.get("isLive").and_then(Value::as_i64).unwrap_or(1) == 1;
-
-            cards.push(RoomCard {
-                id: format!("douyu-{room_id}"),
-                platform: PlatformId::Douyu,
-                room_id,
-                title,
-                streamer_name,
-                cover_url,
-                area_name,
-                viewer_count_text: viewers,
-                is_live,
-                followed: false,
-            });
-        }
-    }
-
-    Ok(cards)
-}
-
-pub async fn search_rooms(keyword: &str, page: u32) -> Result<Vec<RoomCard>, String> {
-    let kw = keyword.to_owned();
-    retry(2, || search_rooms_once(&kw, page)).await
-}
 
 pub async fn get_room_detail(room_id: &str) -> Result<RoomDetail, String> {
     let client = shared_client();

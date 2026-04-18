@@ -18,9 +18,9 @@ import streamingLogo from "@/assets/Streaming.svg";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { GlobalSearch } from "@/features/global-search/ui/GlobalSearch";
 import { usePlatformStore } from "@/features/platform-switch/model/usePlatformStore";
-import { useThemeStore } from "@/features/theme/model/useThemeStore";
+import { type ThemeMode, useThemeStore } from "@/features/theme/model/useThemeStore";
 import { cn } from "@/lib/utils";
-import { loadPreferences } from "@/shared/api/commands";
+import { loadPreferences, savePreferences } from "@/shared/api/commands";
 
 // ── Window controls ───────────────────────────────────────────────────────────
 
@@ -200,25 +200,34 @@ function ThemeToggle() {
 export function AppShell() {
   const location = useLocation();
   const hydratePlatform = usePlatformStore((s) => s.hydratePlatform);
-  const initTheme = useThemeStore((s) => s.init);
+  const syncTheme = useThemeStore((s) => s.syncFromPreference);
   const isPlayer = location.pathname.startsWith("/player/");
 
-  // Init theme before first paint
-  useEffect(() => {
-    initTheme();
-  }, [initTheme]);
-
+  // Hydrate platform + theme from saved preferences
   useEffect(() => {
     let ok = true;
     void loadPreferences()
       .then((p) => {
-        if (ok) hydratePlatform(p.defaultPlatform);
+        if (!ok) return;
+        hydratePlatform(p.defaultPlatform);
+        syncTheme(p.appearance as ThemeMode);
       })
       .catch(() => undefined);
     return () => {
       ok = false;
     };
-  }, [hydratePlatform]);
+  }, [hydratePlatform, syncTheme]);
+
+  // Persist sidebar toggle back to AppPreferences
+  useEffect(() => {
+    return useThemeStore.subscribe((state, prevState) => {
+      if (state.theme !== prevState.theme) {
+        void loadPreferences()
+          .then((p) => savePreferences({ ...p, appearance: state.theme }))
+          .catch(() => undefined);
+      }
+    });
+  }, []);
 
   return (
     <TooltipProvider delayDuration={500}>

@@ -83,7 +83,7 @@ export type ProxyMode = "none" | "system";
 export interface AppPreferences {
   defaultPlatform: PlatformId;
   resumeLastSession: boolean;
-  appearance: "system" | "light";
+  appearance: "system" | "light" | "dark";
   /** "none" = disable all proxy (safe default); "system" = use OS/env proxy */
   proxy: ProxyMode;
   lastVisited?: {

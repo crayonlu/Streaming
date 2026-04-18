@@ -5,6 +5,7 @@ import { DiscoverPage } from "@/pages/discover/DiscoverPage";
 import { FollowsPage } from "@/pages/follows/FollowsPage";
 import { SearchPage } from "@/pages/search/SearchPage";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
+import { ErrorBoundary } from "@/shared/ui/ErrorBoundary";
 import { StatusView } from "@/shared/ui/StatusView";
 
 const PlayerPage = lazy(() =>
@@ -26,20 +27,28 @@ export const appRouter = createBrowserRouter([
       {
         path: "player/:platform/:roomId",
         element: (
-          <Suspense fallback={<StatusView title="播放器加载中" tone="loading" />}>
-            <PlayerPage />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<StatusView title="播放器加载中" tone="loading" />}>
+              <PlayerPage />
+            </Suspense>
+          </ErrorBoundary>
         ),
       },
       {
         path: "replay/:platform/:roomId",
         element: (
-          <Suspense fallback={<StatusView title="录播加载中" tone="loading" />}>
-            <ReplayPage />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<StatusView title="录播加载中" tone="loading" />}>
+              <ReplayPage />
+            </Suspense>
+          </ErrorBoundary>
         ),
       },
       { path: "settings", element: <SettingsPage /> },
+      {
+        path: "*",
+        element: <StatusView title="页面不存在" hint="请检查地址是否正确" tone="empty" />,
+      },
     ],
   },
 ]);

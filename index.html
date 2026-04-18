@@ -9,6 +9,15 @@
 
   <body>
     <div id="root"></div>
+    <!--
+      FOUC guard — apply dark class synchronously before React hydrates.
+      This is a non-authoritative cache; the source of truth is
+      AppPreferences.appearance persisted in tauri-plugin-store.
+      AppShell.syncTheme reconciles on startup.
+    -->
+    <script>
+      ;(function(){try{var m=localStorage.getItem('streaming_theme_cache');if(m==='dark'||(m==='system'&&matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}})()
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

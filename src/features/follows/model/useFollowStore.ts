@@ -6,6 +6,7 @@ interface FollowState {
   follows: FollowRecord[];
   liveStatusMap: Record<string, boolean>;
   isLoading: boolean;
+  error: boolean;
   sortByLive: boolean;
 
   loadFollows: () => Promise<void>;
@@ -17,17 +18,18 @@ export const useFollowStore = create<FollowState>((set, get) => ({
   follows: [],
   liveStatusMap: {},
   isLoading: false,
+  error: false,
   sortByLive: true,
 
   loadFollows: async () => {
-    set({ isLoading: true });
+    set({ isLoading: true, error: false });
     try {
       const data = await listFollows();
       set({ follows: data, isLoading: false });
       // After loading follows, refresh live status
       await get().refreshLiveStatus();
     } catch {
-      set({ isLoading: false });
+      set({ isLoading: false, error: true });
     }
   },
 

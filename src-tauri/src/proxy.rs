@@ -99,13 +99,13 @@ pub fn start() {
         let listener = match tokio::net::TcpListener::bind(format!("127.0.0.1:{port}")).await {
             Ok(l) => l,
             Err(e) => {
-                eprintln!("[proxy] bind failed on port {port}: {e}");
+                tracing::error!(port, error = %e, "proxy bind failed");
                 return;
             }
         };
 
         if let Err(e) = axum::serve(listener, app).await {
-            eprintln!("[proxy] server error: {e}");
+            tracing::error!(error = %e, "proxy server error");
         }
     });
 }
@@ -155,13 +155,13 @@ async fn image_handler(Query(params): Query<ImgQuery>) -> Response<Body> {
     let upstream = match req.send().await {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("[proxy] request failed for {url}: {e}");
+            tracing::warn!(url, error = %e, "proxy request failed");
             return simple_error(StatusCode::BAD_GATEWAY, "upstream request failed");
         }
     };
 
     if !upstream.status().is_success() {
-        eprintln!("[proxy] upstream {url} → {}", upstream.status());
+        tracing::warn!(url, status = %upstream.status(), "upstream error");
         return simple_error(StatusCode::BAD_GATEWAY, "upstream returned non-2xx");
     }
 
@@ -177,7 +177,7 @@ async fn image_handler(Query(params): Query<ImgQuery>) -> Response<Body> {
     let bytes = match upstream.bytes().await {
         Ok(b) => b,
         Err(e) => {
-            eprintln!("[proxy] read bytes failed for {url}: {e}");
+            tracing::warn!(url, error = %e, "proxy read bytes failed");
             return simple_error(StatusCode::INTERNAL_SERVER_ERROR, "read failed");
         }
     };
@@ -230,24 +230,20 @@ async fn stream_handler(Query(params): Query<StreamQuery>) -> Response<Body> {
     {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("[proxy/stream] request failed for {m3u8_url}: {e}");
+            tracing::warn!(url = %m3u8_url, error = %e, "stream request failed");
             return simple_error(StatusCode::BAD_GATEWAY, "upstream request failed");
         }
     };
 
     if !upstream.status().is_success() {
-        eprintln!(
-            "[proxy/stream] upstream {} → {}",
-            m3u8_url,
-            upstream.status()
-        );
+        tracing::warn!(url = %m3u8_url, status = %upstream.status(), "stream upstream error");
         return simple_error(StatusCode::BAD_GATEWAY, "upstream returned non-2xx");
     }
 
     let text = match upstream.text().await {
         Ok(t) => t,
         Err(e) => {
-            eprintln!("[proxy/stream] read text failed for {m3u8_url}: {e}");
+            tracing::warn!(url = %m3u8_url, error = %e, "stream read text failed");
             return simple_error(StatusCode::INTERNAL_SERVER_ERROR, "read failed");
         }
     };
@@ -351,13 +347,13 @@ async fn seg_handler(Query(params): Query<SegQuery>) -> Response<Body> {
     {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("[proxy/seg] request failed for {seg_url}: {e}");
+            tracing::warn!(url = %seg_url, error = %e, "seg request failed");
             return simple_error(StatusCode::BAD_GATEWAY, "upstream request failed");
         }
     };
 
     if !upstream.status().is_success() {
-        eprintln!("[proxy/seg] upstream {} → {}", seg_url, upstream.status());
+        tracing::warn!(url = %seg_url, status = %upstream.status(), "seg upstream error");
         return simple_error(StatusCode::BAD_GATEWAY, "upstream returned non-2xx");
     }
 
@@ -371,7 +367,7 @@ async fn seg_handler(Query(params): Query<SegQuery>) -> Response<Body> {
     let bytes = match upstream.bytes().await {
         Ok(b) => b,
         Err(e) => {
-            eprintln!("[proxy/seg] read bytes failed for {seg_url}: {e}");
+            tracing::warn!(url = %seg_url, error = %e, "seg read bytes failed");
             return simple_error(StatusCode::INTERNAL_SERVER_ERROR, "read failed");
         }
     };

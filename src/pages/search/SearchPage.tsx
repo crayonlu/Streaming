@@ -35,9 +35,11 @@ export function SearchPage() {
   const sectionRef = useRef<HTMLElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
+  // Debounced search — 300 ms delay after last keystroke
   useEffect(() => {
     if (!keyword) return;
-    searchFirstPage(keyword, scopedPlatform);
+    const id = setTimeout(() => searchFirstPage(keyword, scopedPlatform), 300);
+    return () => clearTimeout(id);
   }, [keyword, scopedPlatform, searchFirstPage]);
 
   useEffect(() => {

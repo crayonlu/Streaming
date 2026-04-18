@@ -217,7 +217,6 @@ export function SettingsPage() {
           </div>
         </div>
 
-        {/* ── 观看偏好 ── */}
         <div>
           <SectionLabel icon={Tv2} label="观看偏好" />
           <div className="rounded-lg bg-card ring-1 ring-border/40 overflow-hidden">
@@ -249,7 +248,6 @@ export function SettingsPage() {
           </div>
         </div>
 
-        {/* ── 网络 ── */}
         <div>
           <SectionLabel icon={Monitor} label="网络" />
           <div className="rounded-lg bg-card ring-1 ring-border/40 overflow-hidden">
@@ -268,10 +266,9 @@ export function SettingsPage() {
 
         <Separator />
 
-        {/* ── 关于 ── */}
         <div className="flex items-center justify-between text-[11px] text-muted-foreground/55">
           <div className="space-y-0.5">
-            <p>Streaming · v0.2.0</p>
+            <p>Streaming · v0.2.1</p>
             <p>支持 Bilibili · 斗鱼</p>
           </div>
           <div className="text-right space-y-0.5 text-[10px]">

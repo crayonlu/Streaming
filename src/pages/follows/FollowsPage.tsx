@@ -2,8 +2,8 @@ import { Heart } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useFollowStore } from "@/features/follows/model/useFollowStore";
 import { FollowButton } from "@/features/follow-button/ui/FollowButton";
+import { useFollowStore } from "@/features/follows/model/useFollowStore";
 import { EmptyState } from "@/shared/ui/EmptyState";
 
 const PLATFORM_LABEL: Record<string, string> = {

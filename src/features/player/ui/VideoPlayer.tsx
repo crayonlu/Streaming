@@ -172,6 +172,7 @@ interface ControlsOverlayProps {
   playerRef: React.MutableRefObject<any>;
   stageRef: React.RefObject<HTMLDivElement | null>;
   isLive: boolean;
+  playerReady: boolean;
   qualities: PlayerQualityItem[];
   selectedQualityId: string | null | undefined;
   onQualityChange: (id: string) => void;
@@ -181,6 +182,7 @@ function ControlsOverlay({
   playerRef,
   stageRef,
   isLive,
+  playerReady,
   qualities,
   selectedQualityId,
   onQualityChange,
@@ -201,6 +203,7 @@ function ControlsOverlay({
 
   // ── Sync player events ──────────────────────────────────────────────────────
   useEffect(() => {
+    if (!playerReady) return;
     const p = playerRef.current;
     if (!p) return;
 
@@ -214,16 +217,12 @@ function ControlsOverlay({
     };
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
-    const onTimeUpdate = () => {
-      if (!seeking.current) setCurrentTime(p.currentTime ?? 0);
-    };
     const onDurationChange = () => setDuration(p.duration ?? 0);
 
     p.on?.("volumechange", onVolumeChange);
     p.on?.("play", onPlay);
     p.on?.("pause", onPause);
     if (!isLive) {
-      p.on?.("timeupdate", onTimeUpdate);
       p.on?.("durationchange", onDurationChange);
       p.on?.("loadedmetadata", onDurationChange);
     }
@@ -233,12 +232,28 @@ function ControlsOverlay({
       p.off?.("play", onPlay);
       p.off?.("pause", onPause);
       if (!isLive) {
-        p.off?.("timeupdate", onTimeUpdate);
         p.off?.("durationchange", onDurationChange);
         p.off?.("loadedmetadata", onDurationChange);
       }
     };
-  }, [playerRef, isLive]);
+  }, [playerRef, isLive, playerReady]);
+
+  // ── VOD current-time polling (250 ms) ────────────────────────────────────
+  // xgplayer's timeupdate fires per HLS segment boundary for some streams,
+  // giving minute-level precision. Polling media.currentTime directly is
+  // more reliable and stays accurate across all segment lengths.
+  useEffect(() => {
+    if (isLive || !playerReady) return;
+    const p = playerRef.current;
+    if (!p) return;
+    const id = setInterval(() => {
+      if (!seeking.current) {
+        const t = (p.video ?? p.media)?.currentTime ?? p.currentTime ?? 0;
+        setCurrentTime(t);
+      }
+    }, 250);
+    return () => clearInterval(id);
+  }, [playerRef, isLive, playerReady]);
 
   // ── Fullscreen sync ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -408,7 +423,7 @@ function ControlsOverlay({
                 <Radio size={7} strokeWidth={2.5} />
                 Live
               </span>
-              <div className="flex-1 h-[3px] rounded-full overflow-hidden bg-white/15">
+              <div className="flex-1 h-0.75 rounded-full overflow-hidden bg-white/15">
                 <div className="h-full w-full rounded-full bg-white/55" />
               </div>
             </div>
@@ -534,6 +549,7 @@ export function VideoPlayer({
   const stageRef = useRef<HTMLDivElement | null>(null);
   // biome-ignore lint/suspicious/noExplicitAny: xgplayer has no public TS types
   const instanceRef = useRef<any>(null);
+  const [playerReady, setPlayerReady] = useState(false);
 
   // ── Mount / remount xgplayer whenever streamUrl or format changes ──────────
   useEffect(() => {
@@ -566,7 +582,7 @@ export function VideoPlayer({
         ...(format === "flv"
           ? {
               flv: {
-                isLive: true,
+                isLive,
                 cors: true,
                 autoCleanupSourceBuffer: true,
                 enableWorker: true,
@@ -588,6 +604,7 @@ export function VideoPlayer({
 
       instanceRef.current = inst;
       if (externalRef) externalRef.current = inst;
+      setPlayerReady(true);
 
       // ── Auto-retry on error (up to 3 times with increasing delay) ───────
       let retryCount = 0;
@@ -635,6 +652,7 @@ export function VideoPlayer({
 
     return () => {
       disposed = true;
+      setPlayerReady(false);
       inst?.destroy?.();
       inst = null;
       instanceRef.current = null;
@@ -654,6 +672,7 @@ export function VideoPlayer({
           playerRef={instanceRef}
           stageRef={stageRef}
           isLive={isLive}
+          playerReady={playerReady}
           qualities={qualities}
           selectedQualityId={selectedQualityId}
           onQualityChange={onQualityChange ?? (() => undefined)}

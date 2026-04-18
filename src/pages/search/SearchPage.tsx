@@ -1,10 +1,10 @@
-import { useEffect, useRef } from "react";
 import { SearchX } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useSearchStore } from "@/features/search/model/useSearchStore";
 import { RoomCard } from "@/features/room-card/ui/RoomCard";
+import { useSearchStore } from "@/features/search/model/useSearchStore";
 import type { PlatformId } from "@/shared/types/domain";
 import { EmptyState } from "@/shared/ui/EmptyState";
 import { StatusView } from "@/shared/ui/StatusView";
@@ -83,7 +83,7 @@ export function SearchPage() {
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [isLoading, rooms.length, hasNextPage, searchNextPage]);
+  }, [isLoading, rooms.length, searchNextPage]);
 
   const hasData = rooms.length > 0;
   const isEmpty = !isLoading && !hasData && !error;

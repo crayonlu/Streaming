@@ -110,7 +110,7 @@ export function DiscoverPage() {
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [isLoading, rooms.length, hasNextPage, currentPlatform, fetchNextPage]);
+  }, [isLoading, rooms.length, currentPlatform, fetchNextPage]);
 
   useEffect(() => {
     let mounted = true;

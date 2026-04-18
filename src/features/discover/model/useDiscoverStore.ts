@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import type { PlatformId, RoomCard } from "@/shared/types/domain";
 import { getFeatured } from "@/shared/api/commands";
+import type { PlatformId, RoomCard } from "@/shared/types/domain";
 
 interface DiscoverState {
   rooms: RoomCard[];

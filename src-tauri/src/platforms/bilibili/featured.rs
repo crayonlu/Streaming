@@ -3,10 +3,12 @@
 use reqwest::header::{REFERER, USER_AGENT};
 use serde_json::Value;
 
-use crate::platforms::http::{retry, shared_client};
 use crate::models::{PlatformId, RoomCard};
+use crate::platforms::http::{retry, shared_client};
 
-use super::{normalize_url, text_u64, value_to_string, value_to_u64, DEFAULT_UA, FEATURED_ENDPOINT};
+use super::{
+    normalize_url, text_u64, value_to_string, value_to_u64, DEFAULT_UA, FEATURED_ENDPOINT,
+};
 async fn get_featured_once(page: u32) -> Result<Vec<RoomCard>, String> {
     let client = shared_client();
 
@@ -94,4 +96,3 @@ pub async fn get_featured(page: u32) -> Result<Vec<RoomCard>, String> {
     let p = page;
     retry(2, || get_featured_once(p)).await
 }
-

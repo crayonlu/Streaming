@@ -4,13 +4,12 @@ use reqwest::header::{COOKIE, REFERER, USER_AGENT};
 use serde_json::Value;
 use std::collections::HashMap;
 
-use crate::platforms::http::{retry, shared_client};
 use crate::models::{PlatformId, RoomCard};
+use crate::platforms::http::{retry, shared_client};
 
 use super::{
-    ensure_buvid, fetch_room_base_info_batch, normalize_url, non_empty, text_u64,
-    value_to_string, value_to_u64, DEFAULT_UA, LIVE_REFERER,
-    LIVE_SEARCH_ENDPOINT, SEARCH_ENDPOINT,
+    ensure_buvid, fetch_room_base_info_batch, non_empty, normalize_url, text_u64, value_to_string,
+    value_to_u64, DEFAULT_UA, LIVE_REFERER, LIVE_SEARCH_ENDPOINT, SEARCH_ENDPOINT,
 };
 fn strip_em_tags(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
@@ -250,4 +249,3 @@ pub async fn search_rooms(keyword: &str, page: u32) -> Result<Vec<RoomCard>, Str
     let kw = keyword.to_owned();
     retry(2, || search_rooms_once(&kw, page)).await
 }
-

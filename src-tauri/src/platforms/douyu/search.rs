@@ -2,13 +2,10 @@
 
 use serde_json::Value;
 
-use crate::platforms::http::{retry, shared_client};
 use crate::models::{PlatformId, RoomCard};
+use crate::platforms::http::{retry, shared_client};
 
-use super::{
-    normalize_url, text_u64, value_to_string, value_to_u64,
-    DEFAULT_UA, SEARCH_ENDPOINT,
-};
+use super::{normalize_url, text_u64, value_to_string, value_to_u64, DEFAULT_UA, SEARCH_ENDPOINT};
 async fn search_rooms_once(keyword: &str, page: u32) -> Result<Vec<RoomCard>, String> {
     let trimmed = keyword.trim();
     if trimmed.is_empty() {

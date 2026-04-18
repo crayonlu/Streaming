@@ -91,6 +91,23 @@ pub struct SearchResult {
     pub total: Option<u64>,
 }
 
+/// A discoverable content category (e.g., "游戏", "英雄联盟").
+/// Flat structure — `parent_id` links sub-categories to their parent.
+/// `short_name` is the slug used by some platform APIs (e.g., Douyu uses it
+/// as the `cate2` parameter in room-list queries).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Category {
+    pub id: String,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub short_name: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RoomDetail {

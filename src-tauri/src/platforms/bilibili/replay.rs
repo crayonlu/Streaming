@@ -1,9 +1,9 @@
 //! Bilibili replay (VOD) functions.
 
+use crate::models::{PlatformId, ReplayItem, ReplayQuality};
+use crate::platforms::http::shared_client;
 use reqwest::header::{COOKIE, REFERER, USER_AGENT};
 use serde_json::Value;
-use crate::platforms::http::shared_client;
-use crate::models::{PlatformId, ReplayItem, ReplayQuality};
 
 use super::{cookie, text_u64, DEFAULT_UA, LIVE_REFERER};
 // ─── Bilibili Replay ───────────────────────────────────────────────────────────
@@ -327,4 +327,3 @@ pub async fn get_replay_qualities(
         time_msg
     ))
 }
-

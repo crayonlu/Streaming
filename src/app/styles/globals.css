@@ -328,3 +328,100 @@ img {
   line-clamp: 2;
   -webkit-box-orient: vertical;
 }
+
+/* ─────────────────────────────────────────────
+   Category chips — parent / sub visual hierarchy
+   ───────────────────────────────────────────── */
+
+/* Base chip: shared reset + transition */
+.cat-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  outline: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 200ms var(--ease-smooth),
+    color 200ms var(--ease-smooth),
+    box-shadow 200ms var(--ease-smooth),
+    transform 150ms var(--ease-out);
+}
+
+/* ── Parent chip: bold, prominent ── */
+.cat-chip--parent {
+  padding: 5px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 999px;
+  background-color: var(--muted);
+  color: var(--muted-foreground);
+  letter-spacing: 0.01em;
+}
+.cat-chip--parent:hover {
+  background-color: color-mix(in oklch, var(--muted) 85%, var(--accent));
+  color: var(--foreground);
+}
+/* Active parent: filled primary with subtle glow */
+.cat-chip--parent.cat-chip--active {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  box-shadow: 0 1px 6px oklch(46% 0.05 218 / 0.25);
+}
+.dark .cat-chip--parent.cat-chip--active {
+  box-shadow: 0 1px 8px oklch(62% 0.05 218 / 0.3);
+}
+
+/* ── Sub chip: lighter, smaller ── */
+.cat-chip--sub {
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 400;
+  border-radius: 999px;
+  background-color: color-mix(in oklch, var(--muted) 70%, transparent);
+  color: var(--muted-foreground);
+}
+.cat-chip--sub:hover {
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+/* Active sub: accent-tinted with left accent bar feel */
+.cat-chip--sub.cat-chip--active {
+  background-color: var(--accent);
+  color: var(--accent-foreground);
+  font-weight: 500;
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--primary) 30%, transparent);
+}
+
+/* ── Expand/collapse button ── */
+.cat-chip--expand {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 400;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+.cat-chip--expand:hover {
+  color: var(--foreground);
+  background-color: color-mix(in oklch, var(--muted) 50%, transparent);
+}
+
+/* ── Sub-categories container with smooth height ── */
+.cat-subs-container {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 250ms var(--ease-smooth);
+  overflow: hidden;
+}
+.cat-subs-container > div {
+  overflow: hidden;
+}
+
+/* ── Press feedback ── */
+.cat-chip:active {
+  transform: scale(0.95);
+}

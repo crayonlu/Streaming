@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { LazyStore } from "@tauri-apps/plugin-store";
 import {
   appPreferencesSchema,
+  categorySchema,
   followRecordSchema,
   replayItemSchema,
   replayQualitySchema,
@@ -12,6 +13,7 @@ import {
 } from "../types/contracts";
 import type {
   AppPreferences,
+  Category,
   FollowRecord,
   PlatformId,
   ReplayItem,
@@ -72,6 +74,32 @@ export async function getFeatured(platform: PlatformId, page = 1): Promise<RoomC
   // change between the two sequential awaits.
   const [result, follows] = await Promise.all([
     safeInvoke<unknown[]>("get_featured", { platform, page }),
+    getFollowRecordsFromStore(),
+  ]);
+  const cards = roomCardSchema.array().parse(result);
+  return patchFollowed(cards, follows);
+}
+
+export async function getCategories(platform: PlatformId): Promise<Category[]> {
+  const result = await safeInvoke<unknown[]>("get_categories", { platform });
+  return categorySchema.array().parse(result);
+}
+
+export async function getRoomsByCategory(
+  platform: PlatformId,
+  categoryId: string,
+  page = 1,
+  parentId?: string,
+  shortName?: string,
+): Promise<RoomCard[]> {
+  const [result, follows] = await Promise.all([
+    safeInvoke<unknown[]>("get_rooms_by_category", {
+      platform,
+      categoryId,
+      parentId: parentId ?? null,
+      shortName: shortName ?? null,
+      page,
+    }),
     getFollowRecordsFromStore(),
   ]);
   const cards = roomCardSchema.array().parse(result);

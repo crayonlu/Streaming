@@ -3,8 +3,8 @@ mod platforms;
 mod proxy;
 
 use models::{
-    AppPreferences, PlatformId, ProxyMode, ReplayItem, ReplayQuality, RoomCard, RoomDetail,
-    SearchResult, StreamSource,
+    AppPreferences, Category, PlatformId, ProxyMode, ReplayItem, ReplayQuality, RoomCard,
+    RoomDetail, SearchResult, StreamSource,
 };
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
@@ -57,6 +57,35 @@ async fn search_rooms(
         total: Some(items.len() as u64),
         items,
     })
+}
+
+#[tauri::command]
+async fn get_categories(platform: PlatformId) -> Result<Vec<Category>, String> {
+    match platform {
+        PlatformId::Bilibili => platforms::bilibili::get_categories().await,
+        PlatformId::Douyu => platforms::douyu::get_categories().await,
+    }
+}
+
+#[tauri::command]
+async fn get_rooms_by_category(
+    platform: PlatformId,
+    category_id: String,
+    parent_id: Option<String>,
+    short_name: Option<String>,
+    page: Option<u32>,
+) -> Result<Vec<RoomCard>, String> {
+    let p = page.unwrap_or(1);
+    match platform {
+        PlatformId::Bilibili => {
+            platforms::bilibili::get_rooms_by_category(&category_id, parent_id.as_deref(), p).await
+        }
+        PlatformId::Douyu => {
+            // Douyu uses shortName (slug) for category room queries
+            let slug = short_name.as_deref().unwrap_or(&category_id);
+            platforms::douyu::get_rooms_by_category(slug, p).await
+        }
+    }
 }
 
 #[tauri::command]
@@ -252,6 +281,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_featured,
             search_rooms,
+            get_categories,
+            get_rooms_by_category,
             get_room_detail,
             get_stream_sources,
             get_replay_list,

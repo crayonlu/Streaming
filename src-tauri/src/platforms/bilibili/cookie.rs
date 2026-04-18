@@ -43,11 +43,7 @@ pub async fn get_bilibili_cookie(app_handle: &AppHandle) -> BilibiliCookieResult
 // ── Private helpers ────────────────────────────────────────────────────────────
 
 fn webview_labels(app_handle: &AppHandle) -> Vec<String> {
-    app_handle
-        .webview_windows()
-        .keys()
-        .cloned()
-        .collect()
+    app_handle.webview_windows().keys().cloned().collect()
 }
 
 fn merge_results(a: &BilibiliCookieResult, b: &BilibiliCookieResult) -> BilibiliCookieResult {
@@ -85,10 +81,7 @@ fn merge_results(a: &BilibiliCookieResult, b: &BilibiliCookieResult) -> Bilibili
 
 /// Opens a hidden WebView pointed at Bilibili, waits briefly for cookies to be
 /// written, then reads the cookie jar and closes the window.
-async fn bootstrap_and_collect(
-    app_handle: &AppHandle,
-    url: &str,
-) -> BilibiliCookieResult {
+async fn bootstrap_and_collect(app_handle: &AppHandle, url: &str) -> BilibiliCookieResult {
     let label = "bilibili-silent-bootstrap".to_string();
 
     // Close any stale bootstrap window from a previous run.
@@ -107,14 +100,11 @@ async fn bootstrap_and_collect(
     let label_owned = label.to_string();
 
     // Build a hidden, non-interactive bootstrap window.
-    let builder = tauri::WebviewWindowBuilder::new(
-        &handle,
-        &label_owned,
-        WebviewUrl::External(parsed_url),
-    )
-    .visible(false)
-    .resizable(false)
-    .focused(false);
+    let builder =
+        tauri::WebviewWindowBuilder::new(&handle, &label_owned, WebviewUrl::External(parsed_url))
+            .visible(false)
+            .resizable(false)
+            .focused(false);
 
     if builder.build().is_err() {
         return BilibiliCookieResult::default();
@@ -218,10 +208,12 @@ fn merge_cookies(
         let is_bilibili = domain
             .as_ref()
             .map(|d| d.contains("bilibili.com"))
-            .unwrap_or_else(|| name.eq_ignore_ascii_case("SESSDATA")
-                || name.eq_ignore_ascii_case("bili_jct")
-                || name.eq_ignore_ascii_case("DedeUserID")
-                || name.eq_ignore_ascii_case("b_lsid"));
+            .unwrap_or_else(|| {
+                name.eq_ignore_ascii_case("SESSDATA")
+                    || name.eq_ignore_ascii_case("bili_jct")
+                    || name.eq_ignore_ascii_case("DedeUserID")
+                    || name.eq_ignore_ascii_case("b_lsid")
+            });
 
         if !is_bilibili {
             continue;
@@ -256,8 +248,7 @@ pub async fn open_bilibili_login_window(app_handle: &AppHandle) -> Result<String
     }
 
     let login_url = "https://passport.bilibili.com/login";
-    let parsed_url =
-        url::Url::parse(login_url).map_err(|e| format!("invalid login URL: {e}"))?;
+    let parsed_url = url::Url::parse(login_url).map_err(|e| format!("invalid login URL: {e}"))?;
 
     let handle = app_handle.clone();
     let label_owned = label.to_string();

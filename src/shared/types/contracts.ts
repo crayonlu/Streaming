@@ -2,6 +2,14 @@ import { z } from "zod";
 
 export const platformSchema = z.enum(["bilibili", "douyu"]);
 
+export const categorySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  parentId: z.string().optional(),
+  iconUrl: z.string().optional(),
+  shortName: z.string().optional(),
+});
+
 export const roomCardSchema = z.object({
   id: z.string(),
   platform: platformSchema,

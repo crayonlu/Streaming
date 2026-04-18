@@ -80,6 +80,14 @@ export interface FollowRecord {
 
 export type ProxyMode = "none" | "system";
 
+export interface Category {
+  id: string;
+  name: string;
+  parentId?: string;
+  iconUrl?: string;
+  shortName?: string;
+}
+
 export interface AppPreferences {
   defaultPlatform: PlatformId;
   resumeLastSession: boolean;

@@ -47,6 +47,8 @@ import { ControlsOverlay } from "./ControlsOverlay";
 export interface PlayerQualityItem {
   id: string;
   label: string;
+  /** CDN line identifier (e.g., "主线路", "备用1") */
+  cdn?: string;
   /** Marks a CDN source that already failed (live only) */
   failed?: boolean;
 }

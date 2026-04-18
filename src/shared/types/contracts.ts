@@ -52,6 +52,7 @@ export const streamSourceSchema = z.object({
   streamUrl: z.string(),
   format: z.enum(["hls", "flv"]),
   isDefault: z.boolean().optional(),
+  cdn: z.string().optional(),
 });
 
 export const replayQualitySchema = z.object({

@@ -322,7 +322,7 @@ export function DiscoverPage() {
         <>
           <div className="cards-grid">
             {rooms.map((room) => (
-              <RoomCard key={room.id} room={room} />
+              <RoomCard key={room.id + room.title} room={room} />
             ))}
           </div>
           <div ref={sentinelRef} className="h-1 w-full shrink-0" aria-hidden />

@@ -42,6 +42,7 @@ export interface StreamSource {
   streamUrl: string;
   format: "hls" | "flv";
   isDefault?: boolean;
+  cdn?: string;
 }
 
 export interface ReplayQuality {

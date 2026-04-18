@@ -259,7 +259,8 @@ async fn stream_handler(Query(params): Query<StreamQuery>) -> Response<Body> {
     };
 
     let port = proxy_port();
-    let rewritten = text
+    let mut has_rewrite = false;
+    let rewritten_lines: Vec<String> = text
         .lines()
         .map(|line| {
             let trimmed = line.trim();
@@ -267,6 +268,7 @@ async fn stream_handler(Query(params): Query<StreamQuery>) -> Response<Body> {
                 // Rewrite URI="…" inside EXT-X-MAP tags (fMP4 init segment)
                 if let Some(rest) = trimmed.strip_prefix("#EXT-X-MAP:") {
                     if let Some(rewritten_tag) = rewrite_tag_uri(rest, &base, port) {
+                        has_rewrite = true;
                         return format!("#EXT-X-MAP:{rewritten_tag}");
                     }
                 }
@@ -276,8 +278,9 @@ async fn stream_handler(Query(params): Query<StreamQuery>) -> Response<Body> {
             let full = resolve_url(trimmed, &base);
             format!("http://127.0.0.1:{port}/seg?url={}", percent_encode(&full))
         })
-        .collect::<Vec<_>>()
-        .join("\n");
+        .collect();
+
+    let rewritten = rewritten_lines.join("\n");
 
     Response::builder()
         .status(StatusCode::OK)
@@ -371,6 +374,47 @@ async fn seg_handler(Query(params): Query<SegQuery>) -> Response<Body> {
             return simple_error(StatusCode::INTERNAL_SERVER_ERROR, "read failed");
         }
     };
+
+    // Check if the response is actually a nested M3U8 (Bilibili fMP4 HLS uses this)
+    let body_text = String::from_utf8_lossy(&bytes);
+    if body_text.trim().starts_with("#EXTM3U") {
+        // This is a nested M3U8 playlist — rewrite it the same way as stream_handler
+        let base = {
+            let no_query = seg_url.split('?').next().unwrap_or(&seg_url);
+            match no_query.rfind('/') {
+                Some(i) => no_query[..=i].to_string(),
+                None => format!("{no_query}/"),
+            }
+        };
+
+        let port = proxy_port();
+        let rewritten_lines: Vec<String> = body_text
+            .lines()
+            .map(|line| {
+                let trimmed = line.trim();
+                if trimmed.is_empty() || trimmed.starts_with('#') {
+                    if let Some(rest) = trimmed.strip_prefix("#EXT-X-MAP:") {
+                        if let Some(rewritten_tag) = rewrite_tag_uri(rest, &base, port) {
+                            return format!("#EXT-X-MAP:{rewritten_tag}");
+                        }
+                    }
+                    return line.to_string();
+                }
+                let full = resolve_url(trimmed, &base);
+                format!("http://127.0.0.1:{port}/seg?url={}", percent_encode(&full))
+            })
+            .collect();
+
+        let rewritten = rewritten_lines.join("\n");
+
+        return Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/vnd.apple.mpegurl")
+            .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+            .header(header::CACHE_CONTROL, "no-cache, no-store")
+            .body(Body::from(rewritten))
+            .unwrap_or_else(|_| simple_error(StatusCode::INTERNAL_SERVER_ERROR, "build failed"));
+    }
 
     Response::builder()
         .status(StatusCode::OK)

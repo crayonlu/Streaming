@@ -132,16 +132,23 @@ fn source_priority(source: &StreamSource) -> i32 {
     if matches!(source.format, StreamFormat::Hls) {
         score += 50;
     }
-    if source.stream_url.contains("d1--cn") {
-        score += 20;
+    if let Some(cdn) = &source.cdn {
+        match cdn.as_str() {
+            "主线路" => score += 20,
+            "备用1" => score += 15,
+            "备用2" => score += 10,
+            "备用3" => score += 5,
+            _ => {}
+        }
     }
     score
 }
 
-async fn probe_source_url(client: &reqwest::Client, url: &str) -> bool {
+async fn probe_source_url(client: &reqwest::Client, url: &str) -> Option<u64> {
+    let start = std::time::Instant::now();
     match client.get(url).send().await {
-        Ok(resp) => resp.status().is_success(),
-        Err(_) => false,
+        Ok(resp) if resp.status().is_success() => Some(start.elapsed().as_millis() as u64),
+        _ => None,
     }
 }
 
@@ -222,10 +229,15 @@ fn parse_playurl_to_sources(playurl: &Value, room_id: &str) -> Vec<StreamSource>
 
                     let is_hls = protocol_name.contains("hls")
                         || format_name == "ts"
-                        || stream_url.contains(".m3u8");
+                        || format_name == "fmp4"
+                        || format_name == "m4s"
+                        || stream_url.contains(".m3u8")
+                        || stream_url.contains(".m4s");
+
+                    let cdn = extract_cdn_name(host);
 
                     sources.push(StreamSource {
-                        id: format!("bili-{qn}-{}", sources.len()),
+                        id: format!("bili-{}-{}-{}", qn, cdn, sources.len()),
                         platform: PlatformId::Bilibili,
                         room_id: room_id.to_string(),
                         quality_key: qn.to_string(),
@@ -237,6 +249,7 @@ fn parse_playurl_to_sources(playurl: &Value, room_id: &str) -> Vec<StreamSource>
                             StreamFormat::Flv
                         },
                         is_default: Some(qn == 0 || qn >= 10_000),
+                        cdn: Some(cdn),
                     });
                 }
             }
@@ -249,6 +262,21 @@ fn parse_playurl_to_sources(playurl: &Value, room_id: &str) -> Vec<StreamSource>
         }
     }
     sources
+}
+
+fn extract_cdn_name(host: &str) -> String {
+    if host.contains("d1--cn") {
+        "主线路".to_string()
+    } else if host.contains("d2--cn") {
+        "备用1".to_string()
+    } else if host.contains("ws--cn") {
+        "备用2".to_string()
+    } else if host.contains("dx--cn") {
+        "备用3".to_string()
+    } else {
+        let parts: Vec<&str> = host.split('.').collect();
+        parts.first().unwrap_or(&host).to_string()
+    }
 }
 
 // ── Cookie helpers for ensure_buvid ──────────────────────────────────────────
@@ -501,68 +529,71 @@ pub async fn get_stream_sources(
         return Err("未获取到可用播放源".to_string());
     }
 
-    // Probe every parsed source concurrently; keep only the ones that are actually reachable.
-    use tokio::task::JoinSet;
-    let probe_urls: Vec<(String, StreamSource)> = sources
+    #[derive(Debug)]
+    struct ProbeResult {
+        source: StreamSource,
+        latency_ms: Option<u64>,
+    }
+
+    let probe_sources: Vec<(String, StreamSource)> = sources
         .into_iter()
         .map(|s| (s.stream_url.clone(), s))
         .collect();
+
+    use tokio::task::JoinSet;
     let mut join_set = JoinSet::new();
-    for (url, s) in probe_urls {
+    for (url, s) in probe_sources {
         let client = client.clone();
         join_set.spawn(async move {
-            let ok = probe_source_url(&client, &url).await;
-            (s, ok)
+            let latency = probe_source_url(&client, &url).await;
+            ProbeResult {
+                source: s,
+                latency_ms: latency,
+            }
         });
     }
-    let mut reachable: Vec<StreamSource> = Vec::new();
+
+    let mut results: Vec<ProbeResult> = Vec::new();
     while let Some(result) = join_set.join_next().await {
-        if let Ok((s, true)) = result {
-            reachable.push(s);
+        if let Ok(r) = result {
+            if r.latency_ms.is_some() {
+                results.push(r);
+            }
         }
     }
 
-    if reachable.is_empty() {
+    if results.is_empty() {
         return Err("所有CDN路线均不可达，请检查网络".to_string());
     }
 
-    // Collect one source per (qualityKey, format) pair, keeping the one with
-    // the highest priority within that group.
-    fn best_per_quality_and_format(mut sources: Vec<StreamSource>) -> Vec<StreamSource> {
-        sources.sort_by_key(|s| std::cmp::Reverse(source_priority(s)));
-        let mut seen: HashMap<(String, String), usize> = HashMap::new();
-        let mut result: Vec<StreamSource> = Vec::new();
-        for (idx, s) in sources.into_iter().enumerate() {
-            let fmt_str = if matches!(s.format, StreamFormat::Hls) {
-                "hls"
-            } else {
-                "flv"
-            };
-            let key = (s.quality_key.clone(), fmt_str.to_string());
-            let entry = seen.entry(key).or_insert(idx);
-            if *entry == idx {
-                result.push(s);
-            }
+    let mut reachable: Vec<StreamSource> = results.into_iter().map(|r| r.source).collect();
+
+    // Sort by: 1) quality priority (desc), 2) CDN priority (desc), 3) format (HLS first)
+    // Keep ALL CDN lines, just sort them
+    reachable.sort_by(|a, b| {
+        let priority_a = source_priority(a);
+        let priority_b = source_priority(b);
+        priority_b.cmp(&priority_a)
+    });
+
+    // Group by quality, mark the first one in each quality group as default
+    let mut quality_groups: HashMap<String, usize> = HashMap::new();
+    for (idx, source) in reachable.iter_mut().enumerate() {
+        let entry = quality_groups
+            .entry(source.quality_key.clone())
+            .or_insert(idx);
+        if *entry == idx {
+            source.is_default = Some(true);
         }
-        result
-    }
-
-    let mut sources = best_per_quality_and_format(reachable);
-
-    sources.sort_by_key(|s| std::cmp::Reverse(source_priority(s)));
-
-    // Mark the first reachable source as default.
-    if let Some(item) = sources.first_mut() {
-        item.is_default = Some(true);
     }
 
     // Route all HLS streams through the local proxy so that WebView2 does not
     // send requests directly to the Bilibili CDN.
-    for source in &mut sources {
+    for source in &mut reachable {
         if matches!(source.format, crate::models::StreamFormat::Hls) {
             source.stream_url = crate::proxy::proxify_stream(&source.stream_url);
         }
     }
 
-    Ok(sources)
+    Ok(reachable)
 }

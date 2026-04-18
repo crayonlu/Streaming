@@ -147,6 +147,8 @@ pub struct StreamSource {
     pub format: StreamFormat,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_default: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cdn: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

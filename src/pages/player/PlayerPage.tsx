@@ -126,7 +126,10 @@ export function PlayerPage() {
   }
 
   const isLoading = detailQuery.isLoading || streamQuery.isLoading;
-  const isError = detailQuery.isError || streamQuery.isError;
+  const allQueriesDone =
+    (detailQuery.isSuccess || detailQuery.isError) &&
+    (streamQuery.isSuccess || streamQuery.isError);
+  const isError = allQueriesDone && (detailQuery.isError || streamQuery.isError);
 
   const openExternal = () => void openUrl(buildRoomWebUrl(platform, roomId));
 
@@ -141,6 +144,7 @@ export function PlayerPage() {
   const qualityItems: PlayerQualityItem[] = sources.map((s) => ({
     id: s.id,
     label: s.qualityLabel,
+    cdn: s.cdn,
     failed: failedSourceIds.has(s.id),
   }));
 

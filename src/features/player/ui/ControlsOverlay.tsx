@@ -120,6 +120,7 @@ function QualityMenu({ items, selectedId, open, onOpenChange, onSelect }: Qualit
                   className={isActive ? "opacity-100 shrink-0" : "opacity-0 shrink-0"}
                 />
                 {item.label}
+                {item.cdn && <span className="text-muted-foreground ml-1">{item.cdn}</span>}
               </button>
             );
           })}

@@ -423,6 +423,7 @@ pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, Stri
                     stream_url,
                     format: StreamFormat::Flv,
                     is_default: Some(sources.is_empty()),
+                    cdn: Some("主线路".to_string()),
                 });
             }
         }

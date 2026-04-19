@@ -6,7 +6,7 @@
  * overlay so xgplayer is always mounted with `controls: false`.
  *
  * Props:
- *   streamUrl        — HLS / FLV URL (changing it remounts the player)
+ *   streamUrl        — HLS / FLV URL (switches source in-place via switchURL)
  *   isLive           — true  → live mode (static progress bar + LIVE badge)
  *                      false → VOD mode  (interactive scrub bar)
  *   format           — "hls" | "flv"   (default "hls")
@@ -16,6 +16,10 @@
  *   onQualityChange  — called when user picks a different quality
  *   onError          — called when xgplayer emits an "error" event
  *   instanceRef      — optional ref that receives the live xgplayer instance
+ *
+ * Lifecycle:
+ *   - Player instance is created when format/isLive changes (structural rebuild)
+ *   - streamUrl changes use switchURL() — no destroy/recreate, preserving time
  */
 
 // ── Module-level cache for xgplayer imports ───────────────────────────────────
@@ -47,9 +51,7 @@ import { ControlsOverlay } from "./ControlsOverlay";
 export interface PlayerQualityItem {
   id: string;
   label: string;
-  /** CDN line identifier (e.g., "主线路", "备用1") */
   cdn?: string;
-  /** Marks a CDN source that already failed (live only) */
   failed?: boolean;
 }
 
@@ -75,6 +77,13 @@ function readVol(): number {
   }
 }
 
+// ── Player lifecycle ──────────────────────────────────────────────────────────
+// Architecture:
+//   - Player instance is created ONCE when format/isLive changes (structural rebuild)
+//   - When only streamUrl changes (quality switch), the existing player switches
+//     source WITHOUT destruction — preserving currentTime, playback state, etc.
+//   - This eliminates the "destroy → recreate → restore time" fragility entirely.
+
 // ── VideoPlayer (main export) ─────────────────────────────────────────────────
 
 export function VideoPlayer({
@@ -91,27 +100,44 @@ export function VideoPlayer({
   const mountRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   // biome-ignore lint/suspicious/noExplicitAny: xgplayer has no public TS types
-  const instanceRef = useRef<any>(null);
+  const instRef = useRef<any>(null);
   const [playerReady, setPlayerReady] = useState(false);
-  // Preserve VOD position across quality switches
-  const savedTimeRef = useRef(0);
 
-  // ── Mount / remount xgplayer whenever streamUrl or format changes ──────────
+  // Track previous structural props to detect rebuild vs source-switch
+  const prevFormatRef = useRef(format);
+  const prevIsLiveRef = useRef(isLive);
+
+  // ── Single lifecycle effect ──────────────────────────────────────────────
   useEffect(() => {
     const el = mountRef.current;
     if (!el || !streamUrl) return;
 
     let disposed = false;
-    // biome-ignore lint/suspicious/noExplicitAny: xgplayer has no public TS types
-    let inst: any = null;
+
+    // Decide: full rebuild (format/isLive changed) or source-switch (url only)
+    const needsRebuild = prevFormatRef.current !== format || prevIsLiveRef.current !== isLive;
+    prevFormatRef.current = format;
+    prevIsLiveRef.current = isLive;
 
     const boot = async () => {
       const { Player, HlsPlugin, FlvPlugin } = await getXgplayerModules();
-
       if (disposed) return;
 
+      // ── Source-switch path: reuse existing player ────────────────────────
+      const existing = instRef.current;
+      if (!needsRebuild && existing && typeof existing.switchURL === "function") {
+        existing.switchURL(streamUrl);
+        setPlayerReady(true);
+        return;
+      }
+
+      // ── Full rebuild path: destroy old + create new ──────────────────────
+      existing?.destroy?.();
+      instRef.current = null;
+      el.innerHTML = "";
+
       // biome-ignore lint/suspicious/noExplicitAny: xgplayer has no public TS types
-      inst = new (Player as any)({
+      const inst = new (Player as any)({
         el,
         url: streamUrl,
         poster: poster ?? undefined,
@@ -146,17 +172,9 @@ export function VideoPlayer({
         plugins: [format === "flv" ? FlvPlugin : HlsPlugin],
       });
 
-      instanceRef.current = inst;
+      instRef.current = inst;
       if (externalRef) externalRef.current = inst;
       setPlayerReady(true);
-
-      // Restore VOD position after quality switch
-      if (!isLive && savedTimeRef.current > 0) {
-        inst.once?.("loadedmetadata", () => {
-          inst.currentTime = savedTimeRef.current;
-          savedTimeRef.current = 0;
-        });
-      }
 
       // ── Auto-retry on error (up to 3 times with increasing delay) ───────
       let retryCount = 0;
@@ -177,7 +195,7 @@ export function VideoPlayer({
         }
       });
 
-      // ── Stream recovery: reload if waiting > 10s ─────────────────────
+      // ── Stream recovery: reload if waiting > 10s ─────────────────────────
       if (isLive) {
         let waitingTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -205,22 +223,27 @@ export function VideoPlayer({
     return () => {
       disposed = true;
       setPlayerReady(false);
-      // Save VOD position before destroying (for quality switch)
-      if (!isLive && inst) {
-        savedTimeRef.current = inst.currentTime ?? inst.video?.currentTime ?? 0;
+
+      // Destroy when:
+      // 1. Structural props changed (format / isLive) — need rebuild
+      // 2. Component unmounting — must clean up player
+      // Keep alive only for URL-only changes while component stays mounted.
+      const structuralChanged =
+        prevFormatRef.current !== format || prevIsLiveRef.current !== isLive;
+      const unmounting = !el.parentElement;
+
+      if (structuralChanged || unmounting) {
+        instRef.current?.destroy?.();
+        instRef.current = null;
+        if (externalRef) externalRef.current = null;
+        if (el) el.innerHTML = "";
       }
-      inst?.destroy?.();
-      inst = null;
-      instanceRef.current = null;
-      if (externalRef) externalRef.current = null;
-      if (el) el.innerHTML = "";
     };
   }, [streamUrl, format, isLive, poster, onError, externalRef]);
 
   return (
-    <div
+    <section
       ref={stageRef}
-      role="region"
       aria-label="视频播放器"
       className="player-stage relative overflow-hidden w-full h-full"
     >
@@ -230,7 +253,7 @@ export function VideoPlayer({
       {/* Custom controls overlay — always rendered after player mounts */}
       {streamUrl && (
         <ControlsOverlay
-          playerRef={instanceRef}
+          playerRef={instRef}
           stageRef={stageRef}
           isLive={isLive}
           playerReady={playerReady}
@@ -239,6 +262,6 @@ export function VideoPlayer({
           onQualityChange={onQualityChange ?? (() => undefined)}
         />
       )}
-    </div>
+    </section>
   );
 }

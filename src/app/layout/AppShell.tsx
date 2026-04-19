@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import streamingLogo from "@/assets/Streaming.svg";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { GlobalSearch } from "@/features/global-search/ui/GlobalSearch";
 import { usePlatformStore } from "@/features/platform-switch/model/usePlatformStore";
@@ -285,14 +284,7 @@ export function AppShell() {
           ─────────────────────────────────────────────────────────── */}
           <header className="flex h-12 shrink-0 items-center bg-card border-b border-border/70 select-none">
             {/* Dedicated draggable strip: keeps drag behavior reliable on Windows */}
-            <div data-tauri-drag-region className="flex min-w-0 flex-1 items-center px-4">
-              <img
-                src={streamingLogo}
-                alt="Streaming"
-                className="h-3.5 w-auto select-none pointer-events-none"
-                draggable={false}
-              />
-            </div>
+            <div data-tauri-drag-region className="flex min-w-0 flex-1"></div>
 
             {/* Interactive area should not be a drag region */}
             <div className="flex items-center gap-2 pr-1">

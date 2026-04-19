@@ -161,15 +161,15 @@ export function VideoPlayer({
             }
           : format === "hls"
             ? {
-              hls: {
-                isLive,
-                retryCount: 3,
-                retryDelay: 2000,
-                enableWorker: true,
-                withCredentials: false,
-                lowLatencyMode: false,
-              },
-            }
+                hls: {
+                  isLive,
+                  retryCount: 3,
+                  retryDelay: 2000,
+                  enableWorker: true,
+                  withCredentials: false,
+                  lowLatencyMode: false,
+                },
+              }
             : {}),
         plugins: format === "mp4" ? [] : [format === "flv" ? FlvPlugin : HlsPlugin],
       });

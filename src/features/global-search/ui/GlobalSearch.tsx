@@ -144,8 +144,7 @@ export function GlobalSearch() {
 
       {/* ── Dropdown: search history + type-to-search ── */}
       {showDropdown && (
-        // biome-ignore lint/a11y/noStaticElementInteractions: mousedown handler manages outside click
-        <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border border-border bg-popover shadow-md py-1 max-h-64 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border border-border bg-popover shadow-md max-h-64 overflow-y-auto">
           {/* Type-to-search suggestion */}
           {value.trim() && (
             <button

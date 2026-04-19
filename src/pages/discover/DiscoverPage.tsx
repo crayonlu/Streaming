@@ -1,214 +1,20 @@
-import { ChevronDown, ChevronUp, Flame, Play, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Flame, Play, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { CategoryFilter } from "@/features/category-filter/ui/CategoryFilter";
 import { useDiscoverStore } from "@/features/discover/model/useDiscoverStore";
 import { usePlatformStore } from "@/features/platform-switch/model/usePlatformStore";
 import { PlatformSwitch } from "@/features/platform-switch/ui/PlatformSwitch";
 import { RoomCard } from "@/features/room-card/ui/RoomCard";
-import { cn } from "@/lib/utils";
-import { getCategories, loadPreferences } from "@/shared/api/commands";
+import { loadPreferences } from "@/shared/api/commands";
 import { findScrollParent } from "@/shared/lib/dom";
-import type { AppPreferences, Category, PlatformId } from "@/shared/types/domain";
+import type { AppPreferences } from "@/shared/types/domain";
 import { CardSkeleton } from "@/shared/ui/CardSkeleton";
 import { EmptyState } from "@/shared/ui/EmptyState";
 import { LoadingIndicator } from "@/shared/ui/LoadingIndicator";
 import { StatusView } from "@/shared/ui/StatusView";
 
-// ── Category filter bar ───────────────────────────────────────────────────────
-// Two rows:
-//   Row 1: "推荐" + parent categories (horizontal scroll chips)
-//   Row 2: sub-categories of the selected parent (collapsible, default collapsed to 1 row)
-//
-// When a parent category is selected:
-//   Bilibili: queries with area_id=0 (all sub-areas) + parent_area_id
-//   Douyu: queries with parent's shortName (if available)
-// When a sub-category is selected:
-//   Bilibili: queries with area_id (sub) + parent_area_id (parent)
-//   Douyu: queries with sub-category's shortName
-
-const SUB_COLLAPSED_COUNT = 8; // chips visible when collapsed
-
-interface CategorySelection {
-  categoryId: string;
-  parentId: string | null;
-  shortName: string | null;
-}
-
-function CategoryFilter({
-  platform,
-  selection,
-  onSelect,
-}: {
-  platform: PlatformId;
-  selection: CategorySelection | null;
-  onSelect: (selection: CategorySelection | null) => void;
-}) {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [subExpanded, setSubExpanded] = useState(false);
-  const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
-
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setCategories([]);
-    setSubExpanded(false);
-    onSelectRef.current(null);
-    getCategories(platform)
-      .then((cats) => {
-        if (active) setCategories(cats);
-      })
-      .catch(() => {
-        if (active) setCategories([]);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [platform]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Derive parent & sub lists
-  const parents = categories.filter((c) => !c.parentId);
-  const selectedId = selection?.categoryId ?? null;
-  const selectedParentId = selection ? (selection.parentId ?? selection.categoryId) : null;
-  const subCategories = selectedParentId
-    ? categories.filter((c) => c.parentId === selectedParentId)
-    : [];
-
-  // Sort: active parent moves to front (after "推荐")
-  const sortedParents = useMemo(() => {
-    const active = parents.find((c) => selectedParentId === c.id);
-    const rest = parents.filter((c) => selectedParentId !== c.id);
-    return active ? [active, ...rest] : rest;
-  }, [parents, selectedParentId]);
-
-  // Sort: active sub moves to front
-  const sortedSubs = useMemo(() => {
-    const active = subCategories.find((c) => selectedId === c.id);
-    const rest = subCategories.filter((c) => selectedId !== c.id);
-    return active ? [active, ...rest] : rest;
-  }, [subCategories, selectedId]);
-
-  // When a parent chip is clicked
-  const handleParentSelect = (cat: Category) => {
-    setSubExpanded(false);
-    if (platform === "douyu") {
-      const firstSub = categories.find((c) => c.parentId === cat.id && c.shortName);
-      if (firstSub) {
-        onSelectRef.current({
-          categoryId: firstSub.id,
-          parentId: cat.id,
-          shortName: firstSub.shortName ?? null,
-        });
-        return;
-      }
-    }
-    onSelectRef.current({
-      categoryId: cat.id,
-      parentId: null,
-      shortName: cat.shortName ?? null,
-    });
-  };
-
-  // When a sub-category chip is clicked
-  const handleSubSelect = (cat: Category) => {
-    onSelectRef.current({
-      categoryId: cat.id,
-      parentId: cat.parentId ?? null,
-      shortName: cat.shortName ?? null,
-    });
-  };
-
-  if (loading) {
-    return (
-      <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-none shrink-0">
-        {Array.from({ length: 6 }, (_, i) => (
-          <div key={i} className="h-7 w-16 rounded-full bg-muted animate-pulse shrink-0" />
-        ))}
-      </div>
-    );
-  }
-
-  if (!parents.length) return null;
-
-  const visibleSubs = subExpanded ? sortedSubs : sortedSubs.slice(0, SUB_COLLAPSED_COUNT);
-  const hasMoreSubs = sortedSubs.length > SUB_COLLAPSED_COUNT;
-
-  return (
-    <div className="shrink-0 space-y-1.5">
-      {/* Row 1: parent categories — prominent pill style */}
-      <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-        <button
-          type="button"
-          onClick={() => {
-            setSubExpanded(false);
-            onSelectRef.current(null);
-          }}
-          className={cn(
-            "cat-chip cat-chip--parent cursor-pointer",
-            !selectedId && "cat-chip--active",
-          )}
-        >
-          推荐
-        </button>
-        {sortedParents.map((cat) => (
-          <button
-            key={cat.id}
-            type="button"
-            onClick={() => handleParentSelect(cat)}
-            className={cn(
-              "cat-chip cat-chip--parent cursor-pointer",
-              selectedParentId === cat.id && "cat-chip--active",
-            )}
-          >
-            {cat.name}
-          </button>
-        ))}
-      </div>
-
-      {/* Row 2: sub-categories — lighter, smaller pills with expand/collapse */}
-      {subCategories.length > 0 && (
-        <div className="cat-subs-container">
-          <div className="flex flex-wrap gap-1">
-            {visibleSubs.map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => handleSubSelect(cat)}
-                className={cn(
-                  "cat-chip cat-chip--sub cursor-pointer",
-                  selectedId === cat.id && "cat-chip--active",
-                )}
-              >
-                {cat.name}
-              </button>
-            ))}
-            {hasMoreSubs && (
-              <button
-                type="button"
-                onClick={() => setSubExpanded((v) => !v)}
-                className="cat-chip cat-chip--expand cursor-pointer flex items-center gap-0.5"
-              >
-                {subExpanded ? (
-                  <>
-                    收起 <ChevronUp size={10} />
-                  </>
-                ) : (
-                  <>
-                    更多 <ChevronDown size={10} />
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+const DISCOVER_SKELETON_KEYS = Array.from({ length: 12 }, (_, i) => `discover-skeleton-${i}`);
 
 function ResumeBanner({
   lastVisited,
@@ -321,8 +127,8 @@ export function DiscoverPage() {
 
       {!hasData && isLoading ? (
         <div className="cards-grid">
-          {Array.from({ length: 12 }, (_, i) => (
-            <CardSkeleton key={i} />
+          {DISCOVER_SKELETON_KEYS.map((key) => (
+            <CardSkeleton key={key} />
           ))}
         </div>
       ) : error ? (

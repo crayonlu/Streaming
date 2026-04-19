@@ -137,8 +137,8 @@ async fn get_replay_list(
     let p = page.unwrap_or(1);
     match platform {
         PlatformId::Douyu => platforms::douyu::get_replay_list(&room_id, p).await,
-        PlatformId::Bilibili => Err("B站回放不作为普通观众功能支持".to_string()),
-        PlatformId::Huya => Err("虎牙暂不支持录播列表".to_string()),
+        PlatformId::Bilibili => Err("B站回放不面向普通观众开放".to_string()),
+        PlatformId::Huya => Err("虎牙暂不提供完整直播回放".to_string()),
     }
 }
 
@@ -151,8 +151,8 @@ async fn get_replay_parts(
 ) -> Result<Vec<ReplayItem>, String> {
     match platform {
         PlatformId::Douyu => platforms::douyu::get_replay_parts(&room_id, &hash_id, &up_id).await,
-        PlatformId::Bilibili => Err("B站回放不作为普通观众功能支持".to_string()),
-        PlatformId::Huya => Err("虎牙暂不支持录播分P".to_string()),
+        PlatformId::Bilibili => Err("B站回放不面向普通观众开放".to_string()),
+        PlatformId::Huya => Err("虎牙暂不提供完整直播回放".to_string()),
     }
 }
 
@@ -164,8 +164,8 @@ async fn get_replay_qualities(
 ) -> Result<Vec<ReplayQuality>, String> {
     match platform {
         PlatformId::Douyu => platforms::douyu::get_replay_qualities(&replay_id).await,
-        PlatformId::Bilibili => Err("B站回放不作为普通观众功能支持".to_string()),
-        PlatformId::Huya => Err("虎牙暂不支持录播播放".to_string()),
+        PlatformId::Bilibili => Err("B站回放不面向普通观众开放".to_string()),
+        PlatformId::Huya => Err("虎牙暂不提供完整直播回放".to_string()),
     }
 }
 

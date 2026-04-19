@@ -1,5 +1,5 @@
 import { ImageIcon, Users } from "lucide-react";
-import { type SyntheticEvent, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { FollowButton } from "@/features/follow-button/ui/FollowButton";
 import { cn } from "@/lib/utils";
@@ -23,22 +23,24 @@ export function RoomCard({ room }: RoomCardProps) {
       )}
     >
       {/* ── Cover ── */}
-      <Link to={`/player/${room.platform}/${room.roomId}`} className="block">
+      <Link
+        to={`/player/${room.platform}/${room.roomId}`}
+        className="block"
+        aria-label={room.title}
+      >
         <div className="card-cover">
           {room.coverUrl && !imgFailed ? (
             <img
               src={room.coverUrl}
               alt={room.title}
               loading="lazy"
-              onError={(e: SyntheticEvent<HTMLImageElement>) => {
-                e.currentTarget.style.display = "none";
-                setImgFailed(true);
-              }}
+              onError={() => setImgFailed(true)}
               className="h-full w-full object-cover transition-transform duration-300"
             />
           ) : (
-            <div className="h-full w-full bg-muted flex items-center justify-center">
-              <ImageIcon size={20} strokeWidth={1.2} className="text-muted-foreground/25" />
+            <div className="h-full w-full bg-muted/80 flex flex-col items-center justify-center gap-1">
+              <ImageIcon size={20} strokeWidth={1.2} className="text-muted-foreground/30" />
+              <span className="text-[10px] text-muted-foreground/45">暂无封面</span>
             </div>
           )}
 

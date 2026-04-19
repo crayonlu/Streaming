@@ -6,6 +6,7 @@ interface FollowState {
   follows: FollowRecord[];
   liveStatusMap: Record<string, boolean>;
   isLoading: boolean;
+  isRefreshingStatus: boolean;
   error: boolean;
   sortByLive: boolean;
 
@@ -18,6 +19,7 @@ export const useFollowStore = create<FollowState>((set, get) => ({
   follows: [],
   liveStatusMap: {},
   isLoading: false,
+  isRefreshingStatus: false,
   error: false,
   sortByLive: true,
 
@@ -36,13 +38,14 @@ export const useFollowStore = create<FollowState>((set, get) => ({
   refreshLiveStatus: async () => {
     const { follows } = get();
     if (follows.length === 0) return;
+    set({ isRefreshingStatus: true });
     try {
       const statusMap = await checkRoomsLiveStatus(
         follows.map((f) => ({ platform: f.platform, roomId: f.roomId })),
       );
-      set({ liveStatusMap: statusMap });
+      set({ liveStatusMap: statusMap, isRefreshingStatus: false });
     } catch {
-      // silently ignore
+      set({ isRefreshingStatus: false });
     }
   },
 

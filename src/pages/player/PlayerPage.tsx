@@ -20,8 +20,10 @@ import {
   setBilibiliSessdata,
 } from "@/shared/api/commands";
 import { isPlatform, PLATFORM_LABEL } from "@/shared/lib/platform";
+import { supportsReplay as canReplay } from "@/shared/lib/replay";
 import type { PlatformId, StreamSource } from "@/shared/types/domain";
 import { StatusView } from "@/shared/ui/StatusView";
+import { getPlaybackStatus } from "./playbackStatus";
 
 // ── PlayerPage ────────────────────────────────────────────────────────────────
 
@@ -133,12 +135,19 @@ export function PlayerPage() {
 
   const openExternal = () => void openUrl(buildRoomWebUrl(platform, roomId));
 
-  const supportsReplay = platform === "douyu";
+  const supportsReplay = canReplay(platform);
   const isRoomOffline =
     !isLoading &&
     (streamQuery.isError ||
       (streamQuery.isSuccess && sources.length === 0) ||
       (room && !room.isLive));
+  const playbackStatus = getPlaybackStatus({
+    room,
+    sources,
+    detailQuery,
+    streamQuery,
+    allFailed,
+  });
 
   // Map StreamSource[] → PlayerQualityItem[] for VideoPlayer
   const qualityItems: PlayerQualityItem[] = sources.map((s) => ({
@@ -264,7 +273,11 @@ export function PlayerPage() {
       <div className="flex-1 min-h-0 flex flex-col gap-3">
         {isError ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 rounded-lg border border-border/60 bg-muted/30 p-4">
-            <StatusView title="暂时无法播放" tone="error" hint="平台风控或房间未开播" />
+            <StatusView
+              title={playbackStatus.title}
+              tone={playbackStatus.tone}
+              hint={playbackStatus.hint}
+            />
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -315,10 +328,10 @@ export function PlayerPage() {
                   )}
                 >
                   {allFailed
-                    ? "所有播放源均不可用，请重试"
+                    ? playbackStatus.title
                     : streamQuery.isLoading
                       ? "获取播放源…"
-                      : "暂无可用流"}
+                      : playbackStatus.title}
                 </p>
                 {!streamQuery.isLoading && (
                   <div className="flex gap-2">

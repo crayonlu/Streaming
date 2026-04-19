@@ -19,6 +19,7 @@ const SCOPE_OPTIONS: { value: SearchScope; label: string }[] = [
   { value: "douyu", label: "斗鱼" },
   { value: "huya", label: "虎牙" },
 ];
+const SEARCH_SKELETON_KEYS = Array.from({ length: 8 }, (_, i) => `search-skeleton-${i}`);
 
 export function SearchPage() {
   const [params] = useSearchParams();
@@ -92,8 +93,8 @@ export function SearchPage() {
         <EmptyState title="输入关键词开始搜索" icon={SearchX} />
       ) : !hasData && isLoading ? (
         <div className="cards-grid">
-          {Array.from({ length: 8 }, (_, i) => (
-            <CardSkeleton key={i} />
+          {SEARCH_SKELETON_KEYS.map((key) => (
+            <CardSkeleton key={key} />
           ))}
         </div>
       ) : error ? (

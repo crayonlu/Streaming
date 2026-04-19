@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const platformSchema = z.enum(["bilibili", "douyu"]);
+export const platformSchema = z.enum(["bilibili", "douyu", "huya"]);
 
 export const categorySchema = z.object({
   id: z.string(),

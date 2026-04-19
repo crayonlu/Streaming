@@ -4156,10 +4156,12 @@ name = "streaming"
 version = "0.3.0"
 dependencies = [
  "axum",
+ "base64 0.22.1",
  "cookie",
  "deno_core",
  "html-escape",
  "md-5",
+ "rand 0.8.5",
  "regex",
  "reqwest 0.12.28",
  "serde",

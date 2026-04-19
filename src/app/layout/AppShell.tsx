@@ -284,7 +284,7 @@ export function AppShell() {
           ─────────────────────────────────────────────────────────── */}
           <header className="flex h-12 shrink-0 items-center bg-card border-b border-border/70 select-none">
             {/* Dedicated draggable strip: keeps drag behavior reliable on Windows */}
-            <div data-tauri-drag-region className="flex min-w-0 flex-1"></div>
+            <div data-tauri-drag-region className="flex min-w-0 flex-1 h-full"></div>
 
             {/* Interactive area should not be a drag region */}
             <div className="flex items-center gap-2 pr-1">

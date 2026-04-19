@@ -273,6 +273,7 @@ export async function recordLastVisited(
 
 export function buildRoomWebUrl(platform: PlatformId, roomId: string) {
   if (platform === "bilibili") return `https://live.bilibili.com/${roomId}`;
+  if (platform === "huya") return `https://www.huya.com/${roomId}`;
   return `https://www.douyu.com/${roomId}`;
 }
 

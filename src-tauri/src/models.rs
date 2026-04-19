@@ -63,6 +63,7 @@ pub struct ReplayItem {
 pub enum PlatformId {
     Bilibili,
     Douyu,
+    Huya,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

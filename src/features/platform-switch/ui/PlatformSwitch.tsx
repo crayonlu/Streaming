@@ -6,6 +6,7 @@ import { usePlatformStore } from "../model/usePlatformStore";
 const OPTIONS: { value: PlatformId; label: string }[] = [
   { value: "bilibili", label: "Bilibili" },
   { value: "douyu", label: "斗鱼" },
+  { value: "huya", label: "虎牙" },
 ];
 
 export function PlatformSwitch() {

@@ -15,6 +15,7 @@ async fn get_featured(platform: PlatformId, page: Option<u32>) -> Result<Vec<Roo
     match platform {
         PlatformId::Bilibili => platforms::bilibili::get_featured(p).await,
         PlatformId::Douyu => platforms::douyu::get_featured(p).await,
+        PlatformId::Huya => platforms::huya::get_featured(p).await,
     }
 }
 
@@ -28,9 +29,11 @@ async fn search_rooms(
     let items = match platform {
         Some(PlatformId::Bilibili) => platforms::bilibili::search_rooms(&keyword, p).await?,
         Some(PlatformId::Douyu) => platforms::douyu::search_rooms(&keyword, p).await?,
+        Some(PlatformId::Huya) => platforms::huya::search_rooms(&keyword, p).await?,
         None => {
             let bili_result = platforms::bilibili::search_rooms(&keyword, p).await;
             let douyu_result = platforms::douyu::search_rooms(&keyword, p).await;
+            let huya_result = platforms::huya::search_rooms(&keyword, p).await;
 
             let mut merged = Vec::new();
             let mut errors: Vec<String> = Vec::new();
@@ -42,6 +45,10 @@ async fn search_rooms(
             match douyu_result {
                 Ok(mut items) => merged.append(&mut items),
                 Err(e) => errors.push(format!("斗鱼: {e}")),
+            }
+            match huya_result {
+                Ok(mut items) => merged.append(&mut items),
+                Err(e) => errors.push(format!("虎牙: {e}")),
             }
 
             // If both platforms fail and no results were collected, surface the error.
@@ -64,6 +71,7 @@ async fn get_categories(platform: PlatformId) -> Result<Vec<Category>, String> {
     match platform {
         PlatformId::Bilibili => platforms::bilibili::get_categories().await,
         PlatformId::Douyu => platforms::douyu::get_categories().await,
+        PlatformId::Huya => platforms::huya::get_categories().await,
     }
 }
 
@@ -85,6 +93,9 @@ async fn get_rooms_by_category(
             let slug = short_name.as_deref().unwrap_or(&category_id);
             platforms::douyu::get_rooms_by_category(slug, p).await
         }
+        PlatformId::Huya => {
+            platforms::huya::get_rooms_by_category(&category_id, parent_id.as_deref(), p).await
+        }
     }
 }
 
@@ -97,6 +108,7 @@ async fn get_room_detail(
     match platform {
         PlatformId::Bilibili => platforms::bilibili::get_room_detail(&app_handle, &room_id).await,
         PlatformId::Douyu => platforms::douyu::get_room_detail(&room_id).await,
+        PlatformId::Huya => platforms::huya::get_room_detail(&room_id).await,
     }
 }
 
@@ -111,6 +123,7 @@ async fn get_stream_sources(
             platforms::bilibili::get_stream_sources(&app_handle, &room_id).await
         }
         PlatformId::Douyu => platforms::douyu::get_stream_sources(&room_id).await,
+        PlatformId::Huya => platforms::huya::get_stream_sources(&room_id).await,
     }
 }
 
@@ -127,6 +140,7 @@ async fn get_replay_list(
         PlatformId::Bilibili => {
             platforms::bilibili::get_replay_list(&app_handle, &room_id, p).await
         }
+        PlatformId::Huya => Err("虎牙暂不支持录播列表".to_string()),
     }
 }
 
@@ -142,6 +156,7 @@ async fn get_replay_parts(
         PlatformId::Bilibili => {
             platforms::bilibili::get_replay_parts(&room_id, &hash_id, &up_id).await
         }
+        PlatformId::Huya => Err("虎牙暂不支持录播分P".to_string()),
     }
 }
 
@@ -156,6 +171,7 @@ async fn get_replay_qualities(
         PlatformId::Bilibili => {
             platforms::bilibili::get_replay_qualities(&app_handle, &replay_id).await
         }
+        PlatformId::Huya => Err("虎牙暂不支持录播播放".to_string()),
     }
 }
 
@@ -241,11 +257,13 @@ async fn check_rooms_live_status(
 ) -> Result<std::collections::HashMap<String, bool>, String> {
     let mut bili_ids = Vec::new();
     let mut douyu_ids = Vec::new();
+    let mut huya_ids = Vec::new();
 
     for entry in &rooms {
         match entry.platform {
             PlatformId::Bilibili => bili_ids.push(entry.room_id.clone()),
             PlatformId::Douyu => douyu_ids.push(entry.room_id.clone()),
+            PlatformId::Huya => huya_ids.push(entry.room_id.clone()),
         }
     }
 
@@ -256,6 +274,9 @@ async fn check_rooms_live_status(
 
     let douyu_map = platforms::douyu::check_rooms_live(&douyu_ids).await;
     result.extend(douyu_map);
+
+    let huya_map = platforms::huya::check_rooms_live(&huya_ids).await;
+    result.extend(huya_map);
 
     Ok(result)
 }

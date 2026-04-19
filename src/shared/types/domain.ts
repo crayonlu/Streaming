@@ -1,4 +1,4 @@
-export type PlatformId = "bilibili" | "douyu";
+export type PlatformId = "bilibili" | "douyu" | "huya";
 
 export interface RoomCard {
   id: string;

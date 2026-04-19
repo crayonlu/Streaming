@@ -17,6 +17,7 @@ const SCOPE_OPTIONS: { value: SearchScope; label: string }[] = [
   { value: "all", label: "全部" },
   { value: "bilibili", label: "Bilibili" },
   { value: "douyu", label: "斗鱼" },
+  { value: "huya", label: "虎牙" },
 ];
 
 export function SearchPage() {

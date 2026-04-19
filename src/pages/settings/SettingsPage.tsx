@@ -299,6 +299,9 @@ export function SettingsPage() {
                 <ToggleGroupItem value="douyu" className="text-xs h-7 px-3">
                   斗鱼
                 </ToggleGroupItem>
+                <ToggleGroupItem value="huya" className="text-xs h-7 px-3">
+                  虎牙
+                </ToggleGroupItem>
               </ToggleGroup>
             </Row>
 
@@ -350,7 +353,7 @@ export function SettingsPage() {
         <div className="flex items-center justify-between text-[11px] text-muted-foreground/55">
           <div className="space-y-0.5">
             <p>Streaming · v{__APP_VERSION__}</p>
-            <p>支持 Bilibili · 斗鱼</p>
+            <p>支持 Bilibili · 斗鱼 · 虎牙</p>
           </div>
           <div className="text-right space-y-0.5 text-[10px]">
             <p>Tauri 2 · React 19</p>

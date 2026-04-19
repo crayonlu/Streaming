@@ -50,13 +50,24 @@ function CategoryFilter({
   onSelectRef.current = onSelect;
 
   useEffect(() => {
+    let active = true;
     setLoading(true);
+    setCategories([]);
     setSubExpanded(false);
     onSelectRef.current(null);
     getCategories(platform)
-      .then((cats) => setCategories(cats))
-      .catch(() => setCategories([]))
-      .finally(() => setLoading(false));
+      .then((cats) => {
+        if (active) setCategories(cats);
+      })
+      .catch(() => {
+        if (active) setCategories([]);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [platform]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Derive parent & sub lists

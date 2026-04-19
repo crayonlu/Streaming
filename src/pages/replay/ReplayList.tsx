@@ -158,13 +158,11 @@ export function ReplayList({
   roomId,
   activeId,
   onPlay,
-  onAuthRequired,
 }: {
   platform: PlatformId;
   roomId: string;
   activeId: string | null;
   onPlay: (item: ReplayItem) => void;
-  onAuthRequired?: (message: string) => void;
 }) {
   const [expandedShowId, setExpandedShowId] = useState<number | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -172,20 +170,7 @@ export function ReplayList({
   // Infinite query — each page returns up to PAGE_SIZE sessions
   const infinite = useInfiniteQuery({
     queryKey: ["replay-list-inf", platform, roomId],
-    queryFn: async ({ pageParam }) => {
-      try {
-        return await getReplayList(platform, roomId, pageParam as number);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (
-          platform === "bilibili" &&
-          (msg.includes("请先") || msg.includes("登录") || msg.includes("授权"))
-        ) {
-          onAuthRequired?.(msg);
-        }
-        throw err;
-      }
-    },
+    queryFn: ({ pageParam }) => getReplayList(platform, roomId, pageParam as number),
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length === PAGE_SIZE ? allPages.length + 1 : undefined,
@@ -237,6 +222,24 @@ export function ReplayList({
             </div>
           </div>
         ))}
+      </div>
+    );
+  }
+
+  if (infinite.isError) {
+    const msg = infinite.error instanceof Error ? infinite.error.message : String(infinite.error);
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center text-muted-foreground">
+        <PlayCircle size={32} strokeWidth={1.2} className="opacity-25" />
+        <span className="text-xs text-foreground/80">无法加载回放</span>
+        <span className="text-[11px] leading-relaxed">{msg}</span>
+        <button
+          type="button"
+          onClick={() => void infinite.refetch()}
+          className="mt-1 text-[11px] text-primary hover:underline"
+        >
+          重试
+        </button>
       </div>
     );
   }

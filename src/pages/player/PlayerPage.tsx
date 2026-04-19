@@ -133,7 +133,7 @@ export function PlayerPage() {
 
   const openExternal = () => void openUrl(buildRoomWebUrl(platform, roomId));
 
-  const supportsReplay = platform === "douyu" || platform === "bilibili";
+  const supportsReplay = platform === "douyu";
   const isRoomOffline =
     !isLoading &&
     (streamQuery.isError ||

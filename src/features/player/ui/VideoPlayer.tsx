@@ -9,7 +9,7 @@
  *   streamUrl        — HLS / FLV URL (switches source in-place via switchURL)
  *   isLive           — true  → live mode (static progress bar + LIVE badge)
  *                      false → VOD mode  (interactive scrub bar)
- *   format           — "hls" | "flv"   (default "hls")
+ *   format           — "hls" | "flv" | "mp4"   (default "hls")
  *   poster           — optional poster image
  *   qualities        — list of quality options to show in the selector
  *   selectedQuality  — currently active quality id
@@ -58,7 +58,7 @@ export interface PlayerQualityItem {
 export interface VideoPlayerProps {
   streamUrl: string;
   isLive?: boolean;
-  format?: "hls" | "flv";
+  format?: "hls" | "flv" | "mp4";
   poster?: string;
   qualities?: PlayerQualityItem[];
   selectedQualityId?: string | null;
@@ -159,7 +159,8 @@ export function VideoPlayer({
                 stashInitialSize: 128,
               },
             }
-          : {
+          : format === "hls"
+            ? {
               hls: {
                 isLive,
                 retryCount: 3,
@@ -168,8 +169,9 @@ export function VideoPlayer({
                 withCredentials: false,
                 lowLatencyMode: false,
               },
-            }),
-        plugins: [format === "flv" ? FlvPlugin : HlsPlugin],
+            }
+            : {}),
+        plugins: format === "mp4" ? [] : [format === "flv" ? FlvPlugin : HlsPlugin],
       });
 
       instRef.current = inst;

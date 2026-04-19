@@ -6,19 +6,14 @@
  *   Right (w-72):   scrollable session / part list
  */
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Film } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import type { PlayerQualityItem } from "@/features/player/ui/VideoPlayer";
 import { VideoPlayer } from "@/features/player/ui/VideoPlayer";
-import {
-  getBilibiliCookie,
-  getReplayQualities,
-  getRoomDetail,
-  setBilibiliSessdata,
-} from "@/shared/api/commands";
+import { getReplayQualities, getRoomDetail } from "@/shared/api/commands";
 import { fmtDuration } from "@/shared/lib/dom";
 import { isPlatform } from "@/shared/lib/platform";
 import type { PlatformId, ReplayItem, ReplayQuality } from "@/shared/types/domain";
@@ -37,55 +32,6 @@ export function ReplayPage() {
   const [selectedQualityId, setSelectedQualityId] = useState<string | null>(null);
   const [urlLoading, setUrlLoading] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
-  const [authMessage, setAuthMessage] = useState<string | null>(null);
-  const [sessdataInput, setSessdataInput] = useState("");
-  const [sessdataSubmitting, setSessdataSubmitting] = useState(false);
-  const [autoExtracting, setAutoExtracting] = useState(false);
-
-  const queryClient = useQueryClient();
-
-  const handleSessdataSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      const val = sessdataInput.trim();
-      if (!val) return;
-      setSessdataSubmitting(true);
-      try {
-        await setBilibiliSessdata(val);
-        setAuthMessage(null);
-        setSessdataInput("");
-        await queryClient.invalidateQueries({ queryKey: ["replay-list-inf", platform, roomId] });
-      } catch {
-        setAuthMessage("保存失败，请检查 SESSDATA 是否正确");
-      } finally {
-        setSessdataSubmitting(false);
-      }
-    },
-    [sessdataInput, platform, roomId, queryClient],
-  );
-
-  // Automatically extract cookies from the app's WebView (no manual copy-paste needed).
-  const handleAutoExtract = useCallback(async () => {
-    setAutoExtracting(true);
-    try {
-      const result = await getBilibiliCookie();
-      if (result.cookie) {
-        await setBilibiliSessdata(result.cookie);
-        setAuthMessage(null);
-        await queryClient.invalidateQueries({ queryKey: ["replay-list-inf", platform, roomId] });
-      } else {
-        setAuthMessage(
-          result.hasSessdata
-            ? "Cookie 提取成功，但未包含 SESSDATA，请确保已登录 bilibili.com"
-            : "无法提取 Cookie，请确认已安装并启用 WebView2",
-        );
-      }
-    } catch {
-      setAuthMessage("提取失败，请尝试手动输入 SESSDATA");
-    } finally {
-      setAutoExtracting(false);
-    }
-  }, [platform, roomId, queryClient]);
 
   const roomQuery = useQuery({
     queryKey: ["room-detail", platform, roomId],
@@ -108,15 +54,7 @@ export function ReplayPage() {
       if (qs.length > 0) setSelectedQualityId(qs[0].name);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      if (
-        item.platform === "bilibili" &&
-        (msg.includes("请先") || msg.includes("登录") || msg.includes("授权"))
-      ) {
-        setAuthMessage(msg);
-        setUrlError(null);
-      } else {
-        setUrlError(msg);
-      }
+      setUrlError(msg);
     } finally {
       setUrlLoading(false);
     }
@@ -128,6 +66,11 @@ export function ReplayPage() {
     label: q.name,
   }));
   const streamUrl = qualities.find((q) => q.name === selectedQualityId)?.url ?? null;
+  const streamFormat = streamUrl?.includes(".m3u8")
+    ? "hls"
+    : streamUrl?.includes(".flv")
+      ? "flv"
+      : "mp4";
 
   if (!isPlatform(platform) || !roomId) {
     return (
@@ -185,6 +128,7 @@ export function ReplayPage() {
               <VideoPlayer
                 streamUrl={streamUrl}
                 isLive={false}
+                format={streamFormat}
                 qualities={qualityItems}
                 selectedQualityId={selectedQualityId}
                 onQualityChange={setSelectedQualityId}
@@ -249,72 +193,6 @@ export function ReplayPage() {
             )}
           </div>
 
-          {authMessage && platform === "bilibili" && (
-            <div className="shrink-0 border-b border-border/50 bg-destructive/8 px-3 py-3">
-              <p className="mb-2 text-xs text-destructive/90">{authMessage}</p>
-
-              {/* Auto-extract from WebView */}
-              <button
-                type="button"
-                onClick={() => void handleAutoExtract()}
-                disabled={autoExtracting}
-                className="mb-2 flex w-full items-center justify-center gap-1.5 rounded border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-xs text-destructive/80 transition-colors hover:border-destructive/50 hover:bg-destructive/15 disabled:opacity-50"
-              >
-                {autoExtracting ? (
-                  <>
-                    <div className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
-                    正在提取…
-                  </>
-                ) : (
-                  "从浏览器自动提取登录状态"
-                )}
-              </button>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-border/40" />
-                </div>
-                <div className="relative flex justify-center text-[9px] uppercase tracking-wide text-muted-foreground/60">
-                  <span className="bg-card px-1.5">或手动输入</span>
-                </div>
-              </div>
-
-              <form
-                onSubmit={(e) => void handleSessdataSubmit(e)}
-                className="mt-2 flex flex-col gap-1.5"
-              >
-                <input
-                  type="text"
-                  value={sessdataInput}
-                  onChange={(e) => setSessdataInput(e.target.value)}
-                  placeholder="粘贴 SESSDATA"
-                  className="w-full rounded border border-border bg-background px-2 py-1 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="submit"
-                    size="sm"
-                    className="h-6 text-[11px]"
-                    disabled={sessdataSubmitting || !sessdataInput.trim()}
-                  >
-                    {sessdataSubmitting ? "保存中…" : "保存并刷新"}
-                  </Button>
-                  <button
-                    type="button"
-                    onClick={() => setAuthMessage(null)}
-                    className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    关闭
-                  </button>
-                </div>
-                <p className="text-[10px] text-muted-foreground/70">
-                  如何获取？登录 bilibili.com 后，F12 → Application → Cookies → 找到 SESSDATA 复制其
-                  Value。
-                </p>
-              </form>
-            </div>
-          )}
-
           {/* Scrollable list */}
           <div className="flex-1 overflow-y-auto">
             <ReplayList
@@ -322,7 +200,6 @@ export function ReplayPage() {
               roomId={roomId}
               activeId={activeItem?.id ?? null}
               onPlay={handlePlay}
-              onAuthRequired={(msg) => setAuthMessage(msg)}
             />
           </div>
         </aside>

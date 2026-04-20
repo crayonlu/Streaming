@@ -44,15 +44,32 @@ export function PlayerProgress({ playerRef, isLive, playerReady }: PlayerProgres
     const p = playerRef.current;
     if (!p) return;
     let rafId = 0;
+
+    // Skip RAF entirely while the user is dragging the scrubber (Q-007).
+    // When seeking, currentTime is driven by handleSeek directly, so the
+    // loop would only waste CPU producing no-op frames.
     const tick = () => {
       if (!seeking.current) {
         const t = (p.video ?? p.media)?.currentTime ?? p.currentTime ?? 0;
         setCurrentTime(t);
+        rafId = requestAnimationFrame(tick);
+      } else {
+        // Pause the loop; it will be restarted by the seekend handler.
+        rafId = 0;
       }
-      rafId = requestAnimationFrame(tick);
     };
+
+    const onSeekEnd = () => {
+      // Restart the RAF loop after the seek completes.
+      if (rafId === 0) rafId = requestAnimationFrame(tick);
+    };
+
+    p.on?.("seeked", onSeekEnd);
     rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
+    return () => {
+      cancelAnimationFrame(rafId);
+      p.off?.("seeked", onSeekEnd);
+    };
   }, [playerRef, isLive, playerReady]);
 
   const handleSeek = useCallback(

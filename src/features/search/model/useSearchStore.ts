@@ -55,12 +55,18 @@ export const useSearchStore = create<SearchState>((set, get) => ({
     try {
       const nextPage = page + 1;
       const result = await searchRooms(keyword, platformFilter, nextPage);
-      set((state) => ({
-        rooms: [...state.rooms, ...result.items],
-        isLoading: false,
-        page: nextPage,
-        hasNextPage: result.items.length > 0,
-      }));
+      set((state) => {
+        // De-duplicate across pages: some platforms may return the same room
+        // on consecutive pages (page boundary overlap).
+        const existingIds = new Set(state.rooms.map((r) => r.id));
+        const fresh = result.items.filter((r) => !existingIds.has(r.id));
+        return {
+          rooms: [...state.rooms, ...fresh],
+          isLoading: false,
+          page: nextPage,
+          hasNextPage: result.items.length > 0,
+        };
+      });
     } catch (e) {
       set({ isLoading: false, error: String(e) });
     }

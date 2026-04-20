@@ -34,6 +34,8 @@ export interface ControlsOverlayProps {
   playerRef: React.MutableRefObject<any>;
   stageRef: React.RefObject<HTMLDivElement | null>;
   isLive: boolean;
+  /** Called when the player stage should receive focus (e.g. after click) */
+  onFocusStage?: () => void;
   playerReady: boolean;
   qualities: PlayerQualityItem[];
   selectedQualityId: string | null | undefined;
@@ -48,15 +50,20 @@ export function ControlsOverlay({
   qualities,
   selectedQualityId,
   onQualityChange,
+  onFocusStage,
 }: ControlsOverlayProps) {
   const [vol, setVol] = useState(readVol);
   const [muted, setMuted] = useState(false);
-  const [playing, setPlaying] = useState(true);
+  // Start as false; the xgplayer event listeners below are the single source
+  // of truth.  Once the player fires "play"/"playing" we flip to true.
+  const [playing, setPlaying] = useState(false);
   const [isFs, setIsFs] = useState(false);
   const [visible, setVisible] = useState(true);
   const [qualityOpen, setQualityOpen] = useState(false);
 
   const idleRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => () => clearTimeout(idleRef.current), []);
 
   // ── Sync player events ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -64,6 +71,7 @@ export function ControlsOverlay({
     const p = playerRef.current;
     if (!p) return;
 
+    // Sync initial values from player instance
     setVol(p.volume ?? readVol());
     setMuted(p.muted ?? false);
     setPlaying(!p.paused);
@@ -72,28 +80,45 @@ export function ControlsOverlay({
       setVol(p.volume ?? 0.7);
       setMuted(p.muted ?? false);
     };
-    const onPlay = () => setPlaying(true);
+    // "playing" fires when playback actually starts (after buffering).
+    // "play"    fires when play() is called (before buffering completes).
+    // "pause"   fires when the player actually pauses.
+    // "waiting" fires when buffering stalls playback — treat as not-playing.
+    // "ended"   fires when VOD reaches the end.
+    const onPlaying = () => setPlaying(true);
     const onPause = () => setPlaying(false);
+    const onWaiting = () => setPlaying(false);
+    const onEnded = () => setPlaying(false);
 
     p.on?.("volumechange", onVolumeChange);
-    p.on?.("play", onPlay);
+    p.on?.("playing", onPlaying);
     p.on?.("pause", onPause);
+    p.on?.("waiting", onWaiting);
+    p.on?.("ended", onEnded);
     return () => {
       p.off?.("volumechange", onVolumeChange);
-      p.off?.("play", onPlay);
+      p.off?.("playing", onPlaying);
       p.off?.("pause", onPause);
+      p.off?.("waiting", onWaiting);
+      p.off?.("ended", onEnded);
     };
   }, [playerRef, playerReady]);
 
-  // ── Fullscreen sync ─────────────────────────────────────────────────────────
+  // ── Fullscreen sync ─────────────────────────────────────────────────────
   useEffect(() => {
     const onChange = () => setIsFs(Boolean(document.fullscreenElement));
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
 
-  // ── Keyboard shortcuts (Space, M, F) ───────────────────────────────────────
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+  // Bound to the player stage container (stageRef) rather than document, so
+  // shortcuts don't fire when the user is typing elsewhere in the app.
+  // Fallback guard on INPUT/TEXTAREA/contentEditable is kept for safety.
   useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
@@ -105,13 +130,9 @@ export function ControlsOverlay({
       switch (e.key) {
         case " ":
           e.preventDefault();
-          if (p.paused) {
-            p.play?.();
-            setPlaying(true);
-          } else {
-            p.pause?.();
-            setPlaying(false);
-          }
+          // Don't setPlaying here — let xgplayer events drive the state.
+          if (p.paused) p.play?.();
+          else p.pause?.();
           break;
         case "m":
         case "M": {
@@ -124,16 +145,50 @@ export function ControlsOverlay({
         case "f":
         case "F":
           e.preventDefault();
-          if (stageRef.current) {
-            if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-            else void stageRef.current.requestFullscreen().catch(() => undefined);
+          if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+          else void el.requestFullscreen().catch(() => undefined);
+          break;
+        case "ArrowLeft":
+          if (!isLive) {
+            e.preventDefault();
+            if (typeof p.currentTime === "number") {
+              p.currentTime = Math.max(0, p.currentTime - 10);
+            }
           }
           break;
+        case "ArrowRight":
+          if (!isLive) {
+            e.preventDefault();
+            if (typeof p.currentTime === "number" && typeof p.duration === "number") {
+              p.currentTime = Math.min(p.duration, p.currentTime + 10);
+            }
+          }
+          break;
+        case "ArrowUp": {
+          e.preventDefault();
+          const nextVol = Math.min(1, (p.volume ?? vol) + 0.1);
+          p.volume = nextVol;
+          p.muted = false;
+          setVol(nextVol);
+          setMuted(false);
+          saveVol(nextVol);
+          break;
+        }
+        case "ArrowDown": {
+          e.preventDefault();
+          const nextVol = Math.max(0, (p.volume ?? vol) - 0.1);
+          p.volume = nextVol;
+          p.muted = nextVol === 0;
+          setVol(nextVol);
+          setMuted(nextVol === 0);
+          saveVol(nextVol);
+          break;
+        }
       }
     };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [playerRef, stageRef, muted]);
+    el.addEventListener("keydown", handler);
+    return () => el.removeEventListener("keydown", handler);
+  }, [playerRef, stageRef, muted, vol, isLive]);
 
   // ── Idle timer ──────────────────────────────────────────────────────────────
   const resetIdle = useCallback(() => {
@@ -157,13 +212,10 @@ export function ControlsOverlay({
   const togglePlay = useCallback(() => {
     const p = playerRef.current;
     if (!p) return;
-    if (p.paused) {
-      p.play?.();
-      setPlaying(true);
-    } else {
-      p.pause?.();
-      setPlaying(false);
-    }
+    // Don't setPlaying here — xgplayer "playing" / "pause" events are the
+    // single source of truth for the playing state.
+    if (p.paused) p.play?.();
+    else p.pause?.();
   }, [playerRef]);
 
   const toggleFullscreen = useCallback(() => {
@@ -200,10 +252,12 @@ export function ControlsOverlay({
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: mouse-idle tracking overlay
+    // biome-ignore lint/a11y/useKeyWithClickEvents: focus intent only, keyboard shortcuts handled on stageRef
     <div
       className="absolute inset-0 z-10 select-none"
       onMouseMove={resetIdle}
       onMouseEnter={resetIdle}
+      onClick={onFocusStage}
       onMouseLeave={() => {
         if (qualityOpen) return;
         clearTimeout(idleRef.current);

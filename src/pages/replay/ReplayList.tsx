@@ -77,6 +77,7 @@ function SessionRow({
       <button
         type="button"
         onClick={hasParts ? onToggle : () => onPlay(session)}
+        aria-expanded={hasParts ? expanded : undefined}
         className={cn(
           "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors group",
           !hasParts && activeId === session.id ? "bg-primary/12" : "hover:bg-accent/60",

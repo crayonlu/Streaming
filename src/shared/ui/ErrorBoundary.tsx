@@ -2,20 +2,34 @@ import { Component, type ReactNode } from "react";
 
 interface Props {
   children: ReactNode;
+  /**
+   * When this value changes the boundary resets itself.  Pass the current
+   * route pathname so the error clears automatically on navigation.
+   */
+  resetKey?: string | number;
 }
 
 interface State {
   hasError: boolean;
+  resetKey: string | number | undefined;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, resetKey: props.resetKey };
   }
 
-  static getDerivedStateFromError(): State {
-    return { hasError: true };
+  static getDerivedStateFromError(_: unknown, prevState: State): State {
+    return { ...prevState, hasError: true };
+  }
+
+  static getDerivedStateFromProps(props: Props, state: State): Partial<State> | null {
+    // If the resetKey changed (e.g. route changed), clear the error.
+    if (props.resetKey !== state.resetKey) {
+      return { hasError: false, resetKey: props.resetKey };
+    }
+    return null;
   }
 
   override componentDidCatch(error: unknown) {

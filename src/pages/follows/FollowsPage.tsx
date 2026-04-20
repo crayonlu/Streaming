@@ -76,7 +76,7 @@ export function FollowsPage() {
       ) : !follows.length ? (
         <EmptyState title="暂无关注" description="在发现或搜索页点击 ♥" icon={Heart} />
       ) : (
-        <div className="cards-grid">
+        <ul className="cards-grid">
           {sorted.map((follow) => (
             <RoomCard
               key={follow.id}
@@ -92,7 +92,7 @@ export function FollowsPage() {
               }}
             />
           ))}
-        </div>
+        </ul>
       )}
     </section>
   );

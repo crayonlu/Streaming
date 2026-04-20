@@ -113,6 +113,9 @@ export function VideoPlayer({
     if (!el || !streamUrl) return;
 
     let disposed = false;
+    // biome-ignore lint/suspicious/noExplicitAny: xgplayer has no public TS types
+    let bootInst: any = null;
+    const pendingTimers: ReturnType<typeof setTimeout>[] = [];
 
     // Decide: full rebuild (format/isLive changed) or source-switch (url only)
     const needsRebuild = prevFormatRef.current !== format || prevIsLiveRef.current !== isLive;
@@ -120,19 +123,33 @@ export function VideoPlayer({
     prevIsLiveRef.current = isLive;
 
     const boot = async () => {
+      // biome-ignore lint/suspicious/noConsole: debug
+      console.log("[VideoPlayer] boot START", { format, isLive, needsRebuild, disposed });
+
       const { Player, HlsPlugin, FlvPlugin } = await getXgplayerModules();
-      if (disposed) return;
+
+      if (disposed) {
+        // biome-ignore lint/suspicious/noConsole: debug
+        console.log("[VideoPlayer] boot ABORTED (disposed after module load)");
+        return;
+      }
 
       // ── Source-switch path: reuse existing player ────────────────────────
       const existing = instRef.current;
       if (!needsRebuild && existing && typeof existing.switchURL === "function") {
+        // biome-ignore lint/suspicious/noConsole: debug
+        console.log("[VideoPlayer] switchURL reuse");
         existing.switchURL(streamUrl);
         setPlayerReady(true);
         return;
       }
 
-      // ── Full rebuild path: destroy old + create new ──────────────────────
-      existing?.destroy?.();
+      // ── Full rebuild path: destroy old + create new ──────────────────────────
+      if (existing) {
+        // biome-ignore lint/suspicious/noConsole: debug
+        console.log("[VideoPlayer] destroying previous instance before rebuild");
+        existing.destroy?.();
+      }
       instRef.current = null;
       el.innerHTML = "";
 
@@ -174,9 +191,20 @@ export function VideoPlayer({
         plugins: format === "mp4" ? [] : [format === "flv" ? FlvPlugin : HlsPlugin],
       });
 
+      bootInst = inst;
       instRef.current = inst;
       if (externalRef) externalRef.current = inst;
       setPlayerReady(true);
+
+      // Guard: if component unmounted while Player was constructing (modules
+      // cached → no await suspension between disposed=true and new Player).
+      if (disposed) {
+        inst.destroy?.();
+        instRef.current = null;
+        bootInst = null;
+        if (externalRef) externalRef.current = null;
+        return;
+      }
 
       // ── Auto-retry on error (up to 3 times with increasing delay) ───────
       let retryCount = 0;
@@ -226,20 +254,20 @@ export function VideoPlayer({
       disposed = true;
       setPlayerReady(false);
 
-      // Destroy when:
-      // 1. Structural props changed (format / isLive) — need rebuild
-      // 2. Component unmounting — must clean up player
-      // Keep alive only for URL-only changes while component stays mounted.
-      const structuralChanged =
-        prevFormatRef.current !== format || prevIsLiveRef.current !== isLive;
-      const unmounting = !el.parentElement;
-
-      if (structuralChanged || unmounting) {
-        instRef.current?.destroy?.();
-        instRef.current = null;
-        if (externalRef) externalRef.current = null;
-        if (el) el.innerHTML = "";
-      }
+      // Always destroy on cleanup — boot() has its own disposed guard and
+      // will recreate the player if it still needs to run.  The previous
+      // conditional (`structuralChanged || unmounting`) was incorrect:
+      // `unmounting` relied on el.parentElement which stays attached during
+      // React StrictMode double-invoke and normal re-renders, so the player
+      // was never destroyed and kept playing audio after navigation.
+      const target = instRef.current ?? bootInst;
+      target?.destroy?.();
+      instRef.current = null;
+      bootInst = null;
+      if (externalRef) externalRef.current = null;
+      if (el) el.innerHTML = "";
+      for (const t of pendingTimers) clearTimeout(t);
+      pendingTimers.length = 0;
     };
   }, [streamUrl, format, isLive, poster, onError, externalRef]);
 
@@ -247,7 +275,11 @@ export function VideoPlayer({
     <section
       ref={stageRef}
       aria-label="视频播放器"
-      className="player-stage relative overflow-hidden w-full h-full"
+      // tabIndex={0} makes the container focusable so keyboard shortcuts work
+      // when the user clicks into the player or tabs to it.
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: player container needs focus for keyboard shortcuts
+      tabIndex={0}
+      className="player-stage relative overflow-hidden w-full h-full focus:outline-none"
     >
       {/* xgplayer mount target */}
       <div ref={mountRef} className="absolute inset-0" />
@@ -262,6 +294,7 @@ export function VideoPlayer({
           qualities={qualities}
           selectedQualityId={selectedQualityId}
           onQualityChange={onQualityChange ?? (() => undefined)}
+          onFocusStage={() => stageRef.current?.focus()}
         />
       )}
     </section>

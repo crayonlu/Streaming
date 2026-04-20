@@ -6,18 +6,15 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FollowButton } from "@/features/follow-button/ui/FollowButton";
+import { useBilibiliAuth } from "@/features/player/model/useBilibiliAuth";
 import type { PlayerQualityItem } from "@/features/player/ui/VideoPlayer";
 import { VideoPlayer } from "@/features/player/ui/VideoPlayer";
 import { cn } from "@/lib/utils";
 import {
   buildRoomWebUrl,
-  closeBilibiliLoginWindow,
-  getBilibiliCookie,
   getRoomDetail,
   getStreamSources,
-  openBilibiliLoginWindow,
   recordLastVisited,
-  setBilibiliSessdata,
 } from "@/shared/api/commands";
 import { isPlatform, PLATFORM_LABEL } from "@/shared/lib/platform";
 import { supportsReplay as canReplay } from "@/shared/lib/replay";
@@ -36,9 +33,7 @@ export function PlayerPage() {
   const [manualSourceId, setManualSourceId] = useState<string | null>(null);
   const [failedSourceIds, setFailedSourceIds] = useState<Set<string>>(new Set());
   const [retryKey, setRetryKey] = useState(0);
-  const [bilibiliLoginState, setBilibiliLoginState] = useState<"idle" | "logging-in" | "logged-in">(
-    "idle",
-  );
+  const { loginState: bilibiliLoginState, login: handleBilibiliLogin } = useBilibiliAuth(platform);
 
   const validRoute = isPlatform(platform) && !!roomId;
 
@@ -88,39 +83,6 @@ export function PlayerPage() {
     setManualSourceId(null);
     setRetryKey((k) => k + 1);
   };
-
-  // Check login state on mount and whenever room changes (for B站).
-  useEffect(() => {
-    if (platform !== "bilibili") return;
-    void getBilibiliCookie()
-      .then((r) => setBilibiliLoginState(r.hasSessdata ? "logged-in" : "idle"))
-      .catch(() => setBilibiliLoginState("idle"));
-  }, [platform]);
-
-  // Opens the visible login window and polls until SESSDATA arrives.
-  const handleBilibiliLogin = useCallback(async () => {
-    if (bilibiliLoginState === "logging-in") return;
-    setBilibiliLoginState("logging-in");
-    try {
-      await openBilibiliLoginWindow();
-      // Poll every 1.5s for up to 120s.
-      const deadline = Date.now() + 120_000;
-      while (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 1500));
-        const result = await getBilibiliCookie();
-        if (result.hasSessdata) {
-          if (result.cookie) await setBilibiliSessdata(result.cookie);
-          await closeBilibiliLoginWindow();
-          setBilibiliLoginState("logged-in");
-          return;
-        }
-      }
-      // Timeout — user may have closed the window without logging in.
-      setBilibiliLoginState("idle");
-    } catch {
-      setBilibiliLoginState("idle");
-    }
-  }, [bilibiliLoginState]);
 
   // ── Early return after all hooks ──────────────────────────────────────────
   if (!validRoute) {

@@ -106,12 +106,18 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
             categorySelection.shortName ?? undefined,
           )
         : await getFeatured(platform, nextPage);
-      set((state) => ({
-        rooms: [...state.rooms, ...data],
-        isLoading: false,
-        page: nextPage,
-        hasNextPage: data.length > 0,
-      }));
+      set((state) => {
+        // De-duplicate across pages: B站 may return the same room_id on
+        // consecutive pages (page boundary overlap or cross-section repeats).
+        const existingIds = new Set(state.rooms.map((r) => r.id));
+        const fresh = data.filter((r) => !existingIds.has(r.id));
+        return {
+          rooms: [...state.rooms, ...fresh],
+          isLoading: false,
+          page: nextPage,
+          hasNextPage: data.length > 0,
+        };
+      });
     } catch (e) {
       set({ isLoading: false, error: String(e) });
     }

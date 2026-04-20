@@ -137,11 +137,11 @@ export function DiscoverPage() {
         <EmptyState title="暂无内容" description="可切换平台或稍后刷新" icon={Flame} />
       ) : (
         <>
-          <div className="cards-grid">
+          <ul className="cards-grid">
             {rooms.map((room) => (
-              <RoomCard key={room.id + room.title} room={room} />
+              <RoomCard key={room.id} room={room} />
             ))}
-          </div>
+          </ul>
           <div ref={sentinelRef} className="h-1 w-full shrink-0" aria-hidden />
           {hasData && isLoading && <LoadingIndicator />}
           {!hasNextPage && hasData && !isLoading && (

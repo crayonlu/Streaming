@@ -24,8 +24,6 @@ export function FollowButton({ room, compact = false }: FollowButtonProps) {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["follows"] });
-      void queryClient.invalidateQueries({ queryKey: ["featured"] });
-      void queryClient.invalidateQueries({ queryKey: ["search"] });
       void queryClient.invalidateQueries({ queryKey: ["room-detail"] });
     },
   });

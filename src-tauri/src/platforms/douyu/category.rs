@@ -109,9 +109,6 @@ pub async fn get_rooms_by_category(short_name: &str, page: u32) -> Result<Vec<Ro
     let url = format!(
         "https://m.douyu.com/hgapi/live/cate/newRecList?offset={offset}&cate2={short_name}&limit=30"
     );
-    eprintln!(
-        "[douyu] get_rooms_by_category: short_name={short_name}, page={page}, offset={offset}"
-    );
 
     let client = shared_client();
     let resp = client
@@ -131,21 +128,11 @@ pub async fn get_rooms_by_category(short_name: &str, page: u32) -> Result<Vec<Ro
         .text()
         .await
         .map_err(|e| format!("douyu read body: {e}"))?;
-    let payload: Value = serde_json::from_str(&text).map_err(|e| {
-        eprintln!(
-            "[douyu] JSON parse error. Body preview: {}",
-            &text[..text.len().min(500)]
-        );
-        format!("douyu category rooms parse error: {e}")
-    })?;
+    let payload: Value = serde_json::from_str(&text)
+        .map_err(|e| format!("douyu category rooms parse error: {e}"))?;
 
     let error_code = payload.get("error").and_then(Value::as_i64).unwrap_or(-1);
     if error_code != 0 {
-        let msg = payload
-            .get("msg")
-            .and_then(Value::as_str)
-            .unwrap_or("unknown");
-        eprintln!("[douyu] API error: error={error_code}, msg={msg}, short_name={short_name}");
         return Ok(vec![]);
     }
 
@@ -156,11 +143,6 @@ pub async fn get_rooms_by_category(short_name: &str, page: u32) -> Result<Vec<Ro
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
-
-    eprintln!(
-        "[douyu] got {} rooms for short_name={short_name}",
-        items.len()
-    );
 
     for item in items {
         let room_id = value_to_string(item.get("rid"));

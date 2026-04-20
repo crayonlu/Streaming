@@ -43,9 +43,17 @@ export function GlobalSearch() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(true);
   const [value, setValue] = useState("");
   const [focused, setFocused] = useState(false);
   const [history, setHistory] = useState<string[]>(loadHistory);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Refresh history list each time the input gains focus
   const handleFocus = useCallback(() => {
@@ -128,8 +136,9 @@ export function GlobalSearch() {
           onChange={(e) => setValue(e.currentTarget.value)}
           onFocus={handleFocus}
           onBlur={() => {
-            // Delay so mousedown handlers in dropdown can fire first
-            setTimeout(() => setFocused(false), 150);
+            setTimeout(() => {
+              if (mountedRef.current) setFocused(false);
+            }, 150);
           }}
           placeholder="搜索直播间…"
           aria-label="搜索直播间"

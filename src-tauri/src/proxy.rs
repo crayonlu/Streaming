@@ -15,13 +15,13 @@
 use axum::body::Body;
 use axum::{
     extract::Query,
-    http::{header, HeaderValue, Response, StatusCode},
+    http::{header, HeaderValue, Method, Response, StatusCode},
     routing::get,
     Router,
 };
 use serde::Deserialize;
 use std::sync::OnceLock;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 
 const DEFAULT_PORT: u16 = 34729;
 const PROXY_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
@@ -94,7 +94,7 @@ pub fn start() {
             .route("/img", get(image_handler))
             .route("/stream", get(stream_handler))
             .route("/seg", get(seg_handler))
-            .layer(CorsLayer::very_permissive());
+            .layer(cors_layer(port));
 
         let listener = match tokio::net::TcpListener::bind(format!("127.0.0.1:{port}")).await {
             Ok(l) => l,
@@ -108,6 +108,32 @@ pub fn start() {
             tracing::error!(error = %e, "proxy server error");
         }
     });
+}
+
+/// Build a restrictive CORS layer that only allows requests from:
+///
+/// - `http://127.0.0.1:<port>` — same proxy origin (sub-manifests, nested M3U8)
+/// - `tauri://localhost` — Tauri WebView2 on Windows
+/// - `https://tauri.localhost` — Tauri WebView2 alternate origin
+///
+/// Only `GET` is exposed; no credentials, no wildcards.
+fn cors_layer(port: u16) -> CorsLayer {
+    let self_origin = format!("http://127.0.0.1:{port}");
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::list([
+            self_origin
+                .parse()
+                .unwrap_or_else(|_| "http://127.0.0.1".parse().expect("static origin valid")),
+            "tauri://localhost"
+                .parse()
+                .expect("tauri://localhost is valid"),
+            "https://tauri.localhost"
+                .parse()
+                .expect("https://tauri.localhost is valid"),
+        ]))
+        .allow_methods(AllowMethods::list([Method::GET]))
+        .allow_headers(AllowHeaders::mirror_request())
+        .max_age(std::time::Duration::from_secs(3600))
 }
 
 /// Find the first TCP port (starting from `DEFAULT_PORT`) that nothing is

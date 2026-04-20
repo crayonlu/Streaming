@@ -33,9 +33,14 @@ export function SearchPage() {
   const hasNextPage = useSearchStore((s) => s.hasNextPage);
   const searchFirstPage = useSearchStore((s) => s.searchFirstPage);
   const searchNextPage = useSearchStore((s) => s.searchNextPage);
+  const clear = useSearchStore((s) => s.clear);
 
   const sectionRef = useRef<HTMLElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Clear store on unmount so stale results don’t flash on the next visit
+  // if a pending debounce fired after the page was already left (Q-005).
+  useEffect(() => () => clear(), [clear]);
 
   // Debounced search — 300 ms delay after last keystroke
   useEffect(() => {
@@ -103,11 +108,11 @@ export function SearchPage() {
         <EmptyState title={`"${keyword}" 无结果`} description="换个关键词试试" icon={SearchX} />
       ) : (
         <>
-          <div className="cards-grid">
+          <ul className="cards-grid">
             {rooms.map((room) => (
               <RoomCard key={room.id} room={room} />
             ))}
-          </div>
+          </ul>
           <div ref={sentinelRef} className="h-1 w-full shrink-0" aria-hidden />
           {hasData && isLoading && <LoadingIndicator />}
           {!hasNextPage && hasData && !isLoading && (

@@ -7,6 +7,7 @@ use reqwest::{
 };
 use serde::Deserialize;
 use serde_json::Value;
+use std::cell::RefCell;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::super::http::{custom_client_builder, shared_client};
@@ -15,6 +16,69 @@ use super::{
     DEFAULT_UA,
 };
 use crate::models::{PlatformId, RoomDetail, StreamFormat, StreamSource};
+
+// ── Thread-local JS runtime cache ────────────────────────────────────────────
+//
+// `JsRuntime` is neither `Send` nor `Sync`, so it cannot be shared across
+// threads via `Mutex` without wrapping in an `Arc<Mutex<…>>` and forcing
+// sequential execution.  Instead we keep one runtime per tokio worker thread
+// (`thread_local!`), which gives us:
+//
+//   - Zero lock contention — each thread owns its instance.
+//   - ~50-100 ms cold-start amortised to the first call per thread rather
+//     than every call.
+//   - The CryptoJS bundle injected once per runtime lifetime, not per call.
+//
+// `RefCell` provides interior mutability without `unsafe`; it is sound here
+// because `thread_local!` storage is never accessed from another thread.
+thread_local! {
+    static JS_RUNTIME: RefCell<Option<JsRuntime>> = const { RefCell::new(None) };
+}
+
+/// Execute the douyu signing function inside the thread-local `JsRuntime`.
+///
+/// On first call per thread the runtime is initialised and CryptoJS is
+/// injected.  Subsequent calls reuse the same isolate, paying only the cost
+/// of executing the signing expression (~1 ms).
+fn execute_js_sign_tl(script: &str, rid: &str, did: &str, ts: i64) -> Result<String, String> {
+    JS_RUNTIME.with(|cell| {
+        let mut opt = cell.borrow_mut();
+
+        // ── Initialise once per thread ──────────────────────────────────────
+        if opt.is_none() {
+            let mut rt = JsRuntime::new(RuntimeOptions::default());
+            rt.execute_script("[douyu-init]", FastString::from(CRYPTO_JS.to_string()))
+                .map_err(|e| format!("inject cryptojs failed: {e}"))?;
+            *opt = Some(rt);
+        }
+
+        let runtime = opt.as_mut().expect("just initialised above");
+
+        // ── Inject the per-room signing script ──────────────────────────────
+        runtime
+            .execute_script("[douyu-sign]", FastString::from(script.to_string()))
+            .map_err(|e| format!("inject sign script failed: {e}"))?;
+
+        // ── Call the signing function ────────────────────────────────────────
+        let rid_js =
+            serde_json::to_string(rid).map_err(|e| format!("serialize rid failed: {e}"))?;
+        let did_js =
+            serde_json::to_string(did).map_err(|e| format!("serialize did failed: {e}"))?;
+        let call_expr = format!("ub98484234({rid_js},{did_js},{ts});");
+
+        let js_result = runtime
+            .execute_script("[douyu-call]", FastString::from(call_expr))
+            .map_err(|e| format!("execute sign function failed: {e}"))?;
+
+        let params = {
+            let scope = &mut runtime.handle_scope();
+            let result = js_result.open(scope);
+            result.to_rust_string_lossy(scope)
+        };
+
+        Ok(params)
+    })
+}
 
 // ── Internal types for stream source fetching ────────────────────────────────
 
@@ -81,29 +145,9 @@ impl DouyuClient {
         did: &str,
         ts: i64,
     ) -> Result<String, String> {
-        let mut runtime = JsRuntime::new(RuntimeOptions::default());
-        runtime
-            .execute_script("[douyu]", FastString::from(CRYPTO_JS.to_string()))
-            .map_err(|e| format!("inject cryptojs failed: {e}"))?;
-        runtime
-            .execute_script("[douyu]", FastString::from(script.to_string()))
-            .map_err(|e| format!("inject sign script failed: {e}"))?;
-
-        let rid_js =
-            serde_json::to_string(rid).map_err(|e| format!("serialize rid failed: {e}"))?;
-        let did_js =
-            serde_json::to_string(did).map_err(|e| format!("serialize did failed: {e}"))?;
-        let call_expr = format!("ub98484234({rid_js},{did_js},{ts});");
-        let js_result = runtime
-            .execute_script("[douyu]", FastString::from(call_expr))
-            .map_err(|e| format!("execute sign function failed: {e}"))?;
-
-        let params = {
-            let scope = &mut runtime.handle_scope();
-            let result = js_result.open(scope);
-            result.to_rust_string_lossy(scope)
-        };
-        Ok(params)
+        // Delegate to the thread-local runtime to avoid the ~50-100 ms
+        // cold-start cost of constructing a new V8 isolate on every call.
+        execute_js_sign_tl(script, rid, did, ts)
     }
 
     async fn fetch_room_detail_basic(&self) -> Result<(String, bool), String> {
@@ -361,7 +405,7 @@ pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, Stri
     }
 
     let mut last_error = String::new();
-    for attempt in 0..2 {
+    for _attempt in 0..2 {
         let sign_data = match douyu.build_sign_params(&normalized_room_id).await {
             Ok(data) => data,
             Err(err) => {
@@ -429,12 +473,6 @@ pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, Stri
         }
 
         if !sources.is_empty() {
-            if attempt > 0 {
-                eprintln!(
-                    "[douyu] recovered stream sources on retry attempt {}",
-                    attempt + 1
-                );
-            }
             return Ok(sources);
         }
     }

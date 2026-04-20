@@ -1,5 +1,6 @@
 import {
   Check,
+  Film,
   Globe,
   Monitor,
   Moon,
@@ -345,6 +346,19 @@ export function SettingsPage() {
               value={prefs.proxy}
               onChange={(v) => setPrefs((p) => ({ ...p, proxy: v }))}
             />
+          </div>
+        </div>
+
+        <div>
+          <SectionLabel icon={Film} label="平台能力说明" />
+          <div className="rounded-lg bg-card ring-1 ring-border/40 overflow-hidden">
+            <div className="px-4 py-3.5">
+              <p className="text-sm font-medium leading-none">直播回放</p>
+              <p className="mt-1.5 text-[11px] text-muted-foreground leading-snug">
+                斗鱼支持全量录像；Bilibili
+                官方接口不面向普通观众，暂不支持；虎牙公开视频与直播回放不同，暂不支持。
+              </p>
+            </div>
           </div>
         </div>
 

@@ -2,6 +2,7 @@
 
 use reqwest::header::{REFERER, USER_AGENT};
 use serde_json::Value;
+use std::collections::HashSet;
 
 use crate::models::{PlatformId, RoomCard};
 use crate::platforms::http::{retry, shared_client};
@@ -41,6 +42,8 @@ async fn get_featured_once(page: u32) -> Result<Vec<RoomCard>, String> {
     }
 
     let mut cards = Vec::new();
+    let mut seen_ids: HashSet<String> = HashSet::new();
+
     let sections = payload
         .get("data")
         .and_then(|d| d.get("room_list"))
@@ -55,6 +58,10 @@ async fn get_featured_once(page: u32) -> Result<Vec<RoomCard>, String> {
         for item in items {
             let room_id = value_to_string(item.get("roomid"));
             if room_id.is_empty() {
+                continue;
+            }
+            if !seen_ids.insert(room_id.clone()) {
+                // Already emitted this room in an earlier section — skip.
                 continue;
             }
 

@@ -35,19 +35,14 @@ function WindowControls() {
       .then(setMaximized)
       .catch(() => undefined);
 
-    // Keep in sync when the user resizes / maximises from OS keyboard shortcuts
-    let unlisten: (() => void) | undefined;
-    void win
+    const listenPromise = win
       .listen("tauri://resize", async () => {
         setMaximized(await win.isMaximized().catch(() => false));
-      })
-      .then((fn) => {
-        unlisten = fn;
       })
       .catch(() => undefined);
 
     return () => {
-      unlisten?.();
+      void listenPromise.then((fn) => fn?.());
     };
   }, []);
 

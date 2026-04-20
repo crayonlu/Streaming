@@ -14,7 +14,7 @@ export function RoomCard({ room }: RoomCardProps) {
   const [imgFailed, setImgFailed] = useState(false);
 
   return (
-    <div
+    <li
       className={cn(
         "group relative rounded-lg bg-card overflow-hidden cursor-pointer",
         "ring-1 ring-transparent",
@@ -82,6 +82,6 @@ export function RoomCard({ room }: RoomCardProps) {
           )}
         </div>
       </div>
-    </div>
+    </li>
   );
 }

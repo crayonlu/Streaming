@@ -1,5 +1,10 @@
 import { create } from "zustand";
-import { checkRoomsLiveStatus, listFollows } from "@/shared/api/commands";
+import {
+  checkRoomsLiveStatus,
+  getRoomDetail,
+  listFollows,
+  patchFollowSnapshot,
+} from "@/shared/api/commands";
 import type { FollowRecord } from "@/shared/types/domain";
 
 interface FollowState {
@@ -12,6 +17,8 @@ interface FollowState {
 
   loadFollows: () => Promise<void>;
   refreshLiveStatus: () => Promise<void>;
+  /** Silently refresh room metadata (title, streamerName, coverUrl) in the background. */
+  refreshFollowDetails: () => Promise<void>;
   removeFollow: (platform: string, roomId: string) => void;
 }
 
@@ -28,8 +35,9 @@ export const useFollowStore = create<FollowState>((set, get) => ({
     try {
       const data = await listFollows();
       set({ follows: data, isLoading: false });
-      // After loading follows, refresh live status
-      await get().refreshLiveStatus();
+      // Run both refreshes concurrently; neither blocks initial render.
+      void get().refreshLiveStatus();
+      void get().refreshFollowDetails();
     } catch {
       set({ isLoading: false, error: true });
     }
@@ -47,6 +55,38 @@ export const useFollowStore = create<FollowState>((set, get) => ({
     } catch {
       set({ isRefreshingStatus: false });
     }
+  },
+
+  refreshFollowDetails: async () => {
+    const { follows } = get();
+    if (follows.length === 0) return;
+
+    await Promise.allSettled(
+      follows.map(async (f) => {
+        try {
+          const detail = await getRoomDetail(f.platform, f.roomId);
+          const patch = {
+            title: detail.title || f.title,
+            streamerName: detail.streamerName || f.streamerName,
+            coverUrl: detail.coverUrl || f.coverUrl,
+          };
+          if (
+            patch.title !== f.title ||
+            patch.streamerName !== f.streamerName ||
+            patch.coverUrl !== f.coverUrl
+          ) {
+            await patchFollowSnapshot(f.platform, f.roomId, patch);
+            set((state) => ({
+              follows: state.follows.map((r) =>
+                r.platform === f.platform && r.roomId === f.roomId ? { ...r, ...patch } : r,
+              ),
+            }));
+          }
+        } catch {
+          // Silently ignore — we still have the cached snapshot as fallback.
+        }
+      }),
+    );
   },
 
   removeFollow: (platform, roomId) => {

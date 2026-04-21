@@ -199,6 +199,18 @@ export async function listFollows(): Promise<FollowRecord[]> {
   return [...records].sort((a, b) => (a.followedAt < b.followedAt ? 1 : -1));
 }
 
+export async function patchFollowSnapshot(
+  platform: PlatformId,
+  roomId: string,
+  patch: { title: string; streamerName: string; coverUrl: string },
+): Promise<void> {
+  const records = await getFollowRecordsFromStore();
+  const updated = records.map((r) =>
+    r.platform === platform && r.roomId === roomId ? { ...r, ...patch } : r,
+  );
+  await writeFollowRecords(updated);
+}
+
 interface ToggleFollowInput {
   platform: PlatformId;
   roomId: string;

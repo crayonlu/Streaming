@@ -12,14 +12,16 @@ import {
   Sun,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { GlobalSearch } from "@/features/global-search/ui/GlobalSearch";
+import { OnboardingOverlay } from "@/features/onboarding/ui/OnboardingOverlay";
 import { usePlatformStore } from "@/features/platform-switch/model/usePlatformStore";
 import { type ThemeMode, useThemeStore } from "@/features/theme/model/useThemeStore";
 import { cn } from "@/lib/utils";
 import { loadPreferences, savePreferences } from "@/shared/api/commands";
+import type { PlatformId } from "@/shared/types/domain";
 
 // ── Window controls ───────────────────────────────────────────────────────────
 
@@ -196,8 +198,10 @@ export function AppShell() {
   const hydratePlatform = usePlatformStore((s) => s.hydratePlatform);
   const syncTheme = useThemeStore((s) => s.syncFromPreference);
   const isPlayer = location.pathname.startsWith("/player/");
+  // null = not yet determined (loading); false = show onboarding; true = done
+  const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
 
-  // Hydrate platform + theme from saved preferences
+  // Hydrate platform + theme from saved preferences, and check onboarding state
   useEffect(() => {
     let ok = true;
     void loadPreferences()
@@ -205,12 +209,25 @@ export function AppShell() {
         if (!ok) return;
         hydratePlatform(p.defaultPlatform);
         syncTheme(p.appearance as ThemeMode);
+        setOnboardingDone(p.onboardingDone === true);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!ok) return;
+        // Treat preference load failure as onboarding not done — show overlay.
+        setOnboardingDone(false);
+      });
     return () => {
       ok = false;
     };
   }, [hydratePlatform, syncTheme]);
+
+  const handleOnboardingDone = useCallback(
+    (platform: PlatformId) => {
+      hydratePlatform(platform);
+      setOnboardingDone(true);
+    },
+    [hydratePlatform],
+  );
 
   // Persist sidebar toggle back to AppPreferences
   useEffect(() => {
@@ -225,6 +242,8 @@ export function AppShell() {
 
   return (
     <TooltipProvider delayDuration={500}>
+      {/* First-run onboarding: shown once, overlaid on top of the shell */}
+      {onboardingDone === false && <OnboardingOverlay onDone={handleOnboardingDone} />}
       <div className="flex h-screen overflow-hidden">
         {/* ─── Sidebar ───────────────────────────────────────────── */}
         <aside className="flex w-14 shrink-0 flex-col items-center gap-1 bg-card border-r border-border/70 py-3">

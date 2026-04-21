@@ -95,6 +95,7 @@ export interface AppPreferences {
   appearance: "system" | "light" | "dark";
   /** "none" = disable all proxy (safe default); "system" = use OS/env proxy */
   proxy: ProxyMode;
+  onboardingDone?: boolean;
   lastVisited?: {
     type: "discover" | "search" | "room";
     platform?: PlatformId;

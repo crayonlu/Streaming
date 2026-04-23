@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FollowButton } from "@/features/follow-button/ui/FollowButton";
 import { useBilibiliAuth } from "@/features/player/model/useBilibiliAuth";
+import { useStreamLifecycle } from "@/features/player/model/useStreamLifecycle";
 import type { PlayerQualityItem } from "@/features/player/ui/VideoPlayer";
 import { VideoPlayer } from "@/features/player/ui/VideoPlayer";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,7 @@ export function PlayerPage() {
   const [failedSourceIds, setFailedSourceIds] = useState<Set<string>>(new Set());
   const [retryKey, setRetryKey] = useState(0);
   const { loginState: bilibiliLoginState, login: handleBilibiliLogin } = useBilibiliAuth(platform);
+  const streamLifecycle = useStreamLifecycle();
 
   const validRoute = isPlatform(platform) && !!roomId;
 
@@ -46,7 +48,12 @@ export function PlayerPage() {
 
   const streamQuery = useQuery({
     queryKey: ["stream-sources", platform, roomId, retryKey],
-    queryFn: () => getStreamSources(platform as PlatformId, roomId as string),
+    queryFn: async () => {
+      const result = await getStreamSources(platform as PlatformId, roomId as string);
+      // Record successful fetch so we know when the URL becomes stale.
+      streamLifecycle.recordFetch();
+      return result;
+    },
     enabled: validRoute,
     retry: 2,
   });
@@ -83,6 +90,29 @@ export function PlayerPage() {
     setManualSourceId(null);
     setRetryKey((k) => k + 1);
   };
+
+  const handleUserPlay = useCallback(() => {
+    if (streamQuery.isFetching) return;
+    if (streamLifecycle.shouldRefresh()) {
+      void streamQuery.refetch();
+    }
+  }, [streamLifecycle, streamQuery]);
+
+  const handlePlaybackStall = useCallback(
+    (reason: "error" | "waiting-timeout") => {
+      if (streamQuery.isFetching) return;
+      streamLifecycle.recordFetch();
+      setFailedSourceIds((prev) => {
+        const next = new Set(prev);
+        if (selectedSource) next.delete(selectedSource.id);
+        return next;
+      });
+      void streamQuery.refetch();
+      // biome-ignore lint/suspicious/noConsole: debug
+      console.log("[PlayerPage] playback stall, refreshing stream sources", { reason });
+    },
+    [streamLifecycle, streamQuery, selectedSource],
+  );
 
   // ── Early return after all hooks ──────────────────────────────────────────
   if (!validRoute) {
@@ -276,6 +306,8 @@ export function PlayerPage() {
                   });
                 }}
                 onError={() => handleSourceError(selectedSource)}
+                onPlaybackStall={handlePlaybackStall}
+                onUserPlay={handleUserPlay}
               />
             ) : (
               /* ── No-source overlay ── */

@@ -40,6 +40,8 @@ export interface ControlsOverlayProps {
   qualities: PlayerQualityItem[];
   selectedQualityId: string | null | undefined;
   onQualityChange: (id: string) => void;
+  onUserPlay?: () => void;
+  onUserPause?: () => void;
 }
 
 export function ControlsOverlay({
@@ -51,6 +53,8 @@ export function ControlsOverlay({
   selectedQualityId,
   onQualityChange,
   onFocusStage,
+  onUserPlay,
+  onUserPause,
 }: ControlsOverlayProps) {
   const [vol, setVol] = useState(readVol);
   const [muted, setMuted] = useState(false);
@@ -131,8 +135,13 @@ export function ControlsOverlay({
         case " ":
           e.preventDefault();
           // Don't setPlaying here — let xgplayer events drive the state.
-          if (p.paused) p.play?.();
-          else p.pause?.();
+          if (p.paused) {
+            p.play?.();
+            onUserPlay?.();
+          } else {
+            p.pause?.();
+            onUserPause?.();
+          }
           break;
         case "m":
         case "M": {
@@ -188,7 +197,7 @@ export function ControlsOverlay({
     };
     el.addEventListener("keydown", handler);
     return () => el.removeEventListener("keydown", handler);
-  }, [playerRef, stageRef, muted, vol, isLive]);
+  }, [playerRef, stageRef, muted, vol, isLive, onUserPlay, onUserPause]);
 
   // ── Idle timer ──────────────────────────────────────────────────────────────
   const resetIdle = useCallback(() => {
@@ -214,9 +223,14 @@ export function ControlsOverlay({
     if (!p) return;
     // Don't setPlaying here — xgplayer "playing" / "pause" events are the
     // single source of truth for the playing state.
-    if (p.paused) p.play?.();
-    else p.pause?.();
-  }, [playerRef]);
+    if (p.paused) {
+      p.play?.();
+      onUserPlay?.();
+    } else {
+      p.pause?.();
+      onUserPause?.();
+    }
+  }, [playerRef, onUserPlay, onUserPause]);
 
   const toggleFullscreen = useCallback(() => {
     const el = stageRef.current;

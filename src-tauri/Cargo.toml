@@ -1,6 +1,6 @@
 [package]
 name = "streaming"
-version = "0.4.3"
+version = "0.4.4"
 description = "A desktop app for streaming video content from various platforms.  "
 authors = ["crayon"]
 edition = "2021"

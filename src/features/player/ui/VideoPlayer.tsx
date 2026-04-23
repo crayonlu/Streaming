@@ -64,6 +64,9 @@ export interface VideoPlayerProps {
   selectedQualityId?: string | null;
   onQualityChange?: (id: string) => void;
   onError?: () => void;
+  onPlaybackStall?: (reason: "error" | "waiting-timeout") => void;
+  onUserPlay?: () => void;
+  onUserPause?: () => void;
   // biome-ignore lint/suspicious/noExplicitAny: xgplayer has no public TS types
   instanceRef?: React.MutableRefObject<any>;
 }
@@ -95,6 +98,9 @@ export function VideoPlayer({
   selectedQualityId,
   onQualityChange,
   onError,
+  onPlaybackStall,
+  onUserPlay,
+  onUserPause,
   instanceRef: externalRef,
 }: VideoPlayerProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
@@ -106,9 +112,11 @@ export function VideoPlayer({
   const latestStreamUrlRef = useRef(streamUrl);
   const activeStreamUrlRef = useRef<string | null>(null);
   const onErrorRef = useRef(onError);
+  const onPlaybackStallRef = useRef(onPlaybackStall);
 
   latestStreamUrlRef.current = streamUrl;
   onErrorRef.current = onError;
+  onPlaybackStallRef.current = onPlaybackStall;
 
   // ── Single lifecycle effect ──────────────────────────────────────────────
   useEffect(() => {
@@ -143,6 +151,7 @@ export function VideoPlayer({
       el.innerHTML = "";
 
       const initialUrl = latestStreamUrlRef.current;
+      // biome-ignore lint/suspicious/noExplicitAny: xgplayer has no public TS types
       const inst = new (Player as any)({
         el,
         url: initialUrl,
@@ -204,6 +213,10 @@ export function VideoPlayer({
 
       inst.on?.("error", () => {
         if (disposed) return;
+        if (isLive && onPlaybackStallRef.current) {
+          onPlaybackStallRef.current("error");
+          return;
+        }
         if (retryCount < maxRetries) {
           const delay = retryDelays[retryCount] ?? 5000;
           retryCount++;
@@ -216,7 +229,7 @@ export function VideoPlayer({
         }
       });
 
-      // ── Stream recovery: reload if waiting > 10s ─────────────────────────
+      // ── Stream recovery: notify parent if waiting > 10s ──────────────────
       if (isLive) {
         let waitingTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -226,7 +239,11 @@ export function VideoPlayer({
           waitingTimer = setTimeout(() => {
             waitingTimer = null;
             if (disposed) return;
-            inst?.reload?.();
+            if (onPlaybackStallRef.current) {
+              onPlaybackStallRef.current("waiting-timeout");
+            } else {
+              inst?.reload?.();
+            }
           }, 10_000);
         });
 
@@ -325,6 +342,8 @@ export function VideoPlayer({
           selectedQualityId={selectedQualityId}
           onQualityChange={onQualityChange ?? (() => undefined)}
           onFocusStage={() => stageRef.current?.focus()}
+          onUserPlay={onUserPlay}
+          onUserPause={onUserPause}
         />
       )}
     </section>

@@ -103,28 +103,26 @@ export function VideoPlayer({
   const instRef = useRef<any>(null);
   const [playerReady, setPlayerReady] = useState(false);
 
-  // Track previous structural props to detect rebuild vs source-switch
-  const prevFormatRef = useRef(format);
-  const prevIsLiveRef = useRef(isLive);
+  const latestStreamUrlRef = useRef(streamUrl);
+  const activeStreamUrlRef = useRef<string | null>(null);
+  const onErrorRef = useRef(onError);
+
+  latestStreamUrlRef.current = streamUrl;
+  onErrorRef.current = onError;
 
   // ── Single lifecycle effect ──────────────────────────────────────────────
   useEffect(() => {
     const el = mountRef.current;
-    if (!el || !streamUrl) return;
+    if (!el || !latestStreamUrlRef.current) return;
 
     let disposed = false;
     // biome-ignore lint/suspicious/noExplicitAny: xgplayer has no public TS types
     let bootInst: any = null;
     const pendingTimers: ReturnType<typeof setTimeout>[] = [];
 
-    // Decide: full rebuild (format/isLive changed) or source-switch (url only)
-    const needsRebuild = prevFormatRef.current !== format || prevIsLiveRef.current !== isLive;
-    prevFormatRef.current = format;
-    prevIsLiveRef.current = isLive;
-
     const boot = async () => {
       // biome-ignore lint/suspicious/noConsole: debug
-      console.log("[VideoPlayer] boot START", { format, isLive, needsRebuild, disposed });
+      console.log("[VideoPlayer] boot START", { format, isLive, disposed });
 
       const { Player, HlsPlugin, FlvPlugin } = await getXgplayerModules();
 
@@ -134,17 +132,8 @@ export function VideoPlayer({
         return;
       }
 
-      // ── Source-switch path: reuse existing player ────────────────────────
-      const existing = instRef.current;
-      if (!needsRebuild && existing && typeof existing.switchURL === "function") {
-        // biome-ignore lint/suspicious/noConsole: debug
-        console.log("[VideoPlayer] switchURL reuse");
-        existing.switchURL(streamUrl);
-        setPlayerReady(true);
-        return;
-      }
-
       // ── Full rebuild path: destroy old + create new ──────────────────────────
+      const existing = instRef.current;
       if (existing) {
         // biome-ignore lint/suspicious/noConsole: debug
         console.log("[VideoPlayer] destroying previous instance before rebuild");
@@ -153,10 +142,10 @@ export function VideoPlayer({
       instRef.current = null;
       el.innerHTML = "";
 
-      // biome-ignore lint/suspicious/noExplicitAny: xgplayer has no public TS types
+      const initialUrl = latestStreamUrlRef.current;
       const inst = new (Player as any)({
         el,
-        url: streamUrl,
+        url: initialUrl,
         poster: poster ?? undefined,
         fluid: true,
         autoplay: true,
@@ -193,6 +182,7 @@ export function VideoPlayer({
 
       bootInst = inst;
       instRef.current = inst;
+      activeStreamUrlRef.current = initialUrl;
       if (externalRef) externalRef.current = inst;
       setPlayerReady(true);
 
@@ -202,6 +192,7 @@ export function VideoPlayer({
         inst.destroy?.();
         instRef.current = null;
         bootInst = null;
+        activeStreamUrlRef.current = null;
         if (externalRef) externalRef.current = null;
         return;
       }
@@ -221,7 +212,7 @@ export function VideoPlayer({
             inst?.reload?.();
           }, delay);
         } else {
-          onError?.();
+          onErrorRef.current?.();
         }
       });
 
@@ -264,12 +255,51 @@ export function VideoPlayer({
       target?.destroy?.();
       instRef.current = null;
       bootInst = null;
+      activeStreamUrlRef.current = null;
       if (externalRef) externalRef.current = null;
       if (el) el.innerHTML = "";
       for (const t of pendingTimers) clearTimeout(t);
       pendingTimers.length = 0;
     };
-  }, [streamUrl, format, isLive, poster, onError, externalRef]);
+  }, [format, isLive, poster, externalRef]);
+
+  // ── Source lifecycle: quality changes reuse the current instance ─────────
+  useEffect(() => {
+    const inst = instRef.current;
+    if (!inst || !streamUrl || activeStreamUrlRef.current === streamUrl) return;
+
+    const media = inst.video ?? inst.media;
+    const resumeTime = isLive ? 0 : (media?.currentTime ?? inst.currentTime ?? 0);
+    const wasPaused = Boolean(media?.paused ?? inst.paused);
+    let restored = false;
+
+    const restoreVodPosition = () => {
+      if (restored) return;
+      restored = true;
+      if (!isLive && resumeTime > 0) {
+        if (typeof inst.seek === "function") inst.seek(resumeTime);
+        else if (media) media.currentTime = resumeTime;
+      }
+      if (!wasPaused) void inst.play?.();
+      setPlayerReady(true);
+    };
+
+    activeStreamUrlRef.current = streamUrl;
+    setPlayerReady(false);
+    inst.on?.("loadedmetadata", restoreVodPosition);
+    inst.on?.("canplay", restoreVodPosition);
+
+    if (typeof inst.switchURL === "function") inst.switchURL(streamUrl);
+    else inst.src = streamUrl;
+
+    const fallbackTimer = setTimeout(restoreVodPosition, 800);
+
+    return () => {
+      clearTimeout(fallbackTimer);
+      inst.off?.("loadedmetadata", restoreVodPosition);
+      inst.off?.("canplay", restoreVodPosition);
+    };
+  }, [streamUrl, isLive]);
 
   return (
     <section

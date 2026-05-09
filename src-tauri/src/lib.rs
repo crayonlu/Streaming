@@ -6,6 +6,7 @@ use models::{
     AppPreferences, Category, PlatformId, ProxyMode, ReplayItem, ReplayQuality, RoomCard,
     RoomDetail, SearchResult, StreamSource,
 };
+use deno_core::JsRuntime;
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
@@ -277,6 +278,11 @@ async fn check_rooms_live_status(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize V8 platform early for deno_core (used by douyu replay signing).
+    // Must happen before any JsRuntime is created, especially on macOS where
+    // Hardened Runtime can interfere with implicit V8 initialization.
+    JsRuntime::init_platform(None);
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()

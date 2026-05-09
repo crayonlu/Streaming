@@ -426,54 +426,59 @@ pub async fn get_replay_qualities(
         .and_then(Value::as_object)
         .ok_or_else(|| "thumb_video not found in response".to_string())?;
 
-    // Collect all qualities, sorted best→worst
+    // Collect all qualities, sorted best→worst.
+    // Proxy HLS URLs through local server to avoid WKWebView CORS blocking
+    // on macOS where the page origin is a non-standard custom protocol.
+    //
+    // Douyu API now returns English key names ("super", "high", "normal").
+    // Map them to Chinese display names based on the level value.
     const QUALITY_ORDER: &[&str] = &["超清", "高清", "标清", "流畅"];
 
     let mut qualities: Vec<crate::models::ReplayQuality> = Vec::new();
 
-    for &qname in QUALITY_ORDER {
-        if let Some(v) = thumb_video.get(qname) {
-            let url = v
-                .get("url")
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .to_string();
-            if url.is_empty() {
-                continue;
-            }
-            let bit_rate = v.get("bit_rate").and_then(Value::as_u64).unwrap_or(0) as u32;
-            let level = v.get("level").and_then(Value::as_u64).unwrap_or(0) as u32;
-            qualities.push(crate::models::ReplayQuality {
-                name: qname.to_string(),
-                url,
-                bit_rate,
-                level,
-            });
-        }
-    }
-
-    // Fallback: include any remaining keys not in the ordered list
-    for (key, v) in thumb_video {
-        if QUALITY_ORDER.contains(&key.as_str()) {
-            continue;
-        }
-        let url = v
+    // Walk all entries and assign a Chinese display name.
+    for (_key, v) in thumb_video {
+        let raw_url = v
             .get("url")
             .and_then(Value::as_str)
             .unwrap_or("")
             .to_string();
-        if url.is_empty() {
+        if raw_url.is_empty() {
             continue;
         }
         let bit_rate = v.get("bit_rate").and_then(Value::as_u64).unwrap_or(0) as u32;
         let level = v.get("level").and_then(Value::as_u64).unwrap_or(0) as u32;
+        let is_m3u8 = raw_url.contains(".m3u8");
+        let url = crate::proxy::proxy_vod(&raw_url, is_m3u8);
+
+        // Map API key → Chinese display name via level value.
+        let name = match level {
+            l if l >= 15 => "超清",
+            l if l >= 10 => "高清",
+            l if l >= 5 => "标清",
+            _ => "流畅",
+        }
+        .to_string();
+
         qualities.push(crate::models::ReplayQuality {
-            name: key.clone(),
+            name,
             url,
             bit_rate,
             level,
         });
     }
+
+    // Sort by level descending (best first), then by the QUALITY_ORDER
+    // precedence within the same level group.
+    qualities.sort_by(|a, b| {
+        b.level
+            .cmp(&a.level)
+            .then_with(|| {
+                let ai = QUALITY_ORDER.iter().position(|n| *n == a.name).unwrap_or(usize::MAX);
+                let bi = QUALITY_ORDER.iter().position(|n| *n == b.name).unwrap_or(usize::MAX);
+                ai.cmp(&bi)
+            })
+    });
 
     if qualities.is_empty() {
         return Err("no playable stream URL found".to_string());

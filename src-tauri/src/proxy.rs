@@ -94,6 +94,8 @@ pub fn start() {
             .route("/img", get(image_handler))
             .route("/stream", get(stream_handler))
             .route("/seg", get(seg_handler))
+            .route("/vod", get(vod_handler))
+            .route("/vod-seg", get(vod_seg_handler))
             .layer(cors_layer(port));
 
         let listener = match tokio::net::TcpListener::bind(format!("127.0.0.1:{port}")).await {
@@ -461,4 +463,218 @@ fn simple_error(status: StatusCode, msg: &'static str) -> Response<Body> {
         .status(status)
         .body(Body::from(msg))
         .unwrap_or_else(|_| Response::new(Body::from(msg)))
+}
+
+// ── Douyu VOD proxy ───────────────────────────────────────────────────────────
+
+/// Wrap a Douyu replay stream URL (HLS .m3u8 or direct .mp4/.flv) so the
+/// browser fetches it through the local proxy with correct Referer/Origin.
+/// This avoids WKWebView CORS issues when the page is loaded via Tauri's
+/// custom protocol (`https://tauri.localhost`) on macOS.
+pub fn proxy_vod(original: &str, is_m3u8: bool) -> String {
+    if original.is_empty() {
+        return String::new();
+    }
+    let port = proxy_port();
+    if is_m3u8 {
+        format!(
+            "http://127.0.0.1:{port}/vod?url={}",
+            percent_encode(original)
+        )
+    } else {
+        format!(
+            "http://127.0.0.1:{port}/vod-seg?url={}",
+            percent_encode(original)
+        )
+    }
+}
+
+/// Douyu VOD constants
+const DOUYU_VOD_REFERER: &str = "https://v.douyu.com/";
+
+#[derive(Deserialize)]
+struct VodQuery {
+    url: String,
+}
+
+/// Proxy and rewrite a Douyu VOD HLS M3U8 playlist.
+async fn vod_handler(Query(params): Query<VodQuery>) -> Response<Body> {
+    let m3u8_url = params.url.trim().to_string();
+    if m3u8_url.is_empty() {
+        return simple_error(StatusCode::BAD_REQUEST, "missing url");
+    }
+
+    let client = crate::platforms::http::shared_client();
+
+    let upstream = match client
+        .get(&m3u8_url)
+        .header("User-Agent", PROXY_UA)
+        .header("Referer", DOUYU_VOD_REFERER)
+        .header("Origin", DOUYU_VOD_REFERER)
+        .header(
+            "Accept",
+            "application/vnd.apple.mpegurl, application/x-mpegurl, */*",
+        )
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::warn!(url = %m3u8_url, error = %e, "vod request failed");
+            return simple_error(StatusCode::BAD_GATEWAY, "upstream request failed");
+        }
+    };
+
+    if !upstream.status().is_success() {
+        tracing::warn!(url = %m3u8_url, status = %upstream.status(), "vod upstream error");
+        return simple_error(StatusCode::BAD_GATEWAY, "upstream returned non-2xx");
+    }
+
+    let text = match upstream.text().await {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::warn!(url = %m3u8_url, error = %e, "vod read text failed");
+            return simple_error(StatusCode::INTERNAL_SERVER_ERROR, "read failed");
+        }
+    };
+
+    let base = {
+        let no_query = m3u8_url.split('?').next().unwrap_or(&m3u8_url);
+        match no_query.rfind('/') {
+            Some(i) => no_query[..=i].to_string(),
+            None => format!("{no_query}/"),
+        }
+    };
+
+    let port = proxy_port();
+    let rewritten_lines: Vec<String> = text
+        .lines()
+        .map(|line| {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                if let Some(rest) = trimmed.strip_prefix("#EXT-X-MAP:") {
+                    if let Some(rewritten_tag) = rewrite_tag_uri(rest, &base, port) {
+                        return format!("#EXT-X-MAP:{}", rewritten_tag);
+                    }
+                }
+                return line.to_string();
+            }
+            let full = resolve_url(trimmed, &base);
+            format!(
+                "http://127.0.0.1:{port}/vod-seg?url={}",
+                percent_encode(&full)
+            )
+        })
+        .collect();
+
+    let rewritten = rewritten_lines.join("\n");
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/vnd.apple.mpegurl")
+        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .header(header::CACHE_CONTROL, "no-cache, no-store")
+        .body(Body::from(rewritten))
+        .unwrap_or_else(|_| simple_error(StatusCode::INTERNAL_SERVER_ERROR, "build failed"))
+}
+
+/// Proxy a single Douyu VOD segment (TS, fMP4, etc.) or a direct MP4/FLV file.
+async fn vod_seg_handler(Query(params): Query<VodQuery>) -> Response<Body> {
+    let seg_url = params.url.trim().to_string();
+    if seg_url.is_empty() {
+        return simple_error(StatusCode::BAD_REQUEST, "missing url");
+    }
+
+    let client = crate::platforms::http::shared_client();
+
+    let upstream = match client
+        .get(&seg_url)
+        .header("User-Agent", PROXY_UA)
+        .header("Referer", DOUYU_VOD_REFERER)
+        .header("Origin", DOUYU_VOD_REFERER)
+        .header("Accept", "video/mp2t, video/mp4, */*")
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::warn!(url = %seg_url, error = %e, "vod-seg request failed");
+            return simple_error(StatusCode::BAD_GATEWAY, "upstream request failed");
+        }
+    };
+
+    if !upstream.status().is_success() {
+        tracing::warn!(url = %seg_url, status = %upstream.status(), "vod-seg upstream error");
+        return simple_error(StatusCode::BAD_GATEWAY, "upstream returned non-2xx");
+    }
+
+    let ct = upstream
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("video/mp2t")
+        .to_string();
+
+    let bytes = match upstream.bytes().await {
+        Ok(b) => b,
+        Err(e) => {
+            tracing::warn!(url = %seg_url, error = %e, "vod-seg read bytes failed");
+            return simple_error(StatusCode::INTERNAL_SERVER_ERROR, "read failed");
+        }
+    };
+
+    // Handle nested M3U8 in segment response
+    let body_text = String::from_utf8_lossy(&bytes);
+    if body_text.trim().starts_with("#EXTM3U") {
+        let base = {
+            let no_query = seg_url.split('?').next().unwrap_or(&seg_url);
+            match no_query.rfind('/') {
+                Some(i) => no_query[..=i].to_string(),
+                None => format!("{no_query}/"),
+            }
+        };
+
+        let port = proxy_port();
+        let rewritten_lines: Vec<String> = body_text
+            .lines()
+            .map(|line| {
+                let trimmed = line.trim();
+                if trimmed.is_empty() || trimmed.starts_with('#') {
+                    if let Some(rest) = trimmed.strip_prefix("#EXT-X-MAP:") {
+                        if let Some(rewritten_tag) = rewrite_tag_uri(rest, &base, port) {
+                            return format!("#EXT-X-MAP:{}", rewritten_tag);
+                        }
+                    }
+                    return line.to_string();
+                }
+                let full = resolve_url(trimmed, &base);
+                format!(
+                    "http://127.0.0.1:{port}/vod-seg?url={}",
+                    percent_encode(&full)
+                )
+            })
+            .collect();
+
+        let rewritten = rewritten_lines.join("\n");
+
+        return Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/vnd.apple.mpegurl")
+            .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+            .header(header::CACHE_CONTROL, "no-cache, no-store")
+            .body(Body::from(rewritten))
+            .unwrap_or_else(|_| simple_error(StatusCode::INTERNAL_SERVER_ERROR, "build failed"));
+    }
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(
+            header::CONTENT_TYPE,
+            HeaderValue::from_str(&ct).unwrap_or_else(|_| HeaderValue::from_static("video/mp2t")),
+        )
+        .header(header::CONTENT_LENGTH, bytes.len().to_string())
+        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .header(header::CACHE_CONTROL, "no-cache")
+        .body(Body::from(bytes))
+        .unwrap_or_else(|_| simple_error(StatusCode::INTERNAL_SERVER_ERROR, "build failed"))
 }

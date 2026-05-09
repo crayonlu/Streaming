@@ -89,6 +89,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          projectPath: src-tauri
           tagName: ${{ env.VERSION }}
           releaseName: "${{ env.PRODUCT_NAME }} ${{ env.VERSION }}"
           releaseBody: "Built from ${{ github.sha }}"

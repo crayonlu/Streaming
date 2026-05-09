@@ -109,11 +109,24 @@ export function ControlsOverlay({
   }, [playerRef, playerReady]);
 
   // ── Fullscreen sync ─────────────────────────────────────────────────────
+  // Listen to BOTH native fullscreen_change (Windows) and cssFullscreen_change
+  // (macOS fallback) so the UI icon stays correct on all platforms.
   useEffect(() => {
-    const onChange = () => setIsFs(Boolean(document.fullscreenElement));
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
-  }, []);
+    const p = playerRef.current;
+    if (!p) return;
+
+    const onChange = () => setIsFs(p.fullscreen || p.cssfullscreen);
+    p.on?.("fullscreen_change", onChange);
+    p.on?.("cssFullscreen_change", onChange);
+
+    // Sync initial state
+    setIsFs(p.fullscreen || p.cssfullscreen);
+
+    return () => {
+      p.off?.("fullscreen_change", onChange);
+      p.off?.("cssFullscreen_change", onChange);
+    };
+  }, [playerRef]);
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   // Bound to the player stage container (stageRef) rather than document, so
@@ -154,8 +167,17 @@ export function ControlsOverlay({
         case "f":
         case "F":
           e.preventDefault();
-          if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-          else void el.requestFullscreen().catch(() => undefined);
+          if (p.fullscreen) {
+            p.exitFullscreen?.();
+          } else if (p.cssfullscreen) {
+            p.exitCssFullscreen?.();
+          } else {
+            // Try native fullscreen first (Windows); fall back to CSS
+            // fullscreen on macOS where WKWebView blocks the native API.
+            p.getFullscreen?.(el)?.catch(() => {
+              p.getCssFullscreen?.(el);
+            });
+          }
           break;
         case "ArrowLeft":
           if (!isLive) {
@@ -233,11 +255,23 @@ export function ControlsOverlay({
   }, [playerRef, onUserPlay, onUserPause]);
 
   const toggleFullscreen = useCallback(() => {
+    const p = playerRef.current;
     const el = stageRef.current;
-    if (!el) return;
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-    else void el.requestFullscreen().catch(() => undefined);
-  }, [stageRef]);
+    if (!p || !el) return;
+    // Exit whichever fullscreen mode is currently active
+    if (p.fullscreen) {
+      p.exitFullscreen?.();
+    } else if (p.cssfullscreen) {
+      p.exitCssFullscreen?.();
+    } else {
+      // Try native fullscreen first (works on Windows).
+      // On macOS WKWebView the native API is blocked, so fall back
+      // to CSS fullscreen which fills the viewport via position:fixed.
+      p.getFullscreen?.(el)?.catch(() => {
+        p.getCssFullscreen?.(el);
+      });
+    }
+  }, [playerRef, stageRef]);
 
   const toggleMute = useCallback(() => {
     const p = playerRef.current;

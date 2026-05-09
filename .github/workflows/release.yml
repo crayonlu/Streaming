@@ -57,6 +57,12 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          cache-all-crates: true
+          cache-on-failure: true
+
+      - name: Update Cargo index
+        working-directory: src-tauri
+        run: cargo update
 
       - name: Install Linux build dependencies (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'

@@ -5,6 +5,7 @@
  * Includes play/pause, volume, quality selector, fullscreen, and VOD scrub bar.
  */
 
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Maximize2, Minimize2, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -109,24 +110,47 @@ export function ControlsOverlay({
   }, [playerRef, playerReady]);
 
   // ── Fullscreen sync ─────────────────────────────────────────────────────
-  // Listen to BOTH native fullscreen_change (Windows) and cssFullscreen_change
-  // (macOS fallback) so the UI icon stays correct on all platforms.
+  // Tracks native browser fullscreen (Windows) AND Tauri window fullscreen
+  // (macOS fallback).  Auto-applies/removes CSS fullscreen when Tauri
+  // native fullscreen toggles, so the macOS green button also expands the
+  // player to fill the window.
   useEffect(() => {
     const p = playerRef.current;
-    if (!p) return;
+    const win = getCurrentWindow();
 
-    const onChange = () => setIsFs(p.fullscreen || p.cssfullscreen);
-    p.on?.("fullscreen_change", onChange);
-    p.on?.("cssFullscreen_change", onChange);
+    const sync = () => {
+      const playerFs = p?.fullscreen || p?.cssfullscreen || false;
+      void win.isFullscreen().then((tauriFs) => {
+        setIsFs(tauriFs || playerFs);
+        // Auto-sync CSS fullscreen with Tauri native fullscreen.
+        // This handles the macOS green traffic-light button (which
+        // triggers native fullscreen without going through our toggle).
+        const el = stageRef.current;
+        if (!el || p?.fullscreen) return; // browser fs manages itself
+        if (tauriFs && !p?.cssfullscreen) {
+          p?.getCssFullscreen?.(el);
+        } else if (!tauriFs && p?.cssfullscreen) {
+          p?.exitCssFullscreen?.();
+        }
+      });
+    };
 
-    // Sync initial state
-    setIsFs(p.fullscreen || p.cssfullscreen);
+    // xgplayer fullscreen / CSS fullscreen
+    p?.on?.("fullscreen_change", sync);
+    p?.on?.("cssFullscreen_change", sync);
+
+    // Tauri native window fullscreen (macOS green button / Esc / monitor drag)
+    const resizePromise = win.onResized(() => sync());
+
+    // Read initial state
+    sync();
 
     return () => {
-      p.off?.("fullscreen_change", onChange);
-      p.off?.("cssFullscreen_change", onChange);
+      p?.off?.("fullscreen_change", sync);
+      p?.off?.("cssFullscreen_change", sync);
+      void resizePromise.then((fn) => fn?.());
     };
-  }, [playerRef]);
+  }, [playerRef, stageRef]);
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   // Bound to the player stage container (stageRef) rather than document, so
@@ -165,20 +189,28 @@ export function ControlsOverlay({
           break;
         }
         case "f":
-        case "F":
+        case "F": {
           e.preventDefault();
-          if (p.fullscreen) {
-            p.exitFullscreen?.();
-          } else if (p.cssfullscreen) {
-            p.exitCssFullscreen?.();
+          const win = getCurrentWindow();
+          // Determine current fullscreen state across all modes
+          const isAnyFs = p.fullscreen || p.cssfullscreen || isFs;
+          if (isAnyFs) {
+            // Exit all fullscreen modes
+            if (p.fullscreen) p.exitFullscreen?.();
+            else if (p.cssfullscreen) p.exitCssFullscreen?.();
+            void win.setFullscreen(false).catch(() => undefined);
           } else {
-            // Try native fullscreen first (Windows); fall back to CSS
-            // fullscreen on macOS where WKWebView blocks the native API.
+            // Try native browser fullscreen first (Windows).  On macOS
+            // WKWebView the API is blocked → fall back to Tauri native
+            // window fullscreen + CSS fullscreen so the player fills the
+            // entire window (not just its layout slot).
             p.getFullscreen?.(el)?.catch(() => {
               p.getCssFullscreen?.(el);
+              void win.setFullscreen(true).catch(() => undefined);
             });
           }
           break;
+        }
         case "ArrowLeft":
           if (!isLive) {
             e.preventDefault();
@@ -219,7 +251,7 @@ export function ControlsOverlay({
     };
     el.addEventListener("keydown", handler);
     return () => el.removeEventListener("keydown", handler);
-  }, [playerRef, stageRef, muted, vol, isLive, onUserPlay, onUserPause]);
+  }, [playerRef, stageRef, muted, vol, isLive, isFs, onUserPlay, onUserPause]);
 
   // ── Idle timer ──────────────────────────────────────────────────────────────
   const resetIdle = useCallback(() => {
@@ -258,20 +290,26 @@ export function ControlsOverlay({
     const p = playerRef.current;
     const el = stageRef.current;
     if (!p || !el) return;
-    // Exit whichever fullscreen mode is currently active
-    if (p.fullscreen) {
-      p.exitFullscreen?.();
-    } else if (p.cssfullscreen) {
-      p.exitCssFullscreen?.();
+    const win = getCurrentWindow();
+
+    // Determine current fullscreen state across all modes
+    const isAnyFs = p.fullscreen || p.cssfullscreen || isFs;
+    if (isAnyFs) {
+      // Exit all fullscreen modes
+      if (p.fullscreen) p.exitFullscreen?.();
+      else if (p.cssfullscreen) p.exitCssFullscreen?.();
+      void win.setFullscreen(false).catch(() => undefined);
     } else {
-      // Try native fullscreen first (works on Windows).
-      // On macOS WKWebView the native API is blocked, so fall back
-      // to CSS fullscreen which fills the viewport via position:fixed.
+      // Try native browser fullscreen first (works on Windows).
+      // On macOS WKWebView the API is blocked → fall back to Tauri
+      // native window fullscreen + CSS fullscreen so the player fills
+      // the entire window, not just its slot in the layout.
       p.getFullscreen?.(el)?.catch(() => {
         p.getCssFullscreen?.(el);
+        void win.setFullscreen(true).catch(() => undefined);
       });
     }
-  }, [playerRef, stageRef]);
+  }, [playerRef, stageRef, isFs]);
 
   const toggleMute = useCallback(() => {
     const p = playerRef.current;

@@ -77,6 +77,10 @@ jobs:
             libssl-dev \
             pkg-config
 
+      - name: Install create-dmg (macOS only)
+        if: matrix.platform == 'macos-latest'
+        run: npm install --global create-dmg
+
       - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile
 

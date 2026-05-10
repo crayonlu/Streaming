@@ -6,7 +6,6 @@ use models::{
     AppPreferences, Category, PlatformId, ProxyMode, ReplayItem, ReplayQuality, RoomCard,
     RoomDetail, SearchResult, StreamSource,
 };
-use deno_core::JsRuntime;
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
@@ -278,18 +277,34 @@ async fn check_rooms_live_status(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Initialize V8 platform early for deno_core (used by douyu replay signing).
-    // Must happen before any JsRuntime is created, especially on macOS where
-    // Hardened Runtime can interfere with implicit V8 initialization.
-    JsRuntime::init_platform(None);
-
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "streaming=info".parse().unwrap()),
-        )
-        .with_target(false)
-        .init();
+    // Debug file logging on macOS.
+    #[cfg(target_os = "macos")]
+    {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+        let log_dir = format!("{home}/Library/Logs/streaming");
+        std::fs::create_dir_all(&log_dir).ok();
+        let f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(format!("{log_dir}/streaming.log"))
+            .expect("open log");
+        tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::new("debug"))
+            .with_target(true)
+            .with_ansi(false)
+            .with_writer(std::sync::Mutex::new(f))
+            .init();
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        tracing_subscriber::fmt()
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| "streaming=info".parse().unwrap()),
+            )
+            .with_target(false)
+            .init();
+    }
 
     tauri::Builder::default()
         .setup(|_app| {

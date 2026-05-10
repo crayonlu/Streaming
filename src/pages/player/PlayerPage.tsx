@@ -264,7 +264,7 @@ export function PlayerPage() {
       {/* ── Video stage ── */}
       <div className="flex-1 min-h-0 flex flex-col gap-3">
         {isError ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 rounded-lg border border-border/60 bg-muted/30 p-4">
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 border border-border/60 bg-muted/30 p-4">
             <StatusView
               title={playbackStatus.title}
               tone={playbackStatus.tone}

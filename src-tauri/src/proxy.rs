@@ -96,6 +96,7 @@ pub fn start() {
             .route("/seg", get(seg_handler))
             .route("/vod", get(vod_handler))
             .route("/vod-seg", get(vod_seg_handler))
+            .route("/live", get(live_handler))
             .layer(cors_layer(port));
 
         let listener = match tokio::net::TcpListener::bind(format!("127.0.0.1:{port}")).await {
@@ -487,6 +488,93 @@ pub fn proxy_vod(original: &str, is_m3u8: bool) -> String {
             percent_encode(original)
         )
     }
+}
+
+// ── Douyu live stream proxy ───────────────────────────────────────────────────
+
+const DOUYU_LIVE_REFERER: &str = "https://www.douyu.com/";
+
+/// Wrap a Douyu live FLV stream URL through the local proxy.
+/// Same rationale as VOD: macOS WKWebView blocks cross-origin requests
+/// from `https://tauri.localhost` to the douyu CDN.
+pub fn proxy_live(original: &str) -> String {
+    if original.is_empty() {
+        return String::new();
+    }
+    let port = proxy_port();
+    format!(
+        "http://127.0.0.1:{port}/live?url={}",
+        percent_encode(original)
+    )
+}
+
+/// Proxy a Douyu live FLV stream. Uses streaming response because
+/// live streams never end — buffering would hang forever.
+async fn live_handler(Query(params): Query<VodQuery>) -> Response<Body> {
+    let seg_url = params.url.trim().to_string();
+    tracing::info!(url = %seg_url, "live_handler: request");
+    if seg_url.is_empty() {
+        return simple_error(StatusCode::BAD_REQUEST, "missing url");
+    }
+
+    // Build a dedicated client with native TLS — rustls fails TLS
+    // handshake with douyu CDN edge servers (AlertReceived: HandshakeFailure).
+    let client = reqwest::Client::builder()
+        .use_native_tls()
+        .http1_only()
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
+
+    let upstream = match client
+        .get(&seg_url)
+        .header("User-Agent", PROXY_UA)
+        .header("Referer", DOUYU_LIVE_REFERER)
+        .header("Origin", DOUYU_LIVE_REFERER)
+        .send()
+        .await
+    {
+        Ok(r) => {
+            let status = r.status();
+            tracing::info!(%status, "live_handler: upstream connected");
+            r
+        }
+        Err(e) => {
+            tracing::error!(url = %seg_url, error = %e, error_debug = ?e, "live proxy request failed");
+            return simple_error(StatusCode::BAD_GATEWAY, "upstream request failed");
+        }
+    };
+
+    if !upstream.status().is_success() {
+        tracing::warn!(url = %seg_url, status = %upstream.status(), "live proxy upstream error");
+        return simple_error(StatusCode::BAD_GATEWAY, "upstream returned non-2xx");
+    }
+
+    let ct = upstream
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("video/x-flv")
+        .to_string();
+
+    // Stream the response — live FLV data never ends.
+    use futures::StreamExt;
+    let byte_stream = upstream.bytes_stream().map(|r| {
+        r.map_err(|e| {
+            tracing::warn!(error = %e, "live proxy stream error");
+            std::io::Error::new(std::io::ErrorKind::Other, e)
+        })
+    });
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(
+            header::CONTENT_TYPE,
+            HeaderValue::from_str(&ct).unwrap_or_else(|_| HeaderValue::from_static("video/x-flv")),
+        )
+        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .header(header::CACHE_CONTROL, "no-cache")
+        .body(Body::from_stream(byte_stream))
+        .unwrap_or_else(|_| simple_error(StatusCode::INTERNAL_SERVER_ERROR, "build failed"))
 }
 
 /// Douyu VOD constants

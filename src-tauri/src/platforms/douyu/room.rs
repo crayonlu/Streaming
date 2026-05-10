@@ -447,7 +447,7 @@ pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, Stri
                     continue;
                 }
 
-                let stream_url = match douyu
+                let raw_url = match douyu
                     .get_play_url(&normalized_room_id, &sign_data, variant.rate, &cdn)
                     .await
                 {
@@ -457,6 +457,10 @@ pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, Stri
                         continue;
                     }
                 };
+                // Proxy live stream URL through local server so WKWebView (macOS)
+                // doesn't block cross-origin FLV requests from Tauri's custom protocol.
+                let stream_url = crate::proxy::proxy_live(&raw_url);
+                tracing::info!(rate = variant.rate, %raw_url, %stream_url, "live stream proxied");
 
                 sources.push(StreamSource {
                     id: format!("douyu-{}-{}", variant.rate, sources.len()),

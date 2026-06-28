@@ -159,11 +159,13 @@ export function ReplayList({
   roomId,
   activeId,
   onPlay,
+  onPartsChange,
 }: {
   platform: PlatformId;
   roomId: string;
   activeId: string | null;
   onPlay: (item: ReplayItem) => void;
+  onPartsChange?: (parts: ReplayItem[]) => void;
 }) {
   const [expandedShowId, setExpandedShowId] = useState<number | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -208,6 +210,13 @@ export function ReplayList({
     enabled: expandedShowId !== null && !!expandedSession,
     staleTime: 120_000,
   });
+
+  // Report the expanded session's parts (or the single session itself when no
+  // parts) back to the parent so it can compute the next part for auto-play.
+  useEffect(() => {
+    if (!expandedShowId) return;
+    onPartsChange?.(partsQuery.data ?? []);
+  }, [expandedShowId, partsQuery.data, onPartsChange]);
 
   // Initial loading skeleton
   if (infinite.isLoading) {

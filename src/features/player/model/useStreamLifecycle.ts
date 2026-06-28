@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useRef } from "react";
 
-const DEFAULT_STALE_THRESHOLD_MS = 1 * 60 * 1000; // 1 minute
+// 12s: douyu live m3u8 sliding window is ~6s (3 segments x 2s);
+// 2x headroom before the playhead slips out of the window.
+const DEFAULT_STALE_THRESHOLD_MS = 12 * 1000;
 
 export interface StreamLifecycleOptions {
   /** Time in ms after which a stream URL is considered stale. */

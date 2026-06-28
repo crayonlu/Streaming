@@ -7,13 +7,13 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Film } from "lucide-react";
-import { useCallback, useState } from "react";
+import { ArrowLeft, Film, RotateCcw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import type { PlayerQualityItem } from "@/features/player/ui/VideoPlayer";
 import { VideoPlayer } from "@/features/player/ui/VideoPlayer";
-import { getReplayQualities, getRoomDetail } from "@/shared/api/commands";
+import { getReplayQualities, getRoomDetail, loadPreferences } from "@/shared/api/commands";
 import { fmtDuration } from "@/shared/lib/dom";
 import { isPlatform } from "@/shared/lib/platform";
 import type { PlatformId, ReplayItem, ReplayQuality } from "@/shared/types/domain";
@@ -32,6 +32,17 @@ export function ReplayPage() {
   const [selectedQualityId, setSelectedQualityId] = useState<string | null>(null);
   const [urlLoading, setUrlLoading] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [currentParts, setCurrentParts] = useState<ReplayItem[]>([]);
+  const [ended, setEnded] = useState(false);
+  const [autoPlayNext, setAutoPlayNext] = useState(true);
+  // Cache of prefetched qualities keyed by part id, to skip the fetch on switch.
+  const prefetchRef = useRef<Map<string, ReplayQuality[]>>(new Map());
+
+  useEffect(() => {
+    void loadPreferences()
+      .then((p) => setAutoPlayNext(p.autoPlayNextReplay ?? true))
+      .catch(() => undefined);
+  }, []);
 
   const roomQuery = useQuery({
     queryKey: ["room-detail", platform, roomId],
@@ -41,12 +52,20 @@ export function ReplayPage() {
 
   const room = roomQuery.data;
 
-  // Fetch all quality options when user selects a segment
+  // Fetch all quality options when user selects a segment.
+  // Uses prefetched qualities when available to avoid a network round-trip.
   const handlePlay = useCallback(async (item: ReplayItem) => {
     setActiveItem(item);
+    setEnded(false);
     setQualities([]);
     setSelectedQualityId(null);
     setUrlError(null);
+    const cached = prefetchRef.current.get(item.id);
+    if (cached) {
+      setQualities(cached);
+      if (cached.length > 0) setSelectedQualityId(cached[0].name);
+      return;
+    }
     setUrlLoading(true);
     try {
       const qs = await getReplayQualities(item.platform, item.id);
@@ -59,6 +78,31 @@ export function ReplayPage() {
       setUrlLoading(false);
     }
   }, []);
+
+  // Next part within the currently expanded session's part list.
+  const currentIndex = activeItem ? currentParts.findIndex((p) => p.id === activeItem.id) : -1;
+  const nextPart =
+    currentIndex >= 0 && currentIndex < currentParts.length - 1
+      ? currentParts[currentIndex + 1]
+      : null;
+
+  // Prefetch the next part's qualities 8s before the current one ends.
+  const handleNearEnd = useCallback(() => {
+    if (!nextPart) return;
+    if (prefetchRef.current.has(nextPart.id)) return;
+    void getReplayQualities(nextPart.platform, nextPart.id)
+      .then((qs) => prefetchRef.current.set(nextPart.id, qs))
+      .catch(() => undefined);
+  }, [nextPart]);
+
+  // On ended: auto-play next, or surface the finished state.
+  const handleEnded = useCallback(() => {
+    if (autoPlayNext && nextPart) {
+      void handlePlay(nextPart);
+    } else {
+      setEnded(true);
+    }
+  }, [autoPlayNext, nextPart, handlePlay]);
 
   // Map ReplayQuality[] → PlayerQualityItem[] for VideoPlayer
   const qualityItems: PlayerQualityItem[] = qualities.map((q) => ({
@@ -132,6 +176,8 @@ export function ReplayPage() {
                 qualities={qualityItems}
                 selectedQualityId={selectedQualityId}
                 onQualityChange={setSelectedQualityId}
+                onEnded={handleEnded}
+                onNearEnd={handleNearEnd}
               />
             ) : (
               /* Empty / loading / error — same container, no height jump */
@@ -162,11 +208,32 @@ export function ReplayPage() {
                 )}
               </div>
             )}
+            {ended && streamUrl && (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/70 backdrop-blur-sm">
+                <span className="text-[11px] uppercase tracking-widest text-white/45">已播完</span>
+                <span className="text-base font-medium text-white/85">
+                  {nextPart ? "已暂停自动连播" : "最后一段"}
+                </span>
+                {activeItem && (
+                  <button
+                    type="button"
+                    onClick={() => handlePlay(activeItem)}
+                    className="flex items-center gap-1.5 rounded-full border border-white/16 bg-white/10 px-4 py-1.5 text-xs font-medium text-white/85 transition-colors hover:bg-white/20"
+                  >
+                    <RotateCcw size={12} strokeWidth={2} />
+                    重播
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Now-playing info bar */}
           {activeItem && (
-            <div className="shrink-0 border-t border-white/8 bg-[#0a0c0e] px-4 py-2 flex items-center gap-3">
+            <div
+              className="shrink-0 border-t border-white/8 px-4 py-2 flex items-center gap-3"
+              style={{ background: "var(--player-stage-bg)" }}
+            >
               <span className="shrink-0 rounded bg-white/8 px-1.5 py-0.5 text-[10px] font-semibold text-white/55 tabular-nums">
                 P{activeItem.partNum}
                 {activeItem.totalParts > 1 && `/${activeItem.totalParts}`}
@@ -200,6 +267,7 @@ export function ReplayPage() {
               roomId={roomId}
               activeId={activeItem?.id ?? null}
               onPlay={handlePlay}
+              onPartsChange={setCurrentParts}
             />
           </div>
         </aside>

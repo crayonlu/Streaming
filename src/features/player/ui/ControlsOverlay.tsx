@@ -1,13 +1,13 @@
 /**
  * ControlsOverlay
  *
- * Custom player controls rendered as a React overlay on top of xgplayer.
+ * Custom player controls rendered as a React overlay on the <video> element.
  * Includes play/pause, volume, quality selector, fullscreen, and VOD scrub bar.
  */
 
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Maximize2, Minimize2, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useFullscreen } from "../model/useFullscreen";
 import { cn } from "@/lib/utils";
 import { PlayerProgress } from "./PlayerProgress";
 import { QualityMenu } from "./QualityMenu";
@@ -25,13 +25,15 @@ function readVol(): number {
 function saveVol(v: number) {
   try {
     localStorage.setItem("streaming_player_volume", String(v));
-  } catch {}
+  } catch {
+    // localStorage may throw in private mode — non-critical
+  }
 }
 
 // ── ControlsOverlay ───────────────────────────────────────────────────────────
 
 export interface ControlsOverlayProps {
-  // biome-ignore lint/suspicious/noExplicitAny: xgplayer has no public TS types
+  // biome-ignore lint/suspicious/noExplicitAny: controller surface is intentionally loose
   playerRef: React.MutableRefObject<any>;
   stageRef: React.RefObject<HTMLDivElement | null>;
   isLive: boolean;
@@ -59,12 +61,12 @@ export function ControlsOverlay({
 }: ControlsOverlayProps) {
   const [vol, setVol] = useState(readVol);
   const [muted, setMuted] = useState(false);
-  // Start as false; the xgplayer event listeners below are the single source
-  // of truth.  Once the player fires "play"/"playing" we flip to true.
+  // playing state is driven by <video> events (playing/pause/waiting/ended).
   const [playing, setPlaying] = useState(false);
-  const [isFs, setIsFs] = useState(false);
   const [visible, setVisible] = useState(true);
   const [qualityOpen, setQualityOpen] = useState(false);
+
+  const { isFs, toggle: toggleFullscreen } = useFullscreen(stageRef);
 
   const idleRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -109,49 +111,6 @@ export function ControlsOverlay({
     };
   }, [playerRef, playerReady]);
 
-  // ── Fullscreen sync ─────────────────────────────────────────────────────
-  // Tracks native browser fullscreen (Windows) AND Tauri window fullscreen
-  // (macOS fallback).  Auto-applies/removes CSS fullscreen when Tauri
-  // native fullscreen toggles, so the macOS green button also expands the
-  // player to fill the window.
-  useEffect(() => {
-    const p = playerRef.current;
-    const win = getCurrentWindow();
-
-    const sync = () => {
-      const playerFs = p?.fullscreen || p?.cssfullscreen || false;
-      void win.isFullscreen().then((tauriFs) => {
-        setIsFs(tauriFs || playerFs);
-        // Auto-sync CSS fullscreen with Tauri native fullscreen.
-        // This handles the macOS green traffic-light button (which
-        // triggers native fullscreen without going through our toggle).
-        const el = stageRef.current;
-        if (!el || p?.fullscreen) return; // browser fs manages itself
-        if (tauriFs && !p?.cssfullscreen) {
-          p?.getCssFullscreen?.(el);
-        } else if (!tauriFs && p?.cssfullscreen) {
-          p?.exitCssFullscreen?.();
-        }
-      });
-    };
-
-    // xgplayer fullscreen / CSS fullscreen
-    p?.on?.("fullscreen_change", sync);
-    p?.on?.("cssFullscreen_change", sync);
-
-    // Tauri native window fullscreen (macOS green button / Esc / monitor drag)
-    const resizePromise = win.onResized(() => sync());
-
-    // Read initial state
-    sync();
-
-    return () => {
-      p?.off?.("fullscreen_change", sync);
-      p?.off?.("cssFullscreen_change", sync);
-      void resizePromise.then((fn) => fn?.());
-    };
-  }, [playerRef, stageRef]);
-
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   // Bound to the player stage container (stageRef) rather than document, so
   // shortcuts don't fire when the user is typing elsewhere in the app.
@@ -191,24 +150,7 @@ export function ControlsOverlay({
         case "f":
         case "F": {
           e.preventDefault();
-          const win = getCurrentWindow();
-          // Determine current fullscreen state across all modes
-          const isAnyFs = p.fullscreen || p.cssfullscreen || isFs;
-          if (isAnyFs) {
-            // Exit all fullscreen modes
-            if (p.fullscreen) p.exitFullscreen?.();
-            else if (p.cssfullscreen) p.exitCssFullscreen?.();
-            void win.setFullscreen(false).catch(() => undefined);
-          } else {
-            // Try native browser fullscreen first (Windows).  On macOS
-            // WKWebView the API is blocked → fall back to Tauri native
-            // window fullscreen + CSS fullscreen so the player fills the
-            // entire window (not just its layout slot).
-            p.getFullscreen?.(el)?.catch(() => {
-              p.getCssFullscreen?.(el);
-              void win.setFullscreen(true).catch(() => undefined);
-            });
-          }
+          toggleFullscreen();
           break;
         }
         case "ArrowLeft":
@@ -251,7 +193,7 @@ export function ControlsOverlay({
     };
     el.addEventListener("keydown", handler);
     return () => el.removeEventListener("keydown", handler);
-  }, [playerRef, stageRef, muted, vol, isLive, isFs, onUserPlay, onUserPause]);
+  }, [playerRef, stageRef, muted, vol, isLive, onUserPlay, onUserPause, toggleFullscreen]);
 
   // ── Idle timer ──────────────────────────────────────────────────────────────
   const resetIdle = useCallback(() => {
@@ -285,31 +227,6 @@ export function ControlsOverlay({
       onUserPause?.();
     }
   }, [playerRef, onUserPlay, onUserPause]);
-
-  const toggleFullscreen = useCallback(() => {
-    const p = playerRef.current;
-    const el = stageRef.current;
-    if (!p || !el) return;
-    const win = getCurrentWindow();
-
-    // Determine current fullscreen state across all modes
-    const isAnyFs = p.fullscreen || p.cssfullscreen || isFs;
-    if (isAnyFs) {
-      // Exit all fullscreen modes
-      if (p.fullscreen) p.exitFullscreen?.();
-      else if (p.cssfullscreen) p.exitCssFullscreen?.();
-      void win.setFullscreen(false).catch(() => undefined);
-    } else {
-      // Try native browser fullscreen first (works on Windows).
-      // On macOS WKWebView the API is blocked → fall back to Tauri
-      // native window fullscreen + CSS fullscreen so the player fills
-      // the entire window, not just its slot in the layout.
-      p.getFullscreen?.(el)?.catch(() => {
-        p.getCssFullscreen?.(el);
-        void win.setFullscreen(true).catch(() => undefined);
-      });
-    }
-  }, [playerRef, stageRef, isFs]);
 
   const toggleMute = useCallback(() => {
     const p = playerRef.current;
@@ -366,7 +283,7 @@ export function ControlsOverlay({
           className="absolute inset-0"
           style={{
             background:
-              "linear-gradient(to top, rgba(3,4,6,0.88) 0%, rgba(3,4,6,0.32) 60%, transparent 100%)",
+              "linear-gradient(to top, var(--player-scrim) 0%, oklch(8% 0.006 250 / 0.32) 60%, transparent 100%)",
           }}
           aria-hidden
         />
@@ -416,7 +333,7 @@ export function ControlsOverlay({
                 aria-valuemax={100}
                 className="vol-slider"
                 style={{
-                  background: `linear-gradient(90deg,rgba(255,255,255,0.78) ${effectiveVol * 100}%,rgba(255,255,255,0.18) ${effectiveVol * 100}%)`,
+                  background: `linear-gradient(90deg, oklch(96% 0.004 250 / 0.78) ${effectiveVol * 100}%, oklch(96% 0.004 250 / 0.18) ${effectiveVol * 100}%)`,
                 }}
               />
             </div>

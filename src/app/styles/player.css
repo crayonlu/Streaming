@@ -1,13 +1,12 @@
 /* ══════════════════════════════════════════════════════════════
-   xgplayer reskin + React controls overlay styles
+   Player stage + React controls overlay styles
    Scope: .player-stage
 
-   Strategy: controls: false in xgplayer config → we own the
-   entire controls layer in React. Only style the xgplayer core
-   (container, video element, loading, error) here.
+   All colors driven by --player-* tokens (defined in globals.css),
+   so the player follows theme switches instead of being hard-coded.
    ══════════════════════════════════════════════════════════════ */
 
-/* ── 1. Stage container & xgplayer root ─────────────────────── */
+/* ── 1. Stage container ─────────────────────────────────────── */
 .player-stage {
   width: 100%;
   /* min-height keeps the stage usable in standalone use (PlayerPage);
@@ -15,77 +14,34 @@
   min-height: min(60vh, 520px);
   height: 100%;
   overflow: hidden;
-  background: #0a0c0e;
-  border-radius: 0px !important;
+  background: var(--player-stage-bg);
+  border-radius: 0;
 }
 
-.player-stage .xgplayer {
-  background: #0a0c0e !important;
-  font-family:
-    "MiSans", "HarmonyOS Sans SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif !important;
-  /* Ensure video fills stage and our overlay sits on top */
-  position: absolute !important;
-  inset: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-}
-
-/* ── 2. Video element ───────────────────────────────────────── */
-.player-stage .xgplayer video {
+.player-stage video {
   object-fit: contain;
-  background: #0a0c0e !important;
+  background: var(--player-stage-bg);
 }
 
-.player-stage .xgplayer[data-xgfill="contain"] video {
-  object-fit: contain;
-}
-.player-stage .xgplayer[data-xgfill="cover"] video {
-  object-fit: cover;
-}
-
-/* ── 3. Loading spinner (controls:false still shows this) ───── */
-.player-stage .xgplayer .xgplayer-loading {
-  width: 36px !important;
-  height: 36px !important;
-  background: transparent !important;
-}
-
-.player-stage .xgplayer .xgplayer-loading svg,
-.player-stage .xgplayer .xgplayer-loading img {
-  display: none !important;
-}
-
-.player-stage .xgplayer .xgplayer-loading::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border: 2.5px solid rgba(255, 255, 255, 0.14);
-  border-top-color: rgba(255, 255, 255, 0.72);
-  border-radius: 50%;
-  animation: xg-spin 0.72s linear infinite;
-}
-
-@keyframes xg-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* ── 4. Error overlay ───────────────────────────────────────── */
-.player-stage .xgplayer .xgplayer-error {
-  background: rgba(6, 8, 12, 0.92) !important;
-  font-family: inherit !important;
-  font-size: 13px !important;
-  color: rgba(255, 255, 255, 0.5) !important;
-}
-
-/* ── 5. Fullscreen: ensure no rounded corners ───────────────── */
-.player-stage:fullscreen,
-.player-stage:-webkit-full-screen {
+/* ── 2. Fullscreen overlay ────────────────────────────────────
+   CSS-overlay fullscreen: lift the stage out of layout to cover the
+   viewport. Works without the browser Fullscreen API (unreliable in
+   WKWebView). Paired with Tauri setSimpleFullscreen for OS-level fill. */
+.player-stage--fullscreen {
+  position: fixed;
+  /* Inset to safe-area so the video never hides under the notch/camera on
+     macOS native fullscreen. Falls back to 0 where the env is unsupported. */
+  top: env(safe-area-inset-top, 0);
+  right: env(safe-area-inset-right, 0);
+  bottom: env(safe-area-inset-bottom, 0);
+  left: env(safe-area-inset-left, 0);
+  z-index: 50;
+  width: auto;
+  height: auto;
   border-radius: 0 !important;
 }
-.player-stage:fullscreen .xgplayer,
-.player-stage:-webkit-full-screen .xgplayer {
+.player-stage:fullscreen,
+.player-stage:-webkit-full-screen {
   border-radius: 0 !important;
 }
 
@@ -101,14 +57,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  /* Icon buttons: fixed square */
   width: 30px;
   height: 30px;
   flex-shrink: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--player-ctrl-fg);
   cursor: pointer;
   transition:
     color 0.12s ease,
@@ -130,12 +85,12 @@
 }
 
 .ctrl-btn:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--player-ctrl-fg-active);
+  background: var(--player-ctrl-bg-hover);
 }
 
 .ctrl-btn:active {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--player-ctrl-bg-active);
 }
 
 /* ── Volume slider ──────────────────────────────────────────── */
@@ -155,8 +110,8 @@
   width: 11px;
   height: 11px;
   border-radius: 50%;
-  background: #ffffff;
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
+  background: var(--player-ctrl-fg-active);
+  box-shadow: 0 0 4px oklch(8% 0.006 250 / 0.4);
   cursor: pointer;
   transition: transform 0.12s ease;
 }
@@ -169,9 +124,9 @@
   width: 11px;
   height: 11px;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--player-ctrl-fg-active);
   border: none;
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 4px oklch(8% 0.006 250 / 0.4);
   cursor: pointer;
 }
 
@@ -181,10 +136,10 @@
   appearance: none;
   height: 24px;
   padding: 0 8px;
-  border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(8, 10, 14, 0.7);
-  color: rgba(255, 255, 255, 0.82);
+  border-radius: var(--radius-sm);
+  border: 1px solid oklch(96% 0.004 250 / 0.16);
+  background: oklch(8% 0.006 250 / 0.7);
+  color: oklch(92% 0.004 250 / 0.82);
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.02em;
@@ -200,13 +155,13 @@
 }
 
 .quality-select:hover {
-  border-color: rgba(255, 255, 255, 0.28);
-  color: #ffffff;
+  border-color: oklch(96% 0.004 250 / 0.28);
+  color: var(--player-ctrl-fg-active);
 }
 
 .quality-select option {
-  background: #0e1014;
-  color: rgba(255, 255, 255, 0.85);
+  background: var(--popover);
+  color: var(--foreground);
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -218,17 +173,17 @@
   right: 0;
   min-width: 108px;
   padding: 4px;
-  border-radius: 9px;
-  /* Exact same glass recipe as the controls scrim */
-  background: rgba(6, 8, 12, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: var(--radius-md);
+  /* Glass recipe keyed to the player scrim */
+  background: var(--player-scrim);
+  border: 1px solid oklch(96% 0.004 250 / 0.09);
   backdrop-filter: blur(20px) saturate(1.3);
   -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  /* Tinted shadow carries the background hue */
   box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.55),
-    0 0 0 0.5px rgba(255, 255, 255, 0.04) inset;
+    0 10px 30px oklch(8% 0.006 250 / 0.55),
+    0 0 0 0.5px oklch(96% 0.004 250 / 0.04) inset;
   z-index: 40;
-  /* Entrance animation */
   animation: popup-in 0.12s ease-out;
 }
 
@@ -250,10 +205,9 @@
   width: 100%;
   padding: 5px 10px;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: transparent;
-  /* Same text color as ctrl-btn */
-  color: rgba(255, 255, 255, 0.7);
+  color: oklch(92% 0.004 250 / 0.7);
   font-size: 11.5px;
   font-weight: 400;
   font-family:
@@ -267,19 +221,17 @@
 }
 
 .player-quality-item:hover:not(:disabled) {
-  /* Same hover bg as ctrl-btn */
-  background: rgba(255, 255, 255, 0.09);
-  color: #ffffff;
+  background: var(--player-ctrl-bg-hover);
+  color: var(--player-ctrl-fg-active);
 }
 
 .player-quality-item:active:not(:disabled) {
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--player-ctrl-bg-active);
 }
 
 /* Active (currently playing) quality */
 .player-quality-item.is-active {
-  /* Same accent as --xg-theme-color */
-  color: oklch(68% 0.06 218);
+  color: var(--player-accent);
   font-weight: 500;
 }
 
@@ -290,15 +242,12 @@
 }
 
 /* ── Keyboard focus rings ───────────────────────────────────── */
-/* Replace the browser default outline on all player controls
-   with a subtle inset ring that matches the dark-glass language. */
-
 .ctrl-btn:focus {
   outline: none;
 }
 .ctrl-btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 0 2px var(--player-ring);
 }
 
 .player-quality-item:focus {
@@ -306,7 +255,7 @@
 }
 .player-quality-item:focus-visible {
   outline: none;
-  background: rgba(255, 255, 255, 0.09);
-  color: #ffffff;
-  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.32);
+  background: var(--player-ctrl-bg-hover);
+  color: var(--player-ctrl-fg-active);
+  box-shadow: inset 0 0 0 1.5px oklch(96% 0.004 250 / 0.32);
 }

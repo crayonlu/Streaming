@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { GlobalSearch } from "@/features/global-search/ui/GlobalSearch";
 import { OnboardingOverlay } from "@/features/onboarding/ui/OnboardingOverlay";
 import { usePlatformStore } from "@/features/platform-switch/model/usePlatformStore";
+import { isMac } from "@/shared/lib/os";
 import { type ThemeMode, useThemeStore } from "@/features/theme/model/useThemeStore";
 import { cn } from "@/lib/utils";
 import { loadPreferences, savePreferences } from "@/shared/api/commands";
@@ -26,20 +27,21 @@ import type { PlatformId } from "@/shared/types/domain";
 // ── Window controls ───────────────────────────────────────────────────────────
 
 function WindowControls() {
-  const [maximized, setMaximized] = useState(false);
+  const [fullscreen, setFullscreenState] = useState(false);
 
   useEffect(() => {
     const win = getCurrentWindow();
 
-    // Read initial state
     void win
-      .isMaximized()
-      .then(setMaximized)
+      .isFullscreen()
+      .then(setFullscreenState)
       .catch(() => undefined);
 
     const listenPromise = win
       .listen("tauri://resize", async () => {
-        setMaximized(await win.isMaximized().catch(() => false));
+        const fs = await win.isFullscreen().catch(() => false);
+        console.log("[win] resize event, isFullscreen =", fs);
+        setFullscreenState(fs);
       })
       .catch(() => undefined);
 
@@ -52,10 +54,15 @@ function WindowControls() {
     void getCurrentWindow()
       .minimize()
       .catch(() => undefined);
-  const toggleMax = () =>
-    void (maximized ? getCurrentWindow().unmaximize() : getCurrentWindow().maximize()).catch(
-      () => undefined,
-    );
+  const toggleFullscreen = async () => {
+    const win = getCurrentWindow();
+    console.log("[win] toggleFullscreen clicked, fullscreen =", fullscreen);
+    try {
+      await win.setFullscreen(!fullscreen);
+    } catch (e) {
+      console.warn("[win] setFullscreen failed", e);
+    }
+  };
   const close = () =>
     void getCurrentWindow()
       .close()
@@ -76,14 +83,14 @@ function WindowControls() {
         <Minus size={12} strokeWidth={1.8} />
       </button>
 
-      {/* Maximize / Restore */}
+      {/* Fullscreen toggle — native OS fullscreen (new Space on macOS) */}
       <button
         type="button"
-        onClick={toggleMax}
-        aria-label={maximized ? "还原" : "最大化"}
+        onClick={toggleFullscreen}
+        aria-label={fullscreen ? "退出全屏" : "全屏"}
         className="flex border-0 h-full w-11 items-center p-2 rounded-sm justify-center text-muted-foreground/70 transition-colors hover:bg-foreground/8 hover:text-foreground active:bg-foreground/14"
       >
-        {maximized ? (
+        {fullscreen ? (
           <Minimize2 size={11} strokeWidth={1.8} />
         ) : (
           <Maximize2 size={11} strokeWidth={1.8} />
@@ -229,12 +236,14 @@ export function AppShell() {
     [hydratePlatform],
   );
 
-  // Persist sidebar toggle back to AppPreferences
+  // Persist appearance mode back to AppPreferences whenever it changes
+  // (header toggle or Settings selector). Persists `mode`, not the resolved
+  // theme, so "system" is preserved.
   useEffect(() => {
     return useThemeStore.subscribe((state, prevState) => {
-      if (state.theme !== prevState.theme) {
+      if (state.mode !== prevState.mode) {
         void loadPreferences()
-          .then((p) => savePreferences({ ...p, appearance: state.theme }))
+          .then((p) => savePreferences({ ...p, appearance: state.mode }))
           .catch(() => undefined);
       }
     });
@@ -244,75 +253,82 @@ export function AppShell() {
     <TooltipProvider delayDuration={500}>
       {/* First-run onboarding: shown once, overlaid on top of the shell */}
       {onboardingDone === false && <OnboardingOverlay onDone={handleOnboardingDone} />}
-      <div className="flex h-screen overflow-hidden">
-        {/* ─── Sidebar ───────────────────────────────────────────── */}
-        <aside className="flex w-14 shrink-0 flex-col items-center gap-1 bg-card border-r border-border/70 py-3">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-primary/8 text-primary cursor-default select-none">
-                <Radio size={14} strokeWidth={2} />
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="right" className="text-xs">
-              Streaming
-            </TooltipContent>
-          </Tooltip>
+      <div className="flex h-screen flex-col overflow-hidden">
+        {/* ─── Top bar (full width) ───────────────────────────────
+            Spans the whole window so macOS traffic lights sit in its left
+            gutter and no sidebar/header border crosses under them. */}
+        <header
+          className={cn(
+            "flex h-12 shrink-0 items-center bg-card border-b border-border/70 select-none",
+            // macOS: reserve the traffic-light gutter on the left; Windows
+            // keeps controls on the right with a small right pad.
+            isMac ? "pl-[78px] pr-4" : "pr-1",
+          )}
+        >
+          {/* Draggable strip (keeps drag reliable on Windows) */}
+          <div data-tauri-drag-region className="flex min-w-0 flex-1 h-full"></div>
 
-          <nav className="flex flex-1 flex-col items-center gap-1" aria-label="主导航">
-            {NAV_ITEMS.map((item) => (
-              <NavItem key={item.to} {...item} />
-            ))}
-          </nav>
+          {/* Interactive area — not a drag region */}
+          <div className="flex items-center gap-2 pr-1">
+            <ThemeToggle />
+            <GlobalSearch />
+            {/* Windows/Linux show custom window controls; macOS uses native traffic lights */}
+            {!isMac && <WindowControls />}
+          </div>
+        </header>
 
-          <div className="w-6 border-t border-border/60 mb-1" />
+        {/* ─── Sidebar + content row ───────────────────────────── */}
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          {/* ─── Sidebar ───────────────────────────────────────────── */}
+          <aside className="flex w-14 shrink-0 flex-col items-center gap-1 bg-card border-r border-border/70 py-3">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-primary/8 text-primary cursor-default select-none">
+                  <Radio size={14} strokeWidth={2} />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs">
+                Streaming
+              </TooltipContent>
+            </Tooltip>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <NavLink to="/settings" end className="block">
-                {({ isActive }) => (
-                  <span
-                    className={cn(
-                      "flex h-9 w-9 items-center justify-center rounded-lg cursor-pointer",
-                      "transition-colors duration-150",
-                      isActive
-                        ? "bg-accent text-accent-foreground"
-                        : "text-muted-foreground hover:bg-background hover:text-foreground",
-                    )}
-                  >
-                    <Settings size={15} strokeWidth={1.8} />
-                  </span>
-                )}
-              </NavLink>
-            </TooltipTrigger>
-            <TooltipContent side="right" className="text-xs">
-              设置
-            </TooltipContent>
-          </Tooltip>
-        </aside>
+            <nav className="flex flex-1 flex-col items-center gap-1" aria-label="主导航">
+              {NAV_ITEMS.map((item) => (
+                <NavItem key={item.to} {...item} />
+              ))}
+            </nav>
 
-        {/* ─── Right column ─────────────────────────────────────── */}
-        <div className="flex min-w-0 flex-1 flex-col">
-          {/* ─── Title bar / Topbar ─────────────────────────────────
-              data-tauri-drag-region makes the whole bar draggable.
-              Interactive children (search, window buttons) still work.
-          ─────────────────────────────────────────────────────────── */}
-          <header className="flex h-12 shrink-0 items-center bg-card border-b border-border/70 select-none">
-            {/* Dedicated draggable strip: keeps drag behavior reliable on Windows */}
-            <div data-tauri-drag-region className="flex min-w-0 flex-1 h-full"></div>
+            <div className="w-6 border-t border-border/60 mb-1" />
 
-            {/* Interactive area should not be a drag region */}
-            <div className="flex items-center gap-2 pr-1">
-              <ThemeToggle />
-              <GlobalSearch />
-              <WindowControls />
-            </div>
-          </header>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <NavLink to="/settings" end className="block">
+                  {({ isActive }) => (
+                    <span
+                      className={cn(
+                        "flex h-9 w-9 items-center justify-center rounded-lg cursor-pointer",
+                        "transition-colors duration-150",
+                        isActive
+                          ? "bg-accent text-accent-foreground"
+                          : "text-muted-foreground hover:bg-background hover:text-foreground",
+                      )}
+                    >
+                      <Settings size={15} strokeWidth={1.8} />
+                    </span>
+                  )}
+                </NavLink>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs">
+                设置
+              </TooltipContent>
+            </Tooltip>
+          </aside>
 
-          {/* Content */}
+          {/* ─── Content ──────────────────────────────────────────── */}
           <main
             className={cn(
-              "min-h-0 flex-1 overflow-y-auto",
-              isPlayer ? "bg-card px-8 py-6" : "bg-card px-8 py-5",
+              "min-h-0 flex-1 overflow-y-auto bg-card",
+              isPlayer ? "px-8 py-6" : "px-8 py-5",
             )}
           >
             <Outlet />

@@ -120,7 +120,7 @@ export function PlayerProgress({ playerRef, isLive, playerReady }: PlayerProgres
         aria-label="播放进度"
         className="vol-slider flex-1"
         style={{
-          background: `linear-gradient(90deg, rgba(255,255,255,0.75) ${progress}%, rgba(255,255,255,0.15) ${progress}%)`,
+          background: `linear-gradient(90deg, oklch(96% 0.004 250 / 0.75) ${progress}%, oklch(96% 0.004 250 / 0.15) ${progress}%)`,
         }}
       />
       <span className="shrink-0 tabular-nums text-[10px] text-white/40">{fmtTime(duration)}</span>

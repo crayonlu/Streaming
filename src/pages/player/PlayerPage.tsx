@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FollowButton } from "@/features/follow-button/ui/FollowButton";
 import { useBilibiliAuth } from "@/features/player/model/useBilibiliAuth";
+import { useOnlineStatus } from "@/features/player/model/useOnlineStatus";
 import { useStreamLifecycle } from "@/features/player/model/useStreamLifecycle";
 import type { PlayerQualityItem } from "@/features/player/ui/VideoPlayer";
 import { VideoPlayer } from "@/features/player/ui/VideoPlayer";
@@ -97,6 +98,15 @@ export function PlayerPage() {
       void streamQuery.refetch();
     }
   }, [streamLifecycle, streamQuery]);
+
+  // Auto-recover on network reconnect: refresh the stream source if it has
+  // gone stale while offline, so playback resumes at the live edge.
+  const online = useOnlineStatus();
+  useEffect(() => {
+    if (online && streamLifecycle.shouldRefresh() && !streamQuery.isFetching) {
+      void streamQuery.refetch();
+    }
+  }, [online, streamLifecycle, streamQuery]);
 
   const handlePlaybackStall = useCallback(
     (reason: "error" | "waiting-timeout") => {
@@ -313,7 +323,7 @@ export function PlayerPage() {
               /* ── No-source overlay ── */
               <div
                 className="player-stage flex flex-col items-center justify-center gap-3.5"
-                style={{ background: "rgba(5,6,8,0.78)" }}
+                style={{ background: "var(--player-scrim)" }}
               >
                 <p
                   className={cn(

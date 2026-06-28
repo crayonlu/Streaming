@@ -224,6 +224,16 @@ export function SettingsPage() {
   const [error, setError] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // Keep the appearance field in sync with the theme store so the header
+  // toggle reflects here without a save.
+  useEffect(() => {
+    return useThemeStore.subscribe((state, prevState) => {
+      if (state.mode !== prevState.mode) {
+        setPrefs((p) => ({ ...p, appearance: state.mode }));
+      }
+    });
+  }, []);
+
   useEffect(() => {
     let mounted = true;
     void loadPreferences()
@@ -306,11 +316,23 @@ export function SettingsPage() {
               </ToggleGroup>
             </Row>
 
-            <Row label="恢复上次浏览" description="启动时显示继续上次观看的提示" last>
+            <Row label="恢复上次浏览" description="启动时显示继续上次观看的提示">
               <Switch
                 checked={prefs.resumeLastSession}
                 onToggle={() =>
                   setPrefs((p) => ({ ...p, resumeLastSession: !p.resumeLastSession }))
+                }
+              />
+            </Row>
+
+            <Row label="回放自动连播" description="一段录像结束后自动播放下一段" last>
+              <Switch
+                checked={prefs.autoPlayNextReplay ?? true}
+                onToggle={() =>
+                  setPrefs((p) => ({
+                    ...p,
+                    autoPlayNextReplay: !(p.autoPlayNextReplay ?? true),
+                  }))
                 }
               />
             </Row>
@@ -323,12 +345,16 @@ export function SettingsPage() {
             <div className="px-4 pt-3.5 pb-1">
               <p className="text-sm font-medium leading-none">主题模式</p>
               <p className="mt-1 text-[11px] text-muted-foreground leading-snug">
-                选择亮色、暗色或跟随系统设置。保存后生效。
+                选择亮色、暗色或跟随系统设置，立即生效。
               </p>
             </div>
             <AppearanceSelector
               value={prefs.appearance as ThemeMode}
-              onChange={(v: ThemeMode) => setPrefs((p) => ({ ...p, appearance: v }))}
+              onChange={(v: ThemeMode) => {
+                setPrefs((p) => ({ ...p, appearance: v }));
+                // Live-apply so the header toggle reflects immediately.
+                useThemeStore.getState().setMode(v);
+              }}
             />
           </div>
         </div>

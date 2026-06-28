@@ -37,10 +37,9 @@
 }
 
 /* ─────────────────────────────────────────────
-   Root palette — Cool-slate · Light-first
-   Philosophy: crisp, clear, fresh — zero warm hue.
-   All neutrals sit at hue 230-240 (cool slate/blue).
-   Depth via surface lightness, not shadows.
+   Root palette — Cool-slate · Cinema dark-first
+   Single cool gray family (hue 250). Depth via surface lightness,
+   no warm/cool mixing. Player stage纳入 token,不再硬编码暖黑。
    ───────────────────────────────────────────── */
 :root {
   /* ── geometry ── */
@@ -51,88 +50,88 @@
     "MiSans", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui,
     sans-serif;
 
-  /* ── surfaces ──────────────────────────────────────────────────────
-     bg-background = cool light-gray base (replaces warm #f4f0ea)
-     bg-card       = near-white elevated surface (sidebar, topbar, cards)
-     ------------------------------------------------------------------ */
-  --background: oklch(96.8% 0.005 232); /* cool slate-white */
-  --foreground: oklch(12% 0.008 232); /* cool near-black  */
+  /* ── surfaces: light mode mirrors the cool family ── */
+  --background: oklch(97% 0.004 250);
+  --foreground: oklch(15% 0.012 250);
 
-  --card: oklch(99.2% 0.002 232); /* crisp white      */
-  --card-foreground: oklch(12% 0.008 232);
+  --card: oklch(99.2% 0.002 250);
+  --card-foreground: oklch(15% 0.012 250);
 
-  --popover: oklch(99.6% 0.001 232);
-  --popover-foreground: oklch(12% 0.008 232);
+  --popover: oklch(99.6% 0.001 250);
+  --popover-foreground: oklch(15% 0.012 250);
 
-  /* ── primary: crisp blue-gray — kept from original ── */
-  --primary: oklch(46% 0.051 218);
-  --primary-foreground: oklch(99% 0.002 232);
+  --primary: oklch(55% 0.05 248);
+  --primary-foreground: oklch(99% 0.002 250);
 
-  /* ── secondary: cool light surface ── */
-  --secondary: oklch(94.5% 0.005 232);
-  --secondary-foreground: oklch(28% 0.009 232);
+  --secondary: oklch(94.5% 0.005 250);
+  --secondary-foreground: oklch(28% 0.009 250);
 
-  /* ── muted: one step darker, still cool ── */
-  --muted: oklch(93.2% 0.005 232);
-  --muted-foreground: oklch(50% 0.01 232);
+  --muted: oklch(94% 0.005 250);
+  --muted-foreground: oklch(46% 0.012 250);
 
-  /* ── accent: soft cool-blue tint for selected / active ── */
-  --accent: oklch(92.5% 0.018 220);
-  --accent-foreground: oklch(36% 0.046 218);
+  --accent: oklch(93% 0.018 248);
+  --accent-foreground: oklch(34% 0.046 248);
 
-  /* ── destructive ── */
   --destructive: oklch(53% 0.19 24);
 
-  /* ── borders: cool slate, faint but crisper than warm ── */
-  --border: oklch(91% 0.006 232);
-  --input: oklch(91.5% 0.006 232);
-  --ring: oklch(46% 0.051 218);
+  --border: oklch(91% 0.006 250);
+  --input: oklch(91.5% 0.006 250);
+  --ring: oklch(55% 0.05 248);
 
-  /* ── sidebar shares the card surface ── */
   --sidebar: var(--card);
-  --sidebar-foreground: oklch(46% 0.01 232);
+  --sidebar-foreground: oklch(46% 0.01 250);
 
-  /* ── live badge red — kept neutral ── */
   --live: oklch(55% 0.168 24);
+
+  /* ── player: dark stage shared by both modes ── */
+  --player-stage-bg: oklch(12% 0.008 250);
+  --player-ctrl-fg: oklch(92% 0.004 250 / 0.85);
+  --player-ctrl-fg-active: oklch(98% 0.002 250);
+  --player-ctrl-bg-hover: oklch(96% 0.004 250 / 0.12);
+  --player-ctrl-bg-active: oklch(96% 0.004 250 / 0.18);
+  --player-scrim: oklch(8% 0.006 250 / 0.88);
+  --player-accent: var(--primary);
+  --player-ring: oklch(96% 0.004 250 / 0.55);
 }
 
 /* ─────────────────────────────────────────────
-   Dark palette — Cool-slate · Soft night (清新夜色)
-   Lifted mid-tones + a touch more chroma: less “纯黑”，
-   更接近雾蓝灰，层次更透气。
+   Dark palette — Cool-slate · Cinema night (影院级)
+   oklch(15%) base, 5-6% lightness steps between surfaces for breathing
+   room. Blue-cyan chroma (0.012-0.03) gives the gray a soul without
+   screaming. Player stage shares the family — no warm black break.
    ───────────────────────────────────────────── */
 .dark {
-  --background: oklch(24% 0.014 230);
-  --foreground: oklch(95% 0.005 232);
+  --background: oklch(15% 0.012 250);
+  --foreground: oklch(96% 0.004 250);
 
-  --card: oklch(30% 0.016 230);
-  --card-foreground: oklch(95% 0.005 232);
+  --card: oklch(20% 0.014 250);
+  --card-foreground: oklch(96% 0.004 250);
 
-  --popover: oklch(33% 0.016 230);
-  --popover-foreground: oklch(95% 0.005 232);
+  --popover: oklch(23% 0.016 250);
+  --popover-foreground: oklch(96% 0.004 250);
 
-  --primary: oklch(62% 0.05 218);
-  --primary-foreground: oklch(17% 0.012 232);
+  --primary: oklch(70% 0.06 248);
+  --primary-foreground: oklch(16% 0.012 250);
 
-  --secondary: oklch(36% 0.016 230);
-  --secondary-foreground: oklch(84% 0.007 232);
+  --secondary: oklch(27% 0.016 250);
+  --secondary-foreground: oklch(84% 0.007 250);
 
-  --muted: oklch(38% 0.015 230);
-  --muted-foreground: oklch(58% 0.012 232);
+  --muted: oklch(25% 0.014 250);
+  --muted-foreground: oklch(64% 0.014 250);
 
-  --accent: oklch(40% 0.03 218);
-  --accent-foreground: oklch(78% 0.04 218);
+  --accent: oklch(31% 0.03 248);
+  --accent-foreground: oklch(80% 0.04 248);
 
-  --destructive: oklch(55% 0.19 24);
+  --destructive: oklch(60% 0.19 24);
 
-  --border: oklch(42% 0.014 230);
-  --input: oklch(42% 0.014 230);
-  --ring: oklch(58% 0.048 218);
+  --border: oklch(33% 0.014 250);
+  --input: oklch(33% 0.014 250);
+  --ring: oklch(58% 0.048 248);
 
   --sidebar: var(--card);
-  --sidebar-foreground: oklch(58% 0.012 232);
+  --sidebar-foreground: oklch(64% 0.012 250);
 
-  --live: oklch(58% 0.18 24);
+  --live: oklch(62% 0.18 24);
 }
 
 /* ─────────────────────────────────────────────
@@ -200,6 +199,15 @@ body,
   margin: 0;
 }
 
+/* Frameless transparent windows (Windows/Linux) clip to rounded corners.
+   macOS keeps native decorations, so no rounding there. */
+:root:not(.is-mac) html,
+:root:not(.is-mac) body,
+:root:not(.is-mac) #root {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
 body {
   font-family: var(--font-base);
   background-color: var(--background);
@@ -233,18 +241,18 @@ img {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: oklch(86% 0.006 232);
+  background: oklch(86% 0.006 250);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(74% 0.008 232);
+  background: oklch(74% 0.008 250);
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: oklch(46% 0.014 230);
+  background: oklch(44% 0.014 250);
 }
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: oklch(56% 0.014 230);
+  background: oklch(56% 0.014 250);
 }
 
 /* ─────────────────────────────────────────────
@@ -299,17 +307,14 @@ img {
 }
 
 /* ─────────────────────────────────────────────
-   Player stage — dark, full-bleed
+   Player stage — dark, full-bleed (token-driven)
    ───────────────────────────────────────────── */
 .player-stage {
   width: 100%;
   min-height: min(60vh, 520px);
   border-radius: var(--radius);
   overflow: hidden;
-  background: oklch(11% 0.01 65);
-}
-.dark .player-stage {
-  background: oklch(20% 0.016 228);
+  background: var(--player-stage-bg);
 }
 
 /* ─────────────────────────────────────────────

@@ -561,7 +561,7 @@ async fn live_handler(Query(params): Query<VodQuery>) -> Response<Body> {
     let byte_stream = upstream.bytes_stream().map(|r| {
         r.map_err(|e| {
             tracing::warn!(error = %e, "live proxy stream error");
-            std::io::Error::new(std::io::ErrorKind::Other, e)
+            std::io::Error::other(e)
         })
     });
 

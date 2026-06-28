@@ -95,6 +95,8 @@ export interface AppPreferences {
   appearance: "system" | "light" | "dark";
   /** "none" = disable all proxy (safe default); "system" = use OS/env proxy */
   proxy: ProxyMode;
+  /** Auto-play the next replay part when the current one ends. */
+  autoPlayNextReplay?: boolean;
   onboardingDone?: boolean;
   lastVisited?: {
     type: "discover" | "search" | "room";

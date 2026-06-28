@@ -6,7 +6,7 @@ use models::{
     AppPreferences, Category, PlatformId, ProxyMode, ReplayItem, ReplayQuality, RoomCard,
     RoomDetail, SearchResult, StreamSource,
 };
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tauri_plugin_store::StoreExt;
 
 #[tauri::command]
@@ -307,13 +307,31 @@ pub fn run() {
     }
 
     tauri::Builder::default()
-        .setup(|_app| {
+        .setup(|app| {
             tracing::info!("starting image proxy");
+            // Inset macOS traffic lights down so they vertically center in our
+            // 48px top bar (native title bar is ~28px, lights sit too high).
+            #[cfg(target_os = "macos")]
+            {
+                use tauri_plugin_decorum::WebviewWindowExt;
+                if let Some(win) = app.get_webview_window("main") {
+                    // y grows the title-bar container height; lights center in it.
+                    // 48px header → lights center ~y=24 → container grows ~30.
+                    let _ = win.set_traffic_lights_inset(20.0, 30.0);
+                }
+            }
+            // Log the merged window config so we can verify platform overrides
+            // (tauri.macos.conf.json) actually took effect.
+            if let Some(win) = app.get_webview_window("main") {
+                tracing::info!("window decorations = {:?}", win.is_decorated());
+            }
             proxy::start();
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_decorum::init())
         .invoke_handler(tauri::generate_handler![
             get_featured,
             search_rooms,

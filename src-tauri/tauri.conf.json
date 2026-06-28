@@ -10,6 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "Streaming",
@@ -19,7 +20,7 @@
         "minHeight": 640,
         "decorations": false,
         "shadow": true,
-        "transparent": false
+        "transparent": true
       }
     ],
     "security": {

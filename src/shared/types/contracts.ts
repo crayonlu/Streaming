@@ -94,6 +94,7 @@ export const appPreferencesSchema = z.object({
   resumeLastSession: z.boolean(),
   appearance: z.enum(["system", "light", "dark"]),
   proxy: z.enum(["none", "system"]).default("none"),
+  autoPlayNextReplay: z.boolean().default(true),
   onboardingDone: z.boolean().optional(),
   lastVisited: z
     .object({

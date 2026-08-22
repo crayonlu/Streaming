@@ -1,3 +1,5 @@
+
+
 <p align="center">
   <img src="assets/app-icon.png" alt="Streaming" width="80" />
 </p>
@@ -20,7 +22,7 @@
 
 ## 安装
 
-[Releases](https://github.com/crayonlu/Streaming/releases) 下载对应平台安装包。
+[Releases](https://github.com/crayonlu/Streaming/releases) 下载对应平台（Windows、macOS、Linux）安装包。
 
 ## License
 

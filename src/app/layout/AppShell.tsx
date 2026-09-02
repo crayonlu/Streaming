@@ -18,10 +18,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { GlobalSearch } from "@/features/global-search/ui/GlobalSearch";
 import { OnboardingOverlay } from "@/features/onboarding/ui/OnboardingOverlay";
 import { usePlatformStore } from "@/features/platform-switch/model/usePlatformStore";
-import { isMac } from "@/shared/lib/os";
 import { type ThemeMode, useThemeStore } from "@/features/theme/model/useThemeStore";
 import { cn } from "@/lib/utils";
 import { loadPreferences, savePreferences } from "@/shared/api/commands";
+import { isMac } from "@/shared/lib/os";
 import type { PlatformId } from "@/shared/types/domain";
 
 // ── Window controls ───────────────────────────────────────────────────────────

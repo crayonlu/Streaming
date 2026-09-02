@@ -7,8 +7,8 @@
 
 import { Maximize2, Minimize2, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useFullscreen } from "../model/useFullscreen";
 import { cn } from "@/lib/utils";
+import { useFullscreen } from "../model/useFullscreen";
 import { PlayerProgress } from "./PlayerProgress";
 import { QualityMenu } from "./QualityMenu";
 import type { PlayerQualityItem } from "./VideoPlayer";

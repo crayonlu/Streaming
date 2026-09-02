@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { INITIAL_RECOVERY_STATE, type RecoveryState, planHlsRecovery } from "./recovery";
+import { INITIAL_RECOVERY_STATE, planHlsRecovery, type RecoveryState } from "./recovery";
 
 export type PlayerFormat = "hls" | "flv" | "mp4";
 

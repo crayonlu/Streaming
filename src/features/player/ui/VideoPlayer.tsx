@@ -87,16 +87,25 @@ export function VideoPlayer({
   // Keep the stable ref fed to ControlsOverlay in sync with the latest controller.
   ctrlRef.current = controller;
 
-  // VOD end-of-playback callbacks: onNearEnd fires once 8s before the end
-  // (for prefetching the next part), onEnded fires when playback finishes.
-  // Reset + re-bind whenever the source changes.
   const nearEndFiredRef = useRef(false);
+
+  // VOD: onNearEnd fires once 8s before the end (for prefetching the next
+  // part), onEnded fires when playback finishes.
+  // LIVE: a dropped FLV/HLS connection surfaces as "ended" rather than an
+  // error (mpegts.js completes cleanly when the TCP stream closes), so we
+  // route it into the stall-recovery path which refetches stream sources.
   // biome-ignore lint/correctness/useExhaustiveDependencies: videoRef is a stable ref; .current is read at bind time
   useEffect(() => {
-    nearEndFiredRef.current = false;
-    if (isLive) return;
     const v = videoRef.current;
     if (!v) return;
+
+    if (isLive) {
+      const onLiveEnd = () => onPlaybackStall?.("error");
+      v.addEventListener("ended", onLiveEnd);
+      return () => v.removeEventListener("ended", onLiveEnd);
+    }
+
+    nearEndFiredRef.current = false;
     const onTime = () => {
       if (nearEndFiredRef.current) return;
       const remaining = (v.duration || 0) - v.currentTime;
@@ -112,7 +121,7 @@ export function VideoPlayer({
       v.removeEventListener("timeupdate", onTime);
       v.removeEventListener("ended", onEnd);
     };
-  }, [isLive, onEnded, onNearEnd]);
+  }, [isLive, onEnded, onNearEnd, onPlaybackStall]);
 
   return (
     <section

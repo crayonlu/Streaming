@@ -146,6 +146,9 @@ export function usePlayerEngine({
         );
         player.attachMediaElement(video);
         player.on(mpegts.Events.ERROR, onFlvError);
+        // A live FLV stream that ends cleanly (server closed the connection)
+        // fires LOADING_COMPLETE instead of ERROR — treat it as a drop.
+        if (isLive) player.on(mpegts.Events.LOADING_COMPLETE, onFlvError);
         player.load();
         engine = player as unknown as AnyEngine;
       } else {

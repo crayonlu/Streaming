@@ -6,16 +6,17 @@
  * xgplayer wrapper so PlayerPage / ReplayPage need no changes here.
  */
 
-import { useEffect, useRef, useState } from "react";
 import { AlertCircle, Loader2, WifiOff } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import "@/app/styles/player.css";
-import { ControlsOverlay } from "./ControlsOverlay";
+import { detectHevcSupport } from "@/shared/lib/hevc";
+import { useOnlineStatus } from "../model/useOnlineStatus";
 import {
   type PlayerController,
   type PlayerFormat,
   usePlayerEngine,
 } from "../model/usePlayerEngine";
-import { useOnlineStatus } from "../model/useOnlineStatus";
+import { ControlsOverlay } from "./ControlsOverlay";
 
 export interface PlayerQualityItem {
   id: string;
@@ -171,6 +172,11 @@ export function VideoPlayer({
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
           <AlertCircle size={28} strokeWidth={1.6} className="text-white/60" />
           <span className="text-sm text-white/70">播放失败 · 正在尝试恢复</span>
+          {detectHevcSupport() === "none" && (
+            <span className="text-xs text-white/40">
+              当前系统可能缺少 HEVC 解码支持（Windows 请安装「HEVC 视频扩展」）
+            </span>
+          )}
         </div>
       )}
     </section>

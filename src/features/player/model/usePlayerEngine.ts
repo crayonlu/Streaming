@@ -45,6 +45,9 @@ type AnyEngine = {
   recoverMediaError?: () => void;
   swapAudioCodec?: () => void;
   loadSource?: (url: string) => void;
+  /** mpegts.js soft reload */
+  unload?: () => void;
+  load?: () => void;
   liveSyncPosition?: number;
   on?: (e: string, fn: (...args: unknown[]) => void) => void;
   off?: (e: string, fn: (...args: unknown[]) => void) => void;
@@ -74,13 +77,42 @@ export function usePlayerEngine({
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(false);
 
-  // ── Engine bootstrap (rebuilt only when format/isLive changes) ─────────────
+  // ── Engine bootstrap / soft-switch ────────────────────────────────────────
+  // Full rebuild when format/isLive changes; soft in-place source swap when
+  // only the URL changes (quality/line switch) — avoids the black flash of a
+  // destroy+recreate cycle. Soft switch is synchronous, so no race guard is
+  // needed there; the async rebuild path uses `disposed`.
+  const prevRef = useRef<{ format: PlayerFormat; isLive: boolean } | null>(null);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
+    const prev = prevRef.current;
+    const engine = engineRef.current;
+
+    // ── Soft switch: same engine family, only the URL changed ────────────
+    if (prev && prev.format === format && prev.isLive === isLive && engine) {
+      recoveryRef.current = INITIAL_RECOVERY_STATE;
+      setError(false);
+      if (format === "hls" && engine.loadSource) {
+        engine.loadSource(url);
+      } else if (format === "flv" && engine.unload && engine.load) {
+        // mpegts.js: unload() + load() while still attached to the element.
+        engine.stopLoad?.();
+        engine.unload();
+        engine.load();
+      } else {
+        video.src = url;
+      }
+      void video.play().catch(() => undefined);
+      return;
+    }
+
+    // ── Full rebuild ──────────────────────────────────────────────────────
+    prevRef.current = { format, isLive };
     let disposed = false;
-    let engine: AnyEngine | null = null;
+    let nextEngine: AnyEngine | null = null;
 
     const onHlsError = (hls: AnyEngine, data: { fatal: boolean; type: string }) => {
       const { action, next } = planHlsRecovery(data, recoveryRef.current, Date.now());
@@ -133,7 +165,7 @@ export function usePlayerEngine({
             });
           }
           hls.loadSource(url);
-          engine = hls as unknown as AnyEngine;
+          nextEngine = hls as unknown as AnyEngine;
         } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
           video.src = url;
         }
@@ -150,16 +182,16 @@ export function usePlayerEngine({
         // fires LOADING_COMPLETE instead of ERROR — treat it as a drop.
         if (isLive) player.on(mpegts.Events.LOADING_COMPLETE, onFlvError);
         player.load();
-        engine = player as unknown as AnyEngine;
+        nextEngine = player as unknown as AnyEngine;
       } else {
         video.src = url;
       }
 
       if (disposed) {
-        engine?.destroy?.();
+        nextEngine?.destroy?.();
         return;
       }
-      engineRef.current = engine;
+      engineRef.current = nextEngine;
       void video.play().catch(() => undefined);
       setReady(true);
     };
@@ -171,8 +203,9 @@ export function usePlayerEngine({
       setReady(false);
       setError(false);
       recoveryRef.current = INITIAL_RECOVERY_STATE;
-      engine?.destroy?.();
+      nextEngine?.destroy?.();
       engineRef.current = null;
+      prevRef.current = null;
       video.removeAttribute("src");
     };
   }, [format, isLive, url]);

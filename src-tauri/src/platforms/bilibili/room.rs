@@ -141,6 +141,11 @@ fn source_priority(source: &StreamSource) -> i32 {
             _ => {}
         }
     }
+    // mcdn = Bilibili P2P edge nodes; unstable under load (dart_simple_live
+    // field experience). Keep them as last-resort fallback.
+    if source.stream_url.contains("mcdn") {
+        score -= 200;
+    }
     score
 }
 
@@ -596,4 +601,33 @@ pub async fn get_stream_sources(
     }
 
     Ok(reachable)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{PlatformId, StreamFormat};
+
+    fn src(url: &str, cdn: &str, is_default: bool) -> StreamSource {
+        StreamSource {
+            id: format!("t-{cdn}"),
+            platform: PlatformId::Bilibili,
+            room_id: "1".to_string(),
+            quality_key: "10000".to_string(),
+            quality_label: "原画".to_string(),
+            stream_url: url.to_string(),
+            format: StreamFormat::Hls,
+            is_default: Some(is_default),
+            cdn: Some(cdn.to_string()),
+        }
+    }
+
+    #[test]
+    fn mcdn_is_demoted_below_default_and_backup_lines() {
+        let main = src("https://d1--cn-gotcha208.bilivideo.com/live/1.m3u8", "主线路", true);
+        let backup = src("https://d2--cn-gotcha208.bilivideo.com/live/1.m3u8", "备用1", false);
+        let p2p = src("https://cn-01.mcdn.bilivideo.cn/live/1.m3u8", "mcdn", false);
+        assert!(source_priority(&main) > source_priority(&p2p));
+        assert!(source_priority(&backup) > source_priority(&p2p));
+    }
 }

@@ -1,4 +1,5 @@
 import { MessageSquare, MessageSquareOff, Settings2 } from "lucide-react";
+import { useEffect, useReducer } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +35,15 @@ export function DanmakuControls() {
   const setArea = useDanmakuStore((s) => s.setArea);
   const setFontSize = useDanmakuStore((s) => s.setFontSize);
 
+  // Re-render on fullscreen changes so the dropdown's portal container
+  // (document.fullscreenElement) is fresh when the menu next opens.
+  const [, forceRender] = useReducer((x: number) => x + 1, 0);
+  useEffect(() => {
+    const onFsChange = () => forceRender();
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
   return (
     <div className="flex items-center gap-0.5">
       <button
@@ -55,7 +65,13 @@ export function DanmakuControls() {
             <Settings2 size={15} strokeWidth={1.9} />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56 p-3">
+        <DropdownMenuContent
+          align="end"
+          className="w-56 p-3"
+          // Portal into the fullscreen element when the player is fullscreen —
+          // body-portaled content is invisible there. Evaluated at open time.
+          container={(document.fullscreenElement as HTMLElement | null) ?? undefined}
+        >
           <DropdownMenuLabel className="px-0 pb-2 text-xs">弹幕设置</DropdownMenuLabel>
 
           <div className="flex flex-col gap-1.5">

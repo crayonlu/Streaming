@@ -65,7 +65,11 @@ export const useFollowStore = create<FollowState>((set, get) => ({
     const { follows, liveStatusMap } = get();
     if (follows.length === 0) return;
 
-    const targets = follows.filter((f) => liveStatusMap[f.id] === true || !f.coverUrl || !f.title);
+    // liveStatusMap is keyed by roomId (matches check_rooms_live_status and
+    // FollowsPage's lookups), not FollowRecord.id ("platform-roomId").
+    const targets = follows.filter(
+      (f) => liveStatusMap[f.roomId] === true || !f.coverUrl || !f.title,
+    );
     if (targets.length === 0) return;
 
     // Bounded pool (not Promise.all over everything) — hammering one

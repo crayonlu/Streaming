@@ -117,6 +117,7 @@ impl JceEncoder {
     }
 
     /// list<string>
+    #[allow(dead_code)] // consumed by the huya danmaku client
     pub fn write_string_list(&mut self, tag: u8, items: &[String]) {
         self.write_head(TYPE_LIST, tag);
         self.write_int32(0, items.len() as i32);
@@ -403,6 +404,7 @@ impl<'a> JceDecoder<'a> {
     }
 
     /// Open a struct field: consumes head(10, tag). Absent → false.
+    #[allow(dead_code)] // consumed by the huya danmaku client
     pub fn read_struct_begin(&mut self, tag: u8) -> Result<bool, String> {
         match self.seek_tag(tag)? {
             None => Ok(false),
@@ -412,6 +414,7 @@ impl<'a> JceDecoder<'a> {
     }
 
     /// Close the current struct: skip remaining fields up to head(11, 0).
+    #[allow(dead_code)] // consumed by the huya danmaku client
     pub fn read_struct_end(&mut self) -> Result<(), String> {
         loop {
             let (ty, _) = self.read_head()?;

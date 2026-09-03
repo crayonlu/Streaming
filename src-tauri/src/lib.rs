@@ -1,3 +1,4 @@
+mod danmaku;
 mod models;
 mod platforms;
 mod proxy;
@@ -320,6 +321,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_os::init())
+        .manage(danmaku::DanmakuRegistry::default())
         .invoke_handler(tauri::generate_handler![
             get_featured,
             search_rooms,
@@ -337,7 +339,9 @@ pub fn run() {
             get_bilibili_cookie,
             open_bilibili_login_window,
             close_bilibili_login_window,
-            check_rooms_live_status
+            check_rooms_live_status,
+            danmaku::start_danmaku,
+            danmaku::stop_danmaku
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

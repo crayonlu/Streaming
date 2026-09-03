@@ -603,6 +603,21 @@ pub async fn get_stream_sources(
         }
     }
 
+    // Prefer HLS as the default playback source: HLS segments, once
+    // published, can be downloaded faster than real time, so hls.js builds a
+    // deep buffer ahead. Live FLV delivery is capped at the encoder's
+    // real-time rate in bursts, which cannot build an ahead-buffer and
+    // stalls whenever a burst gap exceeds the player's buffer.
+    let has_default = reachable.iter().any(|s| s.is_default == Some(true));
+    if !has_default {
+        if let Some(hls) = reachable
+            .iter_mut()
+            .find(|s| matches!(s.format, crate::models::StreamFormat::Hls))
+        {
+            hls.is_default = Some(true);
+        }
+    }
+
     Ok(reachable)
 }
 
@@ -632,5 +647,46 @@ mod tests {
         let p2p = src("https://cn-01.mcdn.bilivideo.cn/live/1.m3u8", "mcdn", false);
         assert!(source_priority(&main) > source_priority(&p2p));
         assert!(source_priority(&backup) > source_priority(&p2p));
+    }
+}
+
+#[cfg(test)]
+mod probe_tests {
+    use super::*;
+
+    /// Live-network probe (ignored by default): fetches real Bilibili HLS
+    /// sources anonymously and prints the proxied manifest URLs.
+    /// Run: BILI_PROBE_ROOM=7734200 cargo test --lib -- --ignored probe_bili_sources --nocapture
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "requires live network access"]
+    async fn probe_bili_sources_live() {
+        let room_id =
+            std::env::var("BILI_PROBE_ROOM").unwrap_or_else(|_| "7734200".to_string());
+        let client = shared_client();
+        let (real, is_live) = resolve_room_id_and_live(client, &room_id)
+            .await
+            .unwrap_or((room_id.clone(), true));
+        println!("[probe] real room {real} live={is_live}");
+        let params: Vec<(&str, &str)> = vec![
+            ("protocol", "0,1"),
+            ("format", "0,1,2"),
+            ("codec", "0"),
+            ("platform", "html5"),
+            ("dolby", "5"),
+        ];
+        let response = request_playinfo(client, &real, &params, None)
+            .await
+            .expect("playinfo request failed");
+        let sources = parse_playurl_to_sources(&extract_playurl(&response), &real);
+        assert!(!sources.is_empty(), "no sources parsed");
+        for s in &sources {
+            println!(
+                "[probe] qn={} cdn={} format={:?} -> {}",
+                s.quality_key,
+                s.cdn.clone().unwrap_or_default(),
+                format!("{:?}", s.format),
+                s.stream_url
+            );
+        }
     }
 }

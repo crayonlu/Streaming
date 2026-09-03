@@ -350,7 +350,11 @@ export function PlayerPage() {
                 }
                 overlaySlot={
                   room?.isLive && isPlatform(platform) ? (
-                    <DanmakuOverlay platform={platform} roomId={roomId as string} />
+                    // room.roomId is the normalized (real) id — the danmaku
+                    // backend emits events with the resolved real id, so
+                    // filtering must use it, not the raw URL param (which can
+                    // be a Bilibili short id like /player/bilibili/6).
+                    <DanmakuOverlay platform={platform} roomId={room.roomId} />
                   ) : null
                 }
                 controlsEndSlot={room?.isLive ? <DanmakuControls /> : null}

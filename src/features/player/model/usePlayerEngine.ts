@@ -153,6 +153,9 @@ export function usePlayerEngine({
             enableWorker: true,
             lowLatencyMode: false,
             liveSyncDurationCount: 3,
+            // Cap retained playback history — without this the back buffer
+            // grows unbounded on long live sessions and playback stutters.
+            backBufferLength: isLive ? 30 : Infinity,
           });
           hls.attachMedia(video);
           hls.on(Hls.Events.ERROR, (_e: unknown, data: { fatal: boolean; type: string }) =>
@@ -174,7 +177,23 @@ export function usePlayerEngine({
         if (disposed) return;
         const player = mpegts.createPlayer(
           { type: "flv", isLive, url },
-          { enableWorker: true, lazyLoad: false, autoCleanupSourceBuffer: true },
+          {
+            enableWorker: true,
+            lazyLoad: false,
+            autoCleanupSourceBuffer: true,
+            // Live FLV delivery is bursty (e.g. Bilibili CDN pushes a burst
+            // every ~1.3s with 1s+ gaps — measured). Keep the stash enabled
+            // to smooth the bursts, and chase the live edge only when the
+            // buffered latency exceeds a cap, so delay stays bounded
+            // without draining the buffer into repeated stalls.
+            ...(isLive
+              ? {
+                  liveBufferLatencyChasing: true,
+                  liveBufferLatencyMaxLatency: 6,
+                  liveBufferLatencyMinRemain: 2,
+                }
+              : {}),
+          },
         );
         player.attachMediaElement(video);
         player.on(mpegts.Events.ERROR, onFlvError);

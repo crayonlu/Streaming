@@ -1,5 +1,5 @@
 import { MessageSquare, MessageSquareOff, Settings2 } from "lucide-react";
-import { useEffect, useReducer } from "react";
+import { useContext, useEffect, useReducer } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
+import { ControlsPanelContext } from "@/features/player/ui/ControlsOverlay";
 import { useDanmakuStore } from "../model/useDanmakuStore";
 
 const AREA_OPTIONS = [
@@ -44,6 +45,9 @@ export function DanmakuControls() {
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
 
+  // Keep the player controls bar visible while the settings panel is open.
+  const onPanelOpenChange = useContext(ControlsPanelContext);
+
   return (
     <div className="flex items-center gap-0.5">
       <button
@@ -59,7 +63,7 @@ export function DanmakuControls() {
         )}
       </button>
 
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={onPanelOpenChange}>
         <DropdownMenuTrigger asChild>
           <button type="button" className="ctrl-btn" aria-label="弹幕设置">
             <Settings2 size={15} strokeWidth={1.9} />

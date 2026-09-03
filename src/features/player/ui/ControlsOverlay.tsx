@@ -6,12 +6,27 @@
  */
 
 import { Maximize2, Minimize2, Pause, Play, Volume2, VolumeX } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { cn } from "@/lib/utils";
 import { useFullscreen } from "../model/useFullscreen";
 import { PlayerProgress } from "./PlayerProgress";
 import { QualityMenu } from "./QualityMenu";
 import type { PlayerQualityItem } from "./VideoPlayer";
+
+/**
+ * Menus rendered inside the controls bar (e.g. the danmaku settings
+ * dropdown) call this when they open/close, so the controls bar stays
+ * visible for as long as a panel is open instead of auto-hiding.
+ */
+export const ControlsPanelContext = createContext<(open: boolean) => void>(
+  () => undefined,
+);
 
 function readVol(): number {
   try {
@@ -68,6 +83,9 @@ export function ControlsOverlay({
   const [playing, setPlaying] = useState(false);
   const [visible, setVisible] = useState(true);
   const [qualityOpen, setQualityOpen] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const anyMenuOpenRef = useRef(false);
+  anyMenuOpenRef.current = qualityOpen || panelOpen;
 
   const { isFs, toggle: toggleFullscreen } = useFullscreen(stageRef);
 
@@ -216,6 +234,17 @@ export function ControlsOverlay({
     [resetIdle],
   );
 
+  // While any menu/panel is open, keep the controls bar pinned and cancel
+  // any pending idle hide; when the last one closes, resume the idle timer.
+  useEffect(() => {
+    if (qualityOpen || panelOpen) {
+      clearTimeout(idleRef.current);
+      setVisible(true);
+    } else {
+      resetIdle();
+    }
+  }, [qualityOpen, panelOpen, resetIdle]);
+
   // ── Controls ────────────────────────────────────────────────────────────────
   const togglePlay = useCallback(() => {
     const p = playerRef.current;
@@ -257,8 +286,9 @@ export function ControlsOverlay({
   const effectiveVol = muted ? 0 : vol;
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: mouse-idle tracking overlay
-    // biome-ignore lint/a11y/useKeyWithClickEvents: focus intent only, keyboard shortcuts handled on stageRef
+    <ControlsPanelContext.Provider value={setPanelOpen}>
+    {/* biome-ignore lint/a11y/noStaticElementInteractions: mouse-idle tracking overlay */}
+    {/* biome-ignore lint/a11y/useKeyWithClickEvents: focus intent only, keyboard shortcuts handled on stageRef */}
     <div
       className="absolute inset-0 z-10 select-none"
       onMouseMove={resetIdle}
@@ -266,7 +296,7 @@ export function ControlsOverlay({
       onClick={onFocusStage}
       onDoubleClick={toggleFullscreen}
       onMouseLeave={() => {
-        if (qualityOpen) return;
+        if (anyMenuOpenRef.current) return;
         clearTimeout(idleRef.current);
         setVisible(false);
       }}
@@ -372,5 +402,6 @@ export function ControlsOverlay({
         </div>
       </div>
     </div>
+    </ControlsPanelContext.Provider>
   );
 }

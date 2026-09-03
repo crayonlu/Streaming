@@ -1,6 +1,6 @@
 [package]
 name = "streaming"
-version = "0.4.6"
+version = "0.5.2"
 description = "A desktop app for streaming video content from various platforms.  "
 authors = ["crayon"]
 edition = "2021"
@@ -47,3 +47,6 @@ futures = "0.3"
 tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
 flate2 = "1"
 bytes = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }

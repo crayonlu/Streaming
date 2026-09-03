@@ -469,3 +469,24 @@ async fn get_stream_sources_legacy(detail: &HuyaRoomPayload) -> Result<Vec<Strea
         })
         .collect())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Live-network probe (ignored by default): fetches real stream sources
+    /// for a live room and prints the proxied playback URLs. Point a player
+    /// or curl at the printed URL to verify the /live proxy path end to end.
+    /// Run: HUYA_PROBE_ROOM=998 cargo test --lib -- --ignored probe_huya_sources --nocapture
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "requires live network access"]
+    async fn probe_huya_sources_live() {
+        let room_id =
+            std::env::var("HUYA_PROBE_ROOM").unwrap_or_else(|_| "998".to_string());
+        let sources = get_stream_sources(&room_id).await.expect("get_stream_sources failed");
+        assert!(!sources.is_empty(), "no stream sources");
+        for s in &sources {
+            println!("[probe] {} {} {} -> {}", s.quality_label, s.cdn.clone().unwrap_or_default(), format!("{:?}", s.format), s.stream_url);
+        }
+    }
+}

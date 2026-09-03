@@ -360,13 +360,21 @@ struct SegQuery {
 }
 
 /// Proxy a single HLS media segment (TS, fMP4, etc.).
+///
+/// Streams the upstream body through instead of buffering whole segments:
+/// full-segment buffering delays first-byte delivery to the player (every
+/// segment pays the full download time before playback can start) and the
+/// shared client's 12s total timeout can abort slow segment downloads
+/// mid-flight — both surfaced as live playback stutter.
 async fn seg_handler(Query(params): Query<SegQuery>) -> Response<Body> {
     let seg_url = params.url.trim().to_string();
     if seg_url.is_empty() {
         return simple_error(StatusCode::BAD_REQUEST, "missing url");
     }
 
-    let client = crate::platforms::http::shared_client();
+    // Dedicated client: no total request timeout (a slow segment download
+    // must not be killed mid-stream); connect timeout still applies.
+    let client = crate::platforms::http::proxy_stream_client();
 
     let upstream = match client
         .get(&seg_url)
@@ -396,18 +404,45 @@ async fn seg_handler(Query(params): Query<SegQuery>) -> Response<Body> {
         .unwrap_or("video/mp2t")
         .to_string();
 
-    let bytes = match upstream.bytes().await {
-        Ok(b) => b,
-        Err(e) => {
-            tracing::warn!(url = %seg_url, error = %e, "seg read bytes failed");
-            return simple_error(StatusCode::INTERNAL_SERVER_ERROR, "read failed");
+    let mut byte_stream = upstream.bytes_stream();
+
+    // Bilibili fMP4 HLS "segment" URLs can return a nested M3U8 playlist.
+    // Sniff only the first chunk (playlists are tiny) instead of running the
+    // whole multi-megabyte body through a UTF-8 scan; if it is a playlist,
+    // buffer the rest (small) and rewrite it like stream_handler does.
+    use futures::StreamExt;
+    let first_chunk = match byte_stream.next().await {
+        Some(Ok(c)) => c,
+        Some(Err(e)) => {
+            tracing::warn!(url = %seg_url, error = %e, "seg stream error");
+            return simple_error(StatusCode::BAD_GATEWAY, "upstream stream failed");
+        }
+        None => {
+            return Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "video/mp2t")
+                .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+                .body(Body::empty())
+                .unwrap_or_else(|_| simple_error(StatusCode::INTERNAL_SERVER_ERROR, "build failed"));
         }
     };
 
-    // Check if the response is actually a nested M3U8 (Bilibili fMP4 HLS uses this)
-    let body_text = String::from_utf8_lossy(&bytes);
-    if body_text.trim().starts_with("#EXTM3U") {
-        // This is a nested M3U8 playlist — rewrite it the same way as stream_handler
+    // Empty stream edge case: fall through to an empty passthrough below.
+    let sniff = String::from_utf8_lossy(&first_chunk);
+    if sniff.trim_start().starts_with("#EXTM3U") {
+        let mut rest = Vec::new();
+        while let Some(chunk) = byte_stream.next().await {
+            match chunk {
+                Ok(c) => rest.extend_from_slice(&c),
+                Err(e) => {
+                    tracing::warn!(url = %seg_url, error = %e, "seg playlist read failed");
+                    return simple_error(StatusCode::BAD_GATEWAY, "upstream stream failed");
+                }
+            }
+        }
+        let mut playlist = sniff.into_owned().into_bytes();
+        playlist.extend_from_slice(&rest);
+
         let base = {
             let no_query = seg_url.split('?').next().unwrap_or(&seg_url);
             match no_query.rfind('/') {
@@ -417,7 +452,8 @@ async fn seg_handler(Query(params): Query<SegQuery>) -> Response<Body> {
         };
 
         let port = proxy_port();
-        let rewritten_lines: Vec<String> = body_text
+        let text = String::from_utf8_lossy(&playlist);
+        let rewritten_lines: Vec<String> = text
             .lines()
             .map(|line| {
                 let trimmed = line.trim();
@@ -445,16 +481,19 @@ async fn seg_handler(Query(params): Query<SegQuery>) -> Response<Body> {
             .unwrap_or_else(|_| simple_error(StatusCode::INTERNAL_SERVER_ERROR, "build failed"));
     }
 
+    // Regular media segment: stream the first chunk + the remainder through.
+    let body_stream = futures::stream::once(async move { Ok::<_, std::io::Error>(first_chunk) })
+        .chain(byte_stream.map(|r| r.map_err(std::io::Error::other)));
+
     Response::builder()
         .status(StatusCode::OK)
         .header(
             header::CONTENT_TYPE,
             HeaderValue::from_str(&ct).unwrap_or_else(|_| HeaderValue::from_static("video/mp2t")),
         )
-        .header(header::CONTENT_LENGTH, bytes.len().to_string())
         .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
         .header(header::CACHE_CONTROL, "no-cache")
-        .body(Body::from(bytes))
+        .body(Body::from_stream(body_stream))
         .unwrap_or_else(|_| simple_error(StatusCode::INTERNAL_SERVER_ERROR, "build failed"))
 }
 

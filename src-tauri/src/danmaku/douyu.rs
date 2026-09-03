@@ -105,19 +105,13 @@ fn extract_chat(
 }
 
 async fn connect_once(room_id: &str, app: &AppHandle, shutdown: &mut mpsc::Receiver<()>) -> ConnOutcome {
-    let mut request = match WS_URL.into_client_request() {
+    let request = match WS_URL.into_client_request() {
         Ok(r) => r,
         Err(e) => {
             tracing::warn!(error = %e, "douyu ws request build failed");
             return ConnOutcome::Disconnected { got_message: false };
         }
     };
-    // Douyu's gateway requires the binary subprotocol marker.
-    match "binary".parse() {
-        Ok(v) => request.headers_mut().insert("Sec-WebSocket-Protocol", v),
-        Err(_) => return ConnOutcome::Disconnected { got_message: false },
-    };
-
     let (ws_stream, _) = match tokio_tungstenite::connect_async(request).await {
         Ok(x) => x,
         Err(e) => {
@@ -131,7 +125,9 @@ async fn connect_once(room_id: &str, app: &AppHandle, shutdown: &mut mpsc::Recei
     if write.send(Message::Binary(login.into())).await.is_err() {
         return ConnOutcome::Disconnected { got_message: false };
     }
-    let join = encode_frame(&format!("type@=joingroup/rid={room_id}/gid@=-9999/"));
+    // NOTE: `rid@=` (not `rid=`) — the join key follows the same STT k/v
+    // format as every other field; a malformed key silently joins nothing.
+    let join = encode_frame(&format!("type@=joingroup/rid@={room_id}/gid@=-9999/"));
     if write.send(Message::Binary(join.into())).await.is_err() {
         return ConnOutcome::Disconnected { got_message: false };
     }
@@ -213,6 +209,71 @@ pub async fn run(room_id: String, app: AppHandle, mut shutdown: mpsc::Receiver<(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Instant;
+
+    /// Live-network probe (ignored by default): verifies WS connect, login,
+    /// join, heartbeat, and that chat messages actually arrive.
+    /// Run: DOUYU_PROBE_ROOM=9999 cargo test --lib -- --ignored probe_douyu --nocapture
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "requires live network access"]
+    async fn probe_douyu_danmaku_live() {
+        let room_id =
+            std::env::var("DOUYU_PROBE_ROOM").unwrap_or_else(|_| "9999".to_string());
+
+        let request = WS_URL.into_client_request().expect("request build");
+        // Note: the "binary" subprotocol must NOT be requested — douyu's
+        // gateway never echoes it and tungstenite aborts the handshake.
+        let (ws, _) =
+            tokio_tungstenite::connect_async(request).await.expect("ws connect failed");
+        let (mut write, mut read) = ws.split();
+        write
+            .send(Message::Binary(encode_frame(&format!("type@=loginreq/roomid@={room_id}/")).into()))
+            .await
+            .expect("login send failed");
+        write
+            .send(Message::Binary(encode_frame(&format!("type@=joingroup/rid@={room_id}/gid@=-9999/")).into()))
+            .await
+            .expect("join send failed");
+
+        let started = Instant::now();
+        let mut heartbeat = tokio::time::interval(Duration::from_secs(20));
+        let mut chat = 0usize;
+        let mut other = 0usize;
+        loop {
+            tokio::select! {
+                _ = heartbeat.tick() => {
+                    let _ = write.send(Message::Binary(encode_frame("type@=mrkl/").into())).await;
+                }
+                msg = tokio::time::timeout(Duration::from_secs(5), read.next()) => {
+                    match msg {
+                        Ok(Some(Ok(m))) => {
+                            if let Message::Binary(data) = m {
+                                for frame in decode_frames(&data) {
+                                    if extract_chat(&frame).is_some() {
+                                        chat += 1;
+                                        println!("[probe] chat: {}: {}", frame.get("nn").cloned().unwrap_or_default(), frame.get("txt").cloned().unwrap_or_default());
+                                    } else {
+                                        other += 1;
+                                        if other <= 5 {
+                                            println!("[probe] other frame type={:?}", frame.get("type"));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Ok(Some(Err(e))) => panic!("ws error after {elapsed:?}: {e}", elapsed = started.elapsed()),
+                        Ok(None) => panic!("connection closed after {elapsed:?} (chat={chat})", elapsed = started.elapsed()),
+                        Err(_) => {} // read idle
+                    }
+                }
+            }
+            if chat >= 3 || started.elapsed() > Duration::from_secs(30) {
+                break;
+            }
+        }
+        println!("[probe] done: chat={chat} other={other}");
+        assert!(chat >= 1, "no chat messages within 30s");
+    }
 
     #[test]
     fn encode_frame_matches_douyu_layout() {

@@ -61,6 +61,30 @@ pub fn custom_client_builder() -> reqwest::ClientBuilder {
     }
 }
 
+/// Client for streaming media through the local proxy (HLS segments, live
+/// FLV). No total request timeout — a segment download must not be killed
+/// mid-stream; only the connect phase is bounded.
+pub fn proxy_stream_client() -> &'static Client {
+    static NO_PROXY: OnceLock<Client> = OnceLock::new();
+    static SYS_PROXY: OnceLock<Client> = OnceLock::new();
+
+    let build = || {
+        let b = Client::builder().connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS));
+        if USE_SYSTEM_PROXY.load(Ordering::Relaxed) {
+            b.build()
+        } else {
+            b.no_proxy().build()
+        }
+        .unwrap_or_else(|_| Client::new())
+    };
+
+    if USE_SYSTEM_PROXY.load(Ordering::Relaxed) {
+        SYS_PROXY.get_or_init(build)
+    } else {
+        NO_PROXY.get_or_init(build)
+    }
+}
+
 /// Run an async operation with bounded retry.
 /// - `attempts` is the total number of tries (so 3 = 1 original + 2 retries).
 /// - backoff grows linearly starting at 250ms.

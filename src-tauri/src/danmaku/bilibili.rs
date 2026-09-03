@@ -452,6 +452,92 @@ pub async fn run(room_id: String, app: AppHandle, mut shutdown: mpsc::Receiver<(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Instant;
+
+    /// Live-network probe (ignored by default): verifies getDanmuInfo, the
+    /// WS handshake, auth reply, and that the server actually pushes chat.
+    /// Run: cargo test --lib -- --ignored probe_bilibili --nocapture
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "requires live network access"]
+    async fn probe_bilibili_danmaku_live() {
+        let client = crate::platforms::http::shared_client();
+        let (real_room_id, _) =
+            crate::platforms::bilibili::room::resolve_room_id_and_live(client, "6")
+                .await
+                .expect("resolve room 6");
+        println!("[probe] real room id: {real_room_id}");
+
+        let mut buvid_cookie = String::new();
+        let _ = crate::platforms::bilibili::room::ensure_buvid(client, &mut buvid_cookie).await;
+        let buvid = buvid_cookie
+            .split(';')
+            .filter_map(|kv| kv.trim().split_once('='))
+            .find(|(k, _)| k.trim() == "buvid3")
+            .map(|(_, v)| v.trim().to_string())
+            .unwrap_or_default();
+        println!("[probe] buvid: {buvid}");
+
+        let info = fetch_danmu_info(client, &real_room_id, None)
+            .await
+            .expect("getDanmuInfo failed");
+        println!("[probe] danmu server {}:{} token_len={}", info.host, info.wss_port, info.token.len());
+
+        let url = format!("wss://{}:{}/sub", info.host, info.wss_port);
+        let (ws, _) = tokio_tungstenite::connect_async(url).await.expect("ws connect failed");
+        let (mut write, mut read) = ws.split();
+        let auth = serde_json::json!({
+            "uid": 0i64,
+            "roomid": real_room_id.parse::<i64>().unwrap_or(0),
+            "protover": 2,
+            "buvid": buvid,
+            "platform": "web",
+            "type": 2,
+            "key": info.token,
+        });
+        write
+            .send(Message::Binary(
+                encode_packet(7, 1, auth.to_string().as_bytes()).into(),
+            ))
+            .await
+            .expect("auth send failed");
+
+        let started = Instant::now();
+        let mut ready = false;
+        let mut chat = 0usize;
+        let mut online = 0usize;
+        while started.elapsed() < Duration::from_secs(30) && chat < 3 {
+            let msg = match tokio::time::timeout(Duration::from_secs(5), read.next()).await {
+                Ok(Some(Ok(m))) => m,
+                Ok(Some(Err(e))) => panic!("ws error after {elapsed:?}: {e}", elapsed = started.elapsed()),
+                Ok(None) => {
+                    panic!("connection closed after {elapsed:?} (chat={chat}, ready={ready})", elapsed = started.elapsed());
+                }
+                Err(_) => continue, // 5s read idle — loop until overall deadline
+            };
+            if let Message::Close(_) = msg {
+                panic!("server sent Close after {elapsed:?} (chat={chat}, ready={ready})", elapsed = started.elapsed());
+            }
+            if let Message::Binary(data) = msg {
+                for m in decode_packets(&data) {
+                    match m.kind {
+                        "ready" => {
+                            ready = true;
+                            println!("[probe] auth reply received (op 8)");
+                        }
+                        "chat" => {
+                            chat += 1;
+                            println!("[probe] chat: {:?}: {:?}", m.user, m.content);
+                        }
+                        "online" => online += 1,
+                        _ => {}
+                    }
+                }
+            }
+        }
+        println!("[probe] done: ready={ready} chat={chat} online_events={online}");
+        assert!(ready, "no auth reply (op 8) within 30s");
+        assert!(chat >= 1, "no chat messages within 30s (room may be quiet)");
+    }
 
     #[test]
     fn encode_packet_layout_big_endian() {

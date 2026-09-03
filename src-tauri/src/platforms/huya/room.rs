@@ -8,7 +8,7 @@ use regex::Regex;
 use reqwest::header::{ACCEPT, ACCEPT_LANGUAGE, ORIGIN, REFERER, USER_AGENT};
 use serde_json::Value;
 
-use super::{normalize_url, value_to_string, DESKTOP_UA, MOBILE_UA};
+use super::{normalize_url, stream_url, value_to_string, DESKTOP_UA, MOBILE_UA};
 use crate::models::{PlatformId, RoomDetail, StreamFormat, StreamSource};
 use crate::platforms::http::shared_client;
 
@@ -119,7 +119,12 @@ fn generate_web_anti_code(stream_name: &str, anti_code: &str) -> Result<String, 
 }
 
 pub(crate) async fn fetch_room_detail_payload(room_id: &str) -> Result<HuyaRoomPayload, String> {
-    let payload: Value = shared_client()
+    let payload = fetch_profile_room_payload(room_id).await?;
+    Ok(detail_from_payload(&payload, room_id))
+}
+
+async fn fetch_profile_room_payload(room_id: &str) -> Result<Value, String> {
+    shared_client()
         .get("https://mp.huya.com/cache.php")
         .header(ACCEPT, "*/*")
         .header(ORIGIN, "https://m.huya.com")
@@ -138,8 +143,10 @@ pub(crate) async fn fetch_room_detail_payload(room_id: &str) -> Result<HuyaRoomP
         .map_err(|e| format!("huya room detail status error: {e}"))?
         .json()
         .await
-        .map_err(|e| format!("huya room detail parse error: {e}"))?;
+        .map_err(|e| format!("huya room detail parse error: {e}"))
+}
 
+fn detail_from_payload(payload: &Value, room_id: &str) -> HuyaRoomPayload {
     let data = payload.get("data").cloned().unwrap_or(Value::Null);
     let live_data = data.get("liveData").cloned().unwrap_or(Value::Null);
     let normalized_room_id = value_to_string(
@@ -182,7 +189,7 @@ pub(crate) async fn fetch_room_detail_payload(room_id: &str) -> Result<HuyaRoomP
             .unwrap_or(0)
             == 2;
 
-    Ok(HuyaRoomPayload {
+    HuyaRoomPayload {
         normalized_room_id,
         title,
         streamer_name,
@@ -194,7 +201,7 @@ pub(crate) async fn fetch_room_detail_payload(room_id: &str) -> Result<HuyaRoomP
         cover_url: if cover.is_empty() { None } else { Some(cover) },
         area_name,
         is_live,
-    })
+    }
 }
 
 async fn fetch_web_stream_candidates(room_id: &str) -> Result<Vec<WebStreamCandidate>, String> {
@@ -342,11 +349,97 @@ pub async fn get_room_detail(room_id: &str) -> Result<RoomDetail, String> {
 }
 
 pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, String> {
-    let detail = fetch_room_detail_payload(room_id).await?;
+    let payload = fetch_profile_room_payload(room_id).await?;
+    let detail = detail_from_payload(&payload, room_id);
     if !detail.is_live {
         return Err("主播未开播".to_string());
     }
 
+    let candidates = stream_url::extract_stream_candidates(&payload);
+    if candidates.is_empty() {
+        // Legacy fallback: HTML scrape + self-signed anti code (pre-Tars path).
+        return get_stream_sources_legacy(&detail).await;
+    }
+
+    let bitrates = stream_url::extract_available_bitrates(&payload);
+    let hd = bitrates.last().copied().unwrap_or(4000);
+    let sd = bitrates.first().copied().unwrap_or(2000);
+
+    // One WUP token exchange per CDN line, in parallel.
+    use tokio::task::JoinSet;
+    let mut join_set = JoinSet::new();
+    for candidate in candidates {
+        join_set.spawn(async move {
+            let token = stream_url::huya_get_cdn_token_info_ex(
+                shared_client(),
+                &candidate.flv_url,
+                &candidate.stream_name,
+            )
+            .await?;
+            let anti = stream_url::build_huya_anti_code(
+                &candidate.stream_name,
+                candidate.presenter_uid,
+                &token,
+            )?;
+            let base = stream_url::enforce_https(&format!(
+                "{}/{}.flv?{}&codec=264",
+                candidate.flv_url, candidate.stream_name, anti
+            ));
+            Ok::<(stream_url::HuyaStreamCandidate, String), String>((candidate, base))
+        });
+    }
+
+    let mut sources: Vec<StreamSource> = Vec::new();
+    while let Some(result) = join_set.join_next().await {
+        let Ok(Ok((candidate, base))) = result else {
+            continue;
+        };
+        let cdn_label = {
+            let lower = candidate.cdn.to_ascii_lowercase();
+            match lower.as_str() {
+                "tx" => "腾讯线路".to_string(),
+                "al" => "阿里线路".to_string(),
+                "hs" => "虎牙线路".to_string(),
+                _ => lower,
+            }
+        };
+        let mut variants = vec![
+            ("source", "原画", base.clone()),
+            ("hd", "高清", format!("{base}&ratio={hd}")),
+        ];
+        if sd != hd {
+            variants.push(("sd", "标清", format!("{base}&ratio={sd}")));
+        }
+        for (key, label, url) in variants {
+            sources.push(StreamSource {
+                id: format!("huya-{key}-{}", sources.len()),
+                platform: PlatformId::Huya,
+                room_id: detail.normalized_room_id.clone(),
+                quality_key: key.to_string(),
+                quality_label: label.to_string(),
+                // The token is bound to the HYSDK UA — must be played through
+                // the local proxy, which injects it (proxy.rs live_handler).
+                stream_url: crate::proxy::proxy_live(&url),
+                format: StreamFormat::Flv,
+                is_default: Some(sources.is_empty()),
+                cdn: Some(cdn_label.clone()),
+            });
+        }
+    }
+
+    if sources.is_empty() {
+        // All WUP exchanges failed — fall back to the legacy self-signed path
+        // rather than failing the room entirely.
+        return get_stream_sources_legacy(&detail).await;
+    }
+    Ok(sources)
+}
+
+/// Legacy pre-Tars path: scrape the room HTML for sFlvAntiCode and sign it
+/// client-side with a random uid. Kept as a fallback while the WUP flow
+/// proves itself; note these URLs are NOT proxied (historically playable
+/// without the HYSDK UA).
+async fn get_stream_sources_legacy(detail: &HuyaRoomPayload) -> Result<Vec<StreamSource>, String> {
     let candidates = fetch_web_stream_candidates(&detail.normalized_room_id).await?;
     let Some(candidate) = candidates.first() else {
         return Err("未获取到可用播放源".to_string());

@@ -2,8 +2,10 @@ use serde_json::Value;
 
 pub(crate) mod category;
 pub(crate) mod featured;
+pub(crate) mod jce;
 pub(crate) mod room;
 pub(crate) mod search;
+pub(crate) mod stream_url;
 
 pub use category::{check_rooms_live, get_categories, get_rooms_by_category};
 pub use featured::get_featured;

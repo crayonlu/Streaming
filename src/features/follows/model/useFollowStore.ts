@@ -6,6 +6,7 @@ import {
   patchFollowSnapshot,
 } from "@/shared/api/commands";
 import type { FollowRecord } from "@/shared/types/domain";
+import { runPool } from "./runPool";
 
 interface FollowState {
   follows: FollowRecord[];
@@ -35,8 +36,11 @@ export const useFollowStore = create<FollowState>((set, get) => ({
     try {
       const data = await listFollows();
       set({ follows: data, isLoading: false });
-      // Run both refreshes concurrently; neither blocks initial render.
-      void get().refreshLiveStatus();
+      // Two-level refresh (dart_simple_live pattern): the lightweight live-
+      // status batch runs first; only rooms that are actually live get the
+      // heavy getRoomDetail call. Offline rooms' metadata rarely changes, so
+      // we skip them unless their local snapshot is incomplete.
+      await get().refreshLiveStatus();
       void get().refreshFollowDetails();
     } catch {
       set({ isLoading: false, error: true });
@@ -58,35 +62,34 @@ export const useFollowStore = create<FollowState>((set, get) => ({
   },
 
   refreshFollowDetails: async () => {
-    const { follows } = get();
+    const { follows, liveStatusMap } = get();
     if (follows.length === 0) return;
 
-    await Promise.allSettled(
-      follows.map(async (f) => {
-        try {
-          const detail = await getRoomDetail(f.platform, f.roomId);
-          const patch = {
-            title: detail.title || f.title,
-            streamerName: detail.streamerName || f.streamerName,
-            coverUrl: detail.coverUrl || f.coverUrl,
-          };
-          if (
-            patch.title !== f.title ||
-            patch.streamerName !== f.streamerName ||
-            patch.coverUrl !== f.coverUrl
-          ) {
-            await patchFollowSnapshot(f.platform, f.roomId, patch);
-            set((state) => ({
-              follows: state.follows.map((r) =>
-                r.platform === f.platform && r.roomId === f.roomId ? { ...r, ...patch } : r,
-              ),
-            }));
-          }
-        } catch {
-          // Silently ignore — we still have the cached snapshot as fallback.
-        }
-      }),
-    );
+    const targets = follows.filter((f) => liveStatusMap[f.id] === true || !f.coverUrl || !f.title);
+    if (targets.length === 0) return;
+
+    // Bounded pool (not Promise.all over everything) — hammering one
+    // platform with dozens of concurrent detail requests trips rate limits.
+    await runPool(targets, 3, async (f) => {
+      const detail = await getRoomDetail(f.platform, f.roomId);
+      const patch = {
+        title: detail.title || f.title,
+        streamerName: detail.streamerName || f.streamerName,
+        coverUrl: detail.coverUrl || f.coverUrl,
+      };
+      if (
+        patch.title !== f.title ||
+        patch.streamerName !== f.streamerName ||
+        patch.coverUrl !== f.coverUrl
+      ) {
+        await patchFollowSnapshot(f.platform, f.roomId, patch);
+        set((state) => ({
+          follows: state.follows.map((r) =>
+            r.platform === f.platform && r.roomId === f.roomId ? { ...r, ...patch } : r,
+          ),
+        }));
+      }
+    });
   },
 
   removeFollow: (platform, roomId) => {

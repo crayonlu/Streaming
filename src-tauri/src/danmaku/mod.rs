@@ -5,6 +5,7 @@
 //! Each platform client normalizes messages into `DanmakuEvent` and pushes
 //! them to the frontend via a single Tauri channel: `danmaku-event`.
 
+pub mod bilibili;
 pub mod douyu;
 mod types;
 
@@ -138,8 +139,11 @@ pub async fn start_danmaku(
         PlatformId::Douyu => {
             tokio::spawn(async move { douyu::run(room, app_clone, rx).await });
         }
-        PlatformId::Bilibili | PlatformId::Huya => {
-            // Task 9 / Task 10 wire these in.
+        PlatformId::Bilibili => {
+            tokio::spawn(async move { bilibili::run(room, app_clone, rx).await });
+        }
+        PlatformId::Huya => {
+            // Task 10 wires this in.
             return Err("该平台弹幕尚未实现".to_string());
         }
     }

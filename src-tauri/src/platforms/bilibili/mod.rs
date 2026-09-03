@@ -11,11 +11,12 @@ pub(crate) mod featured;
 pub(crate) mod replay;
 pub(crate) mod room;
 pub(crate) mod search;
+pub(crate) mod wbi;
 
 pub use category::{check_rooms_live, get_categories, get_rooms_by_category};
 pub use featured::get_featured;
 pub use replay::persist_sessdata;
-pub(crate) use room::ensure_buvid;
+pub(crate) use room::{ensure_buvid, resolve_room_id_and_live};
 pub use room::{get_room_detail, get_stream_sources};
 pub use search::search_rooms;
 

@@ -167,8 +167,12 @@ export function VideoPlayer({
         />
       )}
 
+      {/* Informational overlays below are pointer-events-none on purpose:
+          they sit above the controls bar, and without this a buffering or
+          error state swallows every click — including the fullscreen exit
+          button (only Esc worked). */}
       {!online && streamUrl && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
+        <div className="absolute inset-0 z-20 pointer-events-none flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
           <WifiOff size={28} strokeWidth={1.6} className="text-white/60" />
           <span className="text-sm text-white/70">网络已断开 · 等待重连</span>
         </div>
@@ -179,7 +183,7 @@ export function VideoPlayer({
 
       {/* Error: in-place recovery exhausted */}
       {error && streamUrl && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
+        <div className="absolute inset-0 z-20 pointer-events-none flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
           <AlertCircle size={28} strokeWidth={1.6} className="text-white/60" />
           <span className="text-sm text-white/70">播放失败 · 正在尝试恢复</span>
           {detectHevcSupport() === "none" && (
@@ -220,7 +224,7 @@ function LoadingOverlay({
 
   if (!buffering) return null;
   return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40">
+    <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center bg-black/40">
       <Loader2 size={30} className="animate-spin text-white/60" strokeWidth={1.8} />
     </div>
   );

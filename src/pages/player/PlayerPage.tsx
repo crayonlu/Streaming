@@ -25,6 +25,7 @@ import { supportsReplay as canReplay } from "@/shared/lib/replay";
 import type { PlatformId, StreamSource } from "@/shared/types/domain";
 import { StatusView } from "@/shared/ui/StatusView";
 import { getPlaybackStatus } from "./playbackStatus";
+import { type ManualSelection, selectionOf, selectStreamSource } from "./selectSource";
 
 // ── PlayerPage ────────────────────────────────────────────────────────────────
 
@@ -34,7 +35,7 @@ export function PlayerPage() {
   const platform = params.platform;
   const roomId = params.roomId;
 
-  const [manualSourceId, setManualSourceId] = useState<string | null>(null);
+  const [manualSelection, setManualSelection] = useState<ManualSelection | null>(null);
   const [failedSourceIds, setFailedSourceIds] = useState<Set<string>>(new Set());
   const [retryKey, setRetryKey] = useState(0);
   const { loginState: bilibiliLoginState, login: handleBilibiliLogin } = useBilibiliAuth(platform);
@@ -72,17 +73,11 @@ export function PlayerPage() {
     }
   }, [room, platform, roomId]);
 
-  // Resolve the active source (highest-priority non-failed)
-  const selectedSource: StreamSource | null = useMemo(() => {
-    if (!sources.length) return null;
-    if (manualSourceId) {
-      const matched = sources.find((s) => s.id === manualSourceId);
-      if (matched && !failedSourceIds.has(matched.id)) return matched;
-    }
-    const available = sources.filter((s) => !failedSourceIds.has(s.id));
-    if (!available.length) return null;
-    return available.find((s) => s.isDefault) ?? available[0];
-  }, [sources, manualSourceId, failedSourceIds]);
+  // Resolve the active source (manual pick by stable triple, else default)
+  const selectedSource: StreamSource | null = useMemo(
+    () => selectStreamSource(sources, manualSelection, failedSourceIds),
+    [sources, manualSelection, failedSourceIds],
+  );
 
   const handleSourceError = useCallback((source: StreamSource) => {
     setFailedSourceIds((prev) => new Set([...prev, source.id]));
@@ -90,7 +85,7 @@ export function PlayerPage() {
 
   const handleRetryAll = () => {
     setFailedSourceIds(new Set());
-    setManualSourceId(null);
+    setManualSelection(null);
     setRetryKey((k) => k + 1);
   };
 
@@ -310,7 +305,8 @@ export function PlayerPage() {
                 qualities={qualityItems}
                 selectedQualityId={selectedSource.id}
                 onQualityChange={(id) => {
-                  setManualSourceId(id);
+                  const picked = sources.find((s) => s.id === id);
+                  if (picked) setManualSelection(selectionOf(picked));
                   setFailedSourceIds((prev) => {
                     const next = new Set(prev);
                     next.delete(id);

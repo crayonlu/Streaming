@@ -14,6 +14,11 @@ interface DanmakuSettings {
   setOpacity: (v: number) => void;
   setArea: (v: number) => void;
   setFontSize: (v: DanmakuFontSize) => void;
+
+  /** Runtime state (NOT persisted): current room's online viewer count,
+   *  fed by danmaku "online" events. Null when unknown / no room. */
+  onlineCount: number | null;
+  setOnlineCount: (v: number | null) => void;
 }
 
 const LS_KEY = "streaming_danmaku_settings";
@@ -82,4 +87,6 @@ export const useDanmakuStore = create<DanmakuSettings>((set, get) => ({
     const { enabled, opacity, area, fontSize } = get();
     persist({ enabled, opacity, area, fontSize });
   },
+  onlineCount: null,
+  setOnlineCount: (v) => set({ onlineCount: v }),
 }));

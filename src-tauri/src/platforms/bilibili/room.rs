@@ -425,11 +425,13 @@ pub async fn get_room_detail(
         .and_then(|v| v.get("description"))
         .and_then(Value::as_str)
         .map(|s| s.to_string());
-    let live_status = room_init
+    let live_status_raw = room_init
         .get("live_status")
         .and_then(Value::as_i64)
-        .unwrap_or(0)
-        == 1;
+        .unwrap_or(0);
+    let live_status = live_status_raw == 1;
+    // live_status == 2: looping a recording, not a real live broadcast.
+    let is_loop = live_status_raw == 2;
 
     Ok(RoomDetail {
         id: format!("bilibili-{normalized_room_id}"),
@@ -450,6 +452,7 @@ pub async fn get_room_detail(
         area_name,
         description,
         is_live: live_status || live_status_from_init,
+        is_loop,
         followed: false,
     })
 }

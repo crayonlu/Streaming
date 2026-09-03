@@ -344,6 +344,7 @@ pub async fn get_room_detail(room_id: &str) -> Result<RoomDetail, String> {
         area_name: detail.area_name,
         description: None,
         is_live: detail.is_live,
+        is_loop: false, // huya has no loop-replay concept in this payload
         followed: false,
     })
 }

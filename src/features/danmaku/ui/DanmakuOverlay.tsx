@@ -47,6 +47,9 @@ export function DanmakuOverlay({ platform, roomId }: DanmakuOverlayProps) {
     const host = hostRef.current;
     if (!host) return;
 
+    // New room — clear the previous room's online count.
+    useDanmakuStore.getState().setOnlineCount(null);
+
     const s = useDanmakuStore.getState();
     const fontPx = FONT_SIZE_MAP[s.fontSize];
     const danmu = new DanmuJs({
@@ -83,6 +86,14 @@ export function DanmakuOverlay({ platform, roomId }: DanmakuOverlayProps) {
       if (!parsed.success) return;
       const msg = parsed.data;
       if (msg.platform !== platform || msg.roomId !== roomId) return;
+
+      // Online-count events feed the room info bar, not the overlay.
+      if (msg.kind === "online") {
+        if (typeof msg.count === "number") {
+          useDanmakuStore.getState().setOnlineCount(msg.count);
+        }
+        return;
+      }
       if (msg.kind !== "chat") return;
 
       const state = useDanmakuStore.getState();

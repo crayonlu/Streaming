@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useDanmakuStore } from "@/features/danmaku/model/useDanmakuStore";
 import { DanmakuControls } from "@/features/danmaku/ui/DanmakuControls";
 import { DanmakuOverlay } from "@/features/danmaku/ui/DanmakuOverlay";
 import { FollowButton } from "@/features/follow-button/ui/FollowButton";
@@ -29,6 +30,10 @@ import { type ManualSelection, selectionOf, selectStreamSource } from "./selectS
 
 // ── PlayerPage ────────────────────────────────────────────────────────────────
 
+function formatOnline(n: number): string {
+  return n >= 10_000 ? `${(n / 10_000).toFixed(1)}万` : String(n);
+}
+
 export function PlayerPage() {
   const params = useParams();
   const navigate = useNavigate();
@@ -37,9 +42,11 @@ export function PlayerPage() {
 
   const [manualSelection, setManualSelection] = useState<ManualSelection | null>(null);
   const [failedSourceIds, setFailedSourceIds] = useState<Set<string>>(new Set());
+  const [stallCount, setStallCount] = useState(0);
   const [retryKey, setRetryKey] = useState(0);
   const { loginState: bilibiliLoginState, login: handleBilibiliLogin } = useBilibiliAuth(platform);
   const streamLifecycle = useStreamLifecycle();
+  const onlineCount = useDanmakuStore((s) => s.onlineCount);
 
   const validRoute = isPlatform(platform) && !!roomId;
 
@@ -86,6 +93,7 @@ export function PlayerPage() {
   const handleRetryAll = () => {
     setFailedSourceIds(new Set());
     setManualSelection(null);
+    setStallCount(0);
     setRetryKey((k) => k + 1);
   };
 
@@ -109,6 +117,7 @@ export function PlayerPage() {
     (reason: "error" | "waiting-timeout") => {
       if (streamQuery.isFetching) return;
       streamLifecycle.recordFetch();
+      setStallCount((c) => c + 1);
       setFailedSourceIds((prev) => {
         const next = new Set(prev);
         if (selectedSource) next.delete(selectedSource.id);
@@ -192,6 +201,26 @@ export function PlayerPage() {
                   <>
                     <span className="text-border shrink-0">·</span>
                     <span className="clamp-1 max-w-25 shrink-0">{room.areaName}</span>
+                  </>
+                )}
+                {room.isLoop ? (
+                  <>
+                    <span className="text-border shrink-0">·</span>
+                    <span className="shrink-0 text-amber-500/90">轮播回放</span>
+                  </>
+                ) : room.isLive ? (
+                  <>
+                    <span className="text-border shrink-0">·</span>
+                    <span className="shrink-0 inline-flex items-center gap-1 text-red-400">
+                      <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                      直播中
+                    </span>
+                  </>
+                ) : null}
+                {room.isLive && onlineCount != null && (
+                  <>
+                    <span className="text-border shrink-0">·</span>
+                    <span className="shrink-0">{formatOnline(onlineCount)} 人在看</span>
                   </>
                 )}
               </div>
@@ -316,6 +345,9 @@ export function PlayerPage() {
                 onError={() => handleSourceError(selectedSource)}
                 onPlaybackStall={handlePlaybackStall}
                 onUserPlay={handleUserPlay}
+                recoveryHint={
+                  stallCount > 0 ? `播放失败 · 正在重新拉流（第 ${stallCount} 次）` : undefined
+                }
                 overlaySlot={
                   room?.isLive && isPlatform(platform) ? (
                     <DanmakuOverlay platform={platform} roomId={roomId as string} />

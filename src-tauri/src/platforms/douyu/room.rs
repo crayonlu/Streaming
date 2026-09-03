@@ -395,6 +395,8 @@ pub async fn get_room_detail(room_id: &str) -> Result<RoomDetail, String> {
         .and_then(Value::as_str)
         .map(|s| s.to_string());
     let is_live = room.get("show_status").and_then(Value::as_i64).unwrap_or(0) == 1;
+    // video_loop == 1: the room is replaying a recording, not actually live.
+    let is_loop = room.get("video_loop").and_then(Value::as_i64).unwrap_or(0) == 1;
 
     Ok(RoomDetail {
         id: format!("douyu-{rid}"),
@@ -415,6 +417,7 @@ pub async fn get_room_detail(room_id: &str) -> Result<RoomDetail, String> {
         area_name,
         description,
         is_live,
+        is_loop,
         followed: false,
     })
 }

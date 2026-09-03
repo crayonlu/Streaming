@@ -24,6 +24,8 @@ export interface RoomDetail {
   areaName?: string;
   description?: string;
   isLive: boolean;
+  /** Playing a looped recording, not a real live broadcast. */
+  isLoop?: boolean;
   followed: boolean;
 }
 

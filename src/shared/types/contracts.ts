@@ -20,6 +20,7 @@ export const roomCardSchema = z.object({
   areaName: z.string().optional(),
   viewerCountText: z.string().optional(),
   isLive: z.boolean(),
+  isLoop: z.boolean().optional(),
   followed: z.boolean(),
 });
 

@@ -264,6 +264,7 @@ export function ControlsOverlay({
       onMouseMove={resetIdle}
       onMouseEnter={resetIdle}
       onClick={onFocusStage}
+      onDoubleClick={toggleFullscreen}
       onMouseLeave={() => {
         if (qualityOpen) return;
         clearTimeout(idleRef.current);
@@ -279,6 +280,7 @@ export function ControlsOverlay({
           visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1 pointer-events-none",
         )}
         onClick={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => e.stopPropagation()}
         onMouseMove={(e) => e.stopPropagation()}
       >
         {/* Gradient scrim */}

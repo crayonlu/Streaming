@@ -47,6 +47,9 @@ export interface VideoPlayerProps {
   overlaySlot?: React.ReactNode;
   /** Extra buttons in the right cluster of the controls bar. */
   controlsEndSlot?: React.ReactNode;
+  /** Overrides the static error-overlay text during stall recovery
+   *  (e.g. "播放失败 · 正在重新拉流（第 2 次）"). */
+  recoveryHint?: string;
 }
 
 export function VideoPlayer({
@@ -66,6 +69,7 @@ export function VideoPlayer({
   instanceRef,
   overlaySlot,
   controlsEndSlot,
+  recoveryHint,
 }: VideoPlayerProps) {
   const { videoRef, controller, ready, error } = usePlayerEngine({
     url: streamUrl,
@@ -185,7 +189,7 @@ export function VideoPlayer({
       {error && streamUrl && (
         <div className="absolute inset-0 z-20 pointer-events-none flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
           <AlertCircle size={28} strokeWidth={1.6} className="text-white/60" />
-          <span className="text-sm text-white/70">播放失败 · 正在尝试恢复</span>
+          <span className="text-sm text-white/70">{recoveryHint ?? "播放失败 · 正在尝试恢复"}</span>
           {detectHevcSupport() === "none" && (
             <span className="text-xs text-white/40">
               当前系统可能缺少 HEVC 解码支持（Windows 请安装「HEVC 视频扩展」）

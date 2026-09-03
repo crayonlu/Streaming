@@ -108,6 +108,28 @@ struct DouyuRateVariant {
     rate: i32,
 }
 
+/// scdn-prefixed CDNs are Douyu's secondary/付费 nodes — keep them as
+/// last-resort fallback (dart_simple_live & DTV field experience).
+fn order_cdns(mut cdns: Vec<String>) -> Vec<String> {
+    cdns.sort_by_key(|cdn| cdn.starts_with("scdn"));
+    cdns
+}
+
+/// Douyu rate 0 means 原画 (source quality) — it must outrank every
+/// positive rate, which naive `Reverse(rate)` sorting gets wrong.
+fn variant_rank(rate: i32) -> i32 {
+    if rate == 0 { i32::MAX } else { rate }
+}
+
+/// The server-provided name for rate=0 is unreliable ("默认"/empty on some
+/// rooms); normalize it to 原画.
+fn quality_label_for(rate: i32, server_name: &str) -> String {
+    if rate == 0 {
+        return "原画".to_string();
+    }
+    server_name.to_string()
+}
+
 // ── DouyuClient: handles signing & stream URL resolution ─────────────────────
 
 struct DouyuClient {
@@ -373,6 +395,8 @@ pub async fn get_room_detail(room_id: &str) -> Result<RoomDetail, String> {
         .and_then(Value::as_str)
         .map(|s| s.to_string());
     let is_live = room.get("show_status").and_then(Value::as_i64).unwrap_or(0) == 1;
+    // video_loop == 1: the room is replaying a recording, not actually live.
+    let is_loop = room.get("video_loop").and_then(Value::as_i64).unwrap_or(0) == 1;
 
     Ok(RoomDetail {
         id: format!("douyu-{rid}"),
@@ -393,6 +417,7 @@ pub async fn get_room_detail(room_id: &str) -> Result<RoomDetail, String> {
         area_name,
         description,
         is_live,
+        is_loop,
         followed: false,
     })
 }
@@ -430,9 +455,9 @@ pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, Stri
         }
 
         let mut variants = play_info.variants.clone();
-        variants.sort_by_key(|v| std::cmp::Reverse(v.rate));
+        variants.sort_by_key(|v| std::cmp::Reverse(variant_rank(v.rate)));
 
-        let mut cdns = play_info.cdns.clone();
+        let mut cdns = order_cdns(play_info.cdns.clone());
         if !cdns.iter().any(|cdn| cdn == DEFAULT_DOUYU_CDN) {
             cdns.insert(0, DEFAULT_DOUYU_CDN.to_string());
         }
@@ -467,7 +492,7 @@ pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, Stri
                     platform: PlatformId::Douyu,
                     room_id: normalized_room_id.clone(),
                     quality_key: variant.rate.to_string(),
-                    quality_label: variant.name.clone(),
+                    quality_label: quality_label_for(variant.rate, &variant.name),
                     stream_url,
                     format: StreamFormat::Flv,
                     is_default: Some(sources.is_empty()),
@@ -486,4 +511,39 @@ pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, Stri
     } else {
         format!("斗鱼签名或取流失败: {last_error}")
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scdn_lines_sort_last() {
+        let cdns = vec![
+            "scdn-tct".to_string(),
+            "ws-h5".to_string(),
+            "tct-h5".to_string(),
+        ];
+        let ordered = order_cdns(cdns);
+        assert_eq!(ordered, vec!["ws-h5", "tct-h5", "scdn-tct"]);
+    }
+
+    #[test]
+    fn rate_zero_is_source_quality_and_ranks_first() {
+        let mut variants = vec![
+            DouyuRateVariant { name: "蓝光4M".to_string(), rate: 4 },
+            DouyuRateVariant { name: "原画".to_string(), rate: 0 },
+            DouyuRateVariant { name: "超清".to_string(), rate: 3 },
+        ];
+        variants.sort_by_key(|v| std::cmp::Reverse(variant_rank(v.rate)));
+        assert_eq!(variants[0].rate, 0, "rate=0 (原画) must rank first");
+        assert_eq!(variants[1].rate, 4);
+    }
+
+    #[test]
+    fn rate_zero_label_is_normalized() {
+        assert_eq!(quality_label_for(0, ""), "原画");
+        assert_eq!(quality_label_for(0, "默认"), "原画");
+        assert_eq!(quality_label_for(4, "蓝光4M"), "蓝光4M");
+    }
 }

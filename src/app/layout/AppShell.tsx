@@ -6,7 +6,6 @@ import {
   Minimize2,
   Minus,
   Moon,
-  Radio,
   Search,
   Settings,
   Sun,
@@ -18,11 +17,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { GlobalSearch } from "@/features/global-search/ui/GlobalSearch";
 import { OnboardingOverlay } from "@/features/onboarding/ui/OnboardingOverlay";
 import { usePlatformStore } from "@/features/platform-switch/model/usePlatformStore";
-import { isMac } from "@/shared/lib/os";
 import { type ThemeMode, useThemeStore } from "@/features/theme/model/useThemeStore";
 import { cn } from "@/lib/utils";
 import { loadPreferences, savePreferences } from "@/shared/api/commands";
+import { isMac } from "@/shared/lib/os";
 import type { PlatformId } from "@/shared/types/domain";
+import appIcon from "../../../assets/app-icon.png";
 
 // ── Window controls ───────────────────────────────────────────────────────────
 
@@ -284,7 +284,12 @@ export function AppShell() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-primary/8 text-primary cursor-default select-none">
-                  <Radio size={14} strokeWidth={2} />
+                  <img
+                    src={appIcon}
+                    alt=""
+                    aria-hidden="true"
+                    className="h-full w-full rounded-lg object-cover"
+                  />
                 </div>
               </TooltipTrigger>
               <TooltipContent side="right" className="text-xs">

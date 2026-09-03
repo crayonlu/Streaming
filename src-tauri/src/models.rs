@@ -126,6 +126,10 @@ pub struct RoomDetail {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub is_live: bool,
+    /// The room is playing a looped recording, not a real live broadcast
+    /// (Douyu video_loop==1, Bilibili live_status==2).
+    #[serde(default)]
+    pub is_loop: bool,
     pub followed: bool,
 }
 

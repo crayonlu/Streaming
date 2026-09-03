@@ -7,8 +7,8 @@
 
 import { Maximize2, Minimize2, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useFullscreen } from "../model/useFullscreen";
 import { cn } from "@/lib/utils";
+import { useFullscreen } from "../model/useFullscreen";
 import { PlayerProgress } from "./PlayerProgress";
 import { QualityMenu } from "./QualityMenu";
 import type { PlayerQualityItem } from "./VideoPlayer";
@@ -45,6 +45,8 @@ export interface ControlsOverlayProps {
   onQualityChange: (id: string) => void;
   onUserPlay?: () => void;
   onUserPause?: () => void;
+  /** Extra buttons in the right cluster, before the fullscreen button. */
+  controlsEndSlot?: React.ReactNode;
 }
 
 export function ControlsOverlay({
@@ -58,6 +60,7 @@ export function ControlsOverlay({
   onFocusStage,
   onUserPlay,
   onUserPause,
+  controlsEndSlot,
 }: ControlsOverlayProps) {
   const [vol, setVol] = useState(readVol);
   const [muted, setMuted] = useState(false);
@@ -261,6 +264,7 @@ export function ControlsOverlay({
       onMouseMove={resetIdle}
       onMouseEnter={resetIdle}
       onClick={onFocusStage}
+      onDoubleClick={toggleFullscreen}
       onMouseLeave={() => {
         if (qualityOpen) return;
         clearTimeout(idleRef.current);
@@ -276,6 +280,7 @@ export function ControlsOverlay({
           visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1 pointer-events-none",
         )}
         onClick={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => e.stopPropagation()}
         onMouseMove={(e) => e.stopPropagation()}
       >
         {/* Gradient scrim */}
@@ -349,6 +354,7 @@ export function ControlsOverlay({
                   onSelect={onQualityChange}
                 />
               )}
+              {controlsEndSlot}
               <button
                 type="button"
                 onClick={toggleFullscreen}

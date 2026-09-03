@@ -5,6 +5,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useDanmakuStore } from "@/features/danmaku/model/useDanmakuStore";
+import { DanmakuControls } from "@/features/danmaku/ui/DanmakuControls";
+import { DanmakuOverlay } from "@/features/danmaku/ui/DanmakuOverlay";
 import { FollowButton } from "@/features/follow-button/ui/FollowButton";
 import { useBilibiliAuth } from "@/features/player/model/useBilibiliAuth";
 import { useOnlineStatus } from "@/features/player/model/useOnlineStatus";
@@ -23,8 +26,13 @@ import { supportsReplay as canReplay } from "@/shared/lib/replay";
 import type { PlatformId, StreamSource } from "@/shared/types/domain";
 import { StatusView } from "@/shared/ui/StatusView";
 import { getPlaybackStatus } from "./playbackStatus";
+import { type ManualSelection, selectionOf, selectStreamSource } from "./selectSource";
 
 // ── PlayerPage ────────────────────────────────────────────────────────────────
+
+function formatOnline(n: number): string {
+  return n >= 10_000 ? `${(n / 10_000).toFixed(1)}万` : String(n);
+}
 
 export function PlayerPage() {
   const params = useParams();
@@ -32,11 +40,13 @@ export function PlayerPage() {
   const platform = params.platform;
   const roomId = params.roomId;
 
-  const [manualSourceId, setManualSourceId] = useState<string | null>(null);
+  const [manualSelection, setManualSelection] = useState<ManualSelection | null>(null);
   const [failedSourceIds, setFailedSourceIds] = useState<Set<string>>(new Set());
+  const [stallCount, setStallCount] = useState(0);
   const [retryKey, setRetryKey] = useState(0);
   const { loginState: bilibiliLoginState, login: handleBilibiliLogin } = useBilibiliAuth(platform);
   const streamLifecycle = useStreamLifecycle();
+  const onlineCount = useDanmakuStore((s) => s.onlineCount);
 
   const validRoute = isPlatform(platform) && !!roomId;
 
@@ -70,17 +80,11 @@ export function PlayerPage() {
     }
   }, [room, platform, roomId]);
 
-  // Resolve the active source (highest-priority non-failed)
-  const selectedSource: StreamSource | null = useMemo(() => {
-    if (!sources.length) return null;
-    if (manualSourceId) {
-      const matched = sources.find((s) => s.id === manualSourceId);
-      if (matched && !failedSourceIds.has(matched.id)) return matched;
-    }
-    const available = sources.filter((s) => !failedSourceIds.has(s.id));
-    if (!available.length) return null;
-    return available.find((s) => s.isDefault) ?? available[0];
-  }, [sources, manualSourceId, failedSourceIds]);
+  // Resolve the active source (manual pick by stable triple, else default)
+  const selectedSource: StreamSource | null = useMemo(
+    () => selectStreamSource(sources, manualSelection, failedSourceIds),
+    [sources, manualSelection, failedSourceIds],
+  );
 
   const handleSourceError = useCallback((source: StreamSource) => {
     setFailedSourceIds((prev) => new Set([...prev, source.id]));
@@ -88,7 +92,8 @@ export function PlayerPage() {
 
   const handleRetryAll = () => {
     setFailedSourceIds(new Set());
-    setManualSourceId(null);
+    setManualSelection(null);
+    setStallCount(0);
     setRetryKey((k) => k + 1);
   };
 
@@ -112,6 +117,7 @@ export function PlayerPage() {
     (reason: "error" | "waiting-timeout") => {
       if (streamQuery.isFetching) return;
       streamLifecycle.recordFetch();
+      setStallCount((c) => c + 1);
       setFailedSourceIds((prev) => {
         const next = new Set(prev);
         if (selectedSource) next.delete(selectedSource.id);
@@ -195,6 +201,26 @@ export function PlayerPage() {
                   <>
                     <span className="text-border shrink-0">·</span>
                     <span className="clamp-1 max-w-25 shrink-0">{room.areaName}</span>
+                  </>
+                )}
+                {room.isLoop ? (
+                  <>
+                    <span className="text-border shrink-0">·</span>
+                    <span className="shrink-0 text-amber-500/90">轮播回放</span>
+                  </>
+                ) : room.isLive ? (
+                  <>
+                    <span className="text-border shrink-0">·</span>
+                    <span className="shrink-0 inline-flex items-center gap-1 text-red-400">
+                      <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                      直播中
+                    </span>
+                  </>
+                ) : null}
+                {room.isLive && onlineCount != null && (
+                  <>
+                    <span className="text-border shrink-0">·</span>
+                    <span className="shrink-0">{formatOnline(onlineCount)} 人在看</span>
                   </>
                 )}
               </div>
@@ -308,7 +334,8 @@ export function PlayerPage() {
                 qualities={qualityItems}
                 selectedQualityId={selectedSource.id}
                 onQualityChange={(id) => {
-                  setManualSourceId(id);
+                  const picked = sources.find((s) => s.id === id);
+                  if (picked) setManualSelection(selectionOf(picked));
                   setFailedSourceIds((prev) => {
                     const next = new Set(prev);
                     next.delete(id);
@@ -318,6 +345,15 @@ export function PlayerPage() {
                 onError={() => handleSourceError(selectedSource)}
                 onPlaybackStall={handlePlaybackStall}
                 onUserPlay={handleUserPlay}
+                recoveryHint={
+                  stallCount > 0 ? `播放失败 · 正在重新拉流（第 ${stallCount} 次）` : undefined
+                }
+                overlaySlot={
+                  room?.isLive && isPlatform(platform) ? (
+                    <DanmakuOverlay platform={platform} roomId={roomId as string} />
+                  ) : null
+                }
+                controlsEndSlot={room?.isLive ? <DanmakuControls /> : null}
               />
             ) : (
               /* ── No-source overlay ── */

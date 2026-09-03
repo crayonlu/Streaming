@@ -24,6 +24,8 @@ export interface RoomDetail {
   areaName?: string;
   description?: string;
   isLive: boolean;
+  /** Playing a looped recording, not a real live broadcast. */
+  isLoop?: boolean;
   followed: boolean;
 }
 
@@ -104,4 +106,19 @@ export interface AppPreferences {
     roomId?: string;
     keyword?: string;
   };
+}
+
+export type DanmakuKind = "chat" | "online" | "status";
+export type DanmakuState = "connected" | "reconnecting" | "closed";
+
+export interface DanmakuEvent {
+  kind: DanmakuKind;
+  platform: PlatformId;
+  roomId: string;
+  user?: string;
+  content?: string;
+  color?: string;
+  userLevel?: number;
+  count?: number;
+  state?: DanmakuState;
 }

@@ -6,16 +6,17 @@
  * xgplayer wrapper so PlayerPage / ReplayPage need no changes here.
  */
 
-import { useEffect, useRef, useState } from "react";
 import { AlertCircle, Loader2, WifiOff } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import "@/app/styles/player.css";
-import { ControlsOverlay } from "./ControlsOverlay";
+import { detectHevcSupport } from "@/shared/lib/hevc";
+import { useOnlineStatus } from "../model/useOnlineStatus";
 import {
   type PlayerController,
   type PlayerFormat,
   usePlayerEngine,
 } from "../model/usePlayerEngine";
-import { useOnlineStatus } from "../model/useOnlineStatus";
+import { ControlsOverlay } from "./ControlsOverlay";
 
 export interface PlayerQualityItem {
   id: string;
@@ -41,6 +42,14 @@ export interface VideoPlayerProps {
   /** Fires once when playback enters the final 8 seconds (VOD), for prefetch. */
   onNearEnd?: () => void;
   instanceRef?: React.MutableRefObject<PlayerController | null>;
+  /** Extra layer rendered above <video> and below controls (e.g. danmaku).
+   *  Must be inside the stage for fullscreen. */
+  overlaySlot?: React.ReactNode;
+  /** Extra buttons in the right cluster of the controls bar. */
+  controlsEndSlot?: React.ReactNode;
+  /** Overrides the static error-overlay text during stall recovery
+   *  (e.g. "播放失败 · 正在重新拉流（第 2 次）"). */
+  recoveryHint?: string;
 }
 
 export function VideoPlayer({
@@ -58,6 +67,9 @@ export function VideoPlayer({
   onEnded,
   onNearEnd,
   instanceRef,
+  overlaySlot,
+  controlsEndSlot,
+  recoveryHint,
 }: VideoPlayerProps) {
   const { videoRef, controller, ready, error } = usePlayerEngine({
     url: streamUrl,
@@ -87,16 +99,25 @@ export function VideoPlayer({
   // Keep the stable ref fed to ControlsOverlay in sync with the latest controller.
   ctrlRef.current = controller;
 
-  // VOD end-of-playback callbacks: onNearEnd fires once 8s before the end
-  // (for prefetching the next part), onEnded fires when playback finishes.
-  // Reset + re-bind whenever the source changes.
   const nearEndFiredRef = useRef(false);
+
+  // VOD: onNearEnd fires once 8s before the end (for prefetching the next
+  // part), onEnded fires when playback finishes.
+  // LIVE: a dropped FLV/HLS connection surfaces as "ended" rather than an
+  // error (mpegts.js completes cleanly when the TCP stream closes), so we
+  // route it into the stall-recovery path which refetches stream sources.
   // biome-ignore lint/correctness/useExhaustiveDependencies: videoRef is a stable ref; .current is read at bind time
   useEffect(() => {
-    nearEndFiredRef.current = false;
-    if (isLive) return;
     const v = videoRef.current;
     if (!v) return;
+
+    if (isLive) {
+      const onLiveEnd = () => onPlaybackStall?.("error");
+      v.addEventListener("ended", onLiveEnd);
+      return () => v.removeEventListener("ended", onLiveEnd);
+    }
+
+    nearEndFiredRef.current = false;
     const onTime = () => {
       if (nearEndFiredRef.current) return;
       const remaining = (v.duration || 0) - v.currentTime;
@@ -112,7 +133,7 @@ export function VideoPlayer({
       v.removeEventListener("timeupdate", onTime);
       v.removeEventListener("ended", onEnd);
     };
-  }, [isLive, onEnded, onNearEnd]);
+  }, [isLive, onEnded, onNearEnd, onPlaybackStall]);
 
   return (
     <section
@@ -132,6 +153,8 @@ export function VideoPlayer({
         <track kind="captions" />
       </video>
 
+      {overlaySlot}
+
       {streamUrl && (
         <ControlsOverlay
           playerRef={ctrlRef}
@@ -144,11 +167,16 @@ export function VideoPlayer({
           onFocusStage={() => stageRef.current?.focus()}
           onUserPlay={onUserPlay}
           onUserPause={onUserPause}
+          controlsEndSlot={controlsEndSlot}
         />
       )}
 
+      {/* Informational overlays below are pointer-events-none on purpose:
+          they sit above the controls bar, and without this a buffering or
+          error state swallows every click — including the fullscreen exit
+          button (only Esc worked). */}
       {!online && streamUrl && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
+        <div className="absolute inset-0 z-20 pointer-events-none flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
           <WifiOff size={28} strokeWidth={1.6} className="text-white/60" />
           <span className="text-sm text-white/70">网络已断开 · 等待重连</span>
         </div>
@@ -159,9 +187,14 @@ export function VideoPlayer({
 
       {/* Error: in-place recovery exhausted */}
       {error && streamUrl && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
+        <div className="absolute inset-0 z-20 pointer-events-none flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
           <AlertCircle size={28} strokeWidth={1.6} className="text-white/60" />
-          <span className="text-sm text-white/70">播放失败 · 正在尝试恢复</span>
+          <span className="text-sm text-white/70">{recoveryHint ?? "播放失败 · 正在尝试恢复"}</span>
+          {detectHevcSupport() === "none" && (
+            <span className="text-xs text-white/40">
+              当前系统可能缺少 HEVC 解码支持（Windows 请安装「HEVC 视频扩展」）
+            </span>
+          )}
         </div>
       )}
     </section>
@@ -195,7 +228,7 @@ function LoadingOverlay({
 
   if (!buffering) return null;
   return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40">
+    <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center bg-black/40">
       <Loader2 size={30} className="animate-spin text-white/60" strokeWidth={1.8} />
     </div>
   );

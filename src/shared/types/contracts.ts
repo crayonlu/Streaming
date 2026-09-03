@@ -20,6 +20,7 @@ export const roomCardSchema = z.object({
   areaName: z.string().optional(),
   viewerCountText: z.string().optional(),
   isLive: z.boolean(),
+  isLoop: z.boolean().optional(),
   followed: z.boolean(),
 });
 
@@ -104,4 +105,16 @@ export const appPreferencesSchema = z.object({
       keyword: z.string().optional(),
     })
     .optional(),
+});
+
+export const danmakuEventSchema = z.object({
+  kind: z.enum(["chat", "online", "status"]),
+  platform: platformSchema,
+  roomId: z.string(),
+  user: z.string().optional(),
+  content: z.string().optional(),
+  color: z.string().optional(),
+  userLevel: z.number().optional(),
+  count: z.number().optional(),
+  state: z.enum(["connected", "reconnecting", "closed"]).optional(),
 });

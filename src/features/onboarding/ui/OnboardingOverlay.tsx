@@ -1,10 +1,10 @@
-import { Radio } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { loadPreferences, savePreferences } from "@/shared/api/commands";
 import { PLATFORM_LABEL } from "@/shared/lib/platform";
 import type { PlatformId } from "@/shared/types/domain";
+import appIcon from "../../../../assets/app-icon.png";
 
 interface OnboardingOverlayProps {
   onDone: (platform: PlatformId) => void;
@@ -52,7 +52,12 @@ export function OnboardingOverlay({ onDone }: OnboardingOverlayProps) {
         {/* Brand mark */}
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Radio size={20} strokeWidth={1.9} />
+            <img
+              src={appIcon}
+              alt=""
+              aria-hidden="true"
+              className="h-full w-full rounded-xl object-cover"
+            />
           </div>
           <div>
             <h1 className="text-base font-semibold tracking-tight text-foreground">

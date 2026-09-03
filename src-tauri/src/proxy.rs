@@ -493,6 +493,11 @@ pub fn proxy_vod(original: &str, is_m3u8: bool) -> String {
 // ── Douyu live stream proxy ───────────────────────────────────────────────────
 
 const DOUYU_LIVE_REFERER: &str = "https://www.douyu.com/";
+const HUYA_LIVE_REFERER: &str = "https://www.huya.com/";
+/// Huya tokenized streams reject playback unless the request carries the
+/// official client UA (see platforms/huya/stream_url.rs).
+const HUYA_HYSDK_UA: &str =
+    "HYSDK(Windows,30000002)_APP(pc_exe&7080000&official)_SDK(trans&2.34.0.5795)";
 
 /// Wrap a Douyu live FLV stream URL through the local proxy.
 /// Same rationale as VOD: macOS WKWebView blocks cross-origin requests
@@ -525,11 +530,19 @@ async fn live_handler(Query(params): Query<VodQuery>) -> Response<Body> {
         .build()
         .unwrap_or_else(|_| reqwest::Client::new());
 
+    // Per-platform header injection: Huya tokenized streams require the
+    // official HYSDK UA; Douyu just needs its Referer.
+    let (referer, ua) = if seg_url.contains("huya.com") || seg_url.contains("hy-cdn.com") {
+        (HUYA_LIVE_REFERER, HUYA_HYSDK_UA)
+    } else {
+        (DOUYU_LIVE_REFERER, PROXY_UA)
+    };
+
     let upstream = match client
         .get(&seg_url)
-        .header("User-Agent", PROXY_UA)
-        .header("Referer", DOUYU_LIVE_REFERER)
-        .header("Origin", DOUYU_LIVE_REFERER)
+        .header("User-Agent", ua)
+        .header("Referer", referer)
+        .header("Origin", referer)
         .send()
         .await
     {

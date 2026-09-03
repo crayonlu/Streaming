@@ -295,3 +295,11 @@ export async function checkRoomsLiveStatus(
   if (rooms.length === 0) return {};
   return safeInvoke<Record<string, boolean>>("check_rooms_live_status", { rooms });
 }
+
+export async function startDanmaku(platform: PlatformId, roomId: string): Promise<void> {
+  await safeInvoke("start_danmaku", { platform, roomId });
+}
+
+export async function stopDanmaku(platform: PlatformId, roomId: string): Promise<void> {
+  await safeInvoke("stop_danmaku", { platform, roomId });
+}

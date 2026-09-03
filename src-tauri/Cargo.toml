@@ -44,3 +44,6 @@ rand = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 futures = "0.3"
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+flate2 = "1"
+bytes = "1"

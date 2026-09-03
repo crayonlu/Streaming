@@ -11,6 +11,7 @@ pub(crate) mod featured;
 pub(crate) mod replay;
 pub(crate) mod room;
 pub(crate) mod search;
+pub(crate) mod wbi;
 
 pub use category::{check_rooms_live, get_categories, get_rooms_by_category};
 pub use featured::get_featured;

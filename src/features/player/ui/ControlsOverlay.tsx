@@ -45,6 +45,8 @@ export interface ControlsOverlayProps {
   onQualityChange: (id: string) => void;
   onUserPlay?: () => void;
   onUserPause?: () => void;
+  /** Extra buttons in the right cluster, before the fullscreen button. */
+  controlsEndSlot?: React.ReactNode;
 }
 
 export function ControlsOverlay({
@@ -58,6 +60,7 @@ export function ControlsOverlay({
   onFocusStage,
   onUserPlay,
   onUserPause,
+  controlsEndSlot,
 }: ControlsOverlayProps) {
   const [vol, setVol] = useState(readVol);
   const [muted, setMuted] = useState(false);
@@ -349,6 +352,7 @@ export function ControlsOverlay({
                   onSelect={onQualityChange}
                 />
               )}
+              {controlsEndSlot}
               <button
                 type="button"
                 onClick={toggleFullscreen}

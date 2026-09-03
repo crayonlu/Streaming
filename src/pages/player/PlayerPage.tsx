@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DanmakuControls } from "@/features/danmaku/ui/DanmakuControls";
+import { DanmakuOverlay } from "@/features/danmaku/ui/DanmakuOverlay";
 import { FollowButton } from "@/features/follow-button/ui/FollowButton";
 import { useBilibiliAuth } from "@/features/player/model/useBilibiliAuth";
 import { useOnlineStatus } from "@/features/player/model/useOnlineStatus";
@@ -318,6 +320,12 @@ export function PlayerPage() {
                 onError={() => handleSourceError(selectedSource)}
                 onPlaybackStall={handlePlaybackStall}
                 onUserPlay={handleUserPlay}
+                overlaySlot={
+                  room?.isLive && isPlatform(platform) ? (
+                    <DanmakuOverlay platform={platform} roomId={roomId as string} />
+                  ) : null
+                }
+                controlsEndSlot={room?.isLive ? <DanmakuControls /> : null}
               />
             ) : (
               /* ── No-source overlay ── */

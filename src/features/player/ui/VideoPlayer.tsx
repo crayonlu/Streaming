@@ -42,6 +42,11 @@ export interface VideoPlayerProps {
   /** Fires once when playback enters the final 8 seconds (VOD), for prefetch. */
   onNearEnd?: () => void;
   instanceRef?: React.MutableRefObject<PlayerController | null>;
+  /** Extra layer rendered above <video> and below controls (e.g. danmaku).
+   *  Must be inside the stage for fullscreen. */
+  overlaySlot?: React.ReactNode;
+  /** Extra buttons in the right cluster of the controls bar. */
+  controlsEndSlot?: React.ReactNode;
 }
 
 export function VideoPlayer({
@@ -59,6 +64,8 @@ export function VideoPlayer({
   onEnded,
   onNearEnd,
   instanceRef,
+  overlaySlot,
+  controlsEndSlot,
 }: VideoPlayerProps) {
   const { videoRef, controller, ready, error } = usePlayerEngine({
     url: streamUrl,
@@ -142,6 +149,8 @@ export function VideoPlayer({
         <track kind="captions" />
       </video>
 
+      {overlaySlot}
+
       {streamUrl && (
         <ControlsOverlay
           playerRef={ctrlRef}
@@ -154,6 +163,7 @@ export function VideoPlayer({
           onFocusStage={() => stageRef.current?.focus()}
           onUserPlay={onUserPlay}
           onUserPause={onUserPause}
+          controlsEndSlot={controlsEndSlot}
         />
       )}
 

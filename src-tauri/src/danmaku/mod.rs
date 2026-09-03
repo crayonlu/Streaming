@@ -7,6 +7,7 @@
 
 pub mod bilibili;
 pub mod douyu;
+pub mod huya;
 mod types;
 
 pub use types::DanmakuEvent;
@@ -143,8 +144,7 @@ pub async fn start_danmaku(
             tokio::spawn(async move { bilibili::run(room, app_clone, rx).await });
         }
         PlatformId::Huya => {
-            // Task 10 wires this in.
-            return Err("该平台弹幕尚未实现".to_string());
+            tokio::spawn(async move { huya::run(room, app_clone, rx).await });
         }
     }
     Ok(())

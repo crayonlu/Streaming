@@ -105,3 +105,18 @@ export interface AppPreferences {
     keyword?: string;
   };
 }
+
+export type DanmakuKind = "chat" | "online" | "status";
+export type DanmakuState = "connected" | "reconnecting" | "closed";
+
+export interface DanmakuEvent {
+  kind: DanmakuKind;
+  platform: PlatformId;
+  roomId: string;
+  user?: string;
+  content?: string;
+  color?: string;
+  userLevel?: number;
+  count?: number;
+  state?: DanmakuState;
+}

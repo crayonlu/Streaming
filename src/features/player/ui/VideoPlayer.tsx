@@ -8,6 +8,7 @@
 
 import { AlertCircle, Loader2, WifiOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { os } from "@/shared/lib/os";
 import "@/app/styles/player.css";
 import { detectHevcSupport } from "@/shared/lib/hevc";
 import { useOnlineStatus } from "../model/useOnlineStatus";
@@ -71,7 +72,7 @@ export function VideoPlayer({
   controlsEndSlot,
   recoveryHint,
 }: VideoPlayerProps) {
-  const { videoRef, controller, ready, error } = usePlayerEngine({
+  const { videoRef, controller, ready, error, codecUnsupported } = usePlayerEngine({
     url: streamUrl,
     format,
     isLive,
@@ -183,7 +184,24 @@ export function VideoPlayer({
       )}
 
       {/* Loading: before ready or while buffering */}
-      {streamUrl && !error && <LoadingOverlay videoRef={videoRef} ready={ready} />}
+      {streamUrl && !error && !codecUnsupported && (
+        <LoadingOverlay videoRef={videoRef} ready={ready} />
+      )}
+
+      {/* Terminal failure: the WebView cannot decode H.264/AAC at all
+          (Linux WebKitGTK without GStreamer decoder packages). Refetching
+          stream sources cannot help — show the fix instead of a spinner. */}
+      {codecUnsupported && streamUrl && (
+        <div className="absolute inset-0 z-20 pointer-events-none flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
+          <AlertCircle size={28} strokeWidth={1.6} className="text-white/60" />
+          <span className="text-sm text-white/70">当前系统缺少视频解码器，无法播放</span>
+          <span className="text-xs text-white/40">
+            {os === "linux"
+              ? "请安装 gstreamer1.0-libav、gstreamer1.0-plugins-bad 后重启应用"
+              : "请检查系统或 WebView 的解码组件安装情况"}
+          </span>
+        </div>
+      )}
 
       {/* Error: in-place recovery exhausted */}
       {error && streamUrl && (

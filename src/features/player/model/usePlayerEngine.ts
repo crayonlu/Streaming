@@ -76,6 +76,10 @@ export function usePlayerEngine({
 
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(false);
+  // Terminal condition, not recoverable by refetch: the WebView has no MSE
+  // codec support (e.g. WebKitGTK without GStreamer decoders). Surfaced
+  // separately so the UI can show a decoder hint instead of spinning forever.
+  const [codecUnsupported, setCodecUnsupported] = useState(false);
 
   // ── Engine bootstrap / soft-switch ────────────────────────────────────────
   // Full rebuild when format/isLive changes; soft in-place source swap when
@@ -113,6 +117,8 @@ export function usePlayerEngine({
     prevRef.current = { format, isLive };
     let disposed = false;
     let nextEngine: AnyEngine | null = null;
+
+    setCodecUnsupported(false);
 
     const onHlsError = (hls: AnyEngine, data: { fatal: boolean; type: string }) => {
       const { action, next } = planHlsRecovery(data, recoveryRef.current, Date.now());
@@ -171,10 +177,19 @@ export function usePlayerEngine({
           nextEngine = hls as unknown as AnyEngine;
         } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
           video.src = url;
+        } else {
+          // No MSE and no native HLS — nothing can ever start; fail fast
+          // with the decoder hint instead of spinning forever.
+          setCodecUnsupported(true);
+          return;
         }
       } else if (format === "flv") {
         const { default: mpegts } = await import("mpegts.js");
         if (disposed) return;
+        if (!mpegts.isSupported()) {
+          setCodecUnsupported(true);
+          return;
+        }
         const player = mpegts.createPlayer(
           { type: "flv", isLive, url },
           {
@@ -221,6 +236,7 @@ export function usePlayerEngine({
       disposed = true;
       setReady(false);
       setError(false);
+      setCodecUnsupported(false);
       recoveryRef.current = INITIAL_RECOVERY_STATE;
       nextEngine?.destroy?.();
       engineRef.current = null;
@@ -312,5 +328,5 @@ export function usePlayerEngine({
   }, []);
 
   const controller = getController();
-  return { videoRef, controller, ready, error };
+  return { videoRef, controller, ready, error, codecUnsupported };
 }

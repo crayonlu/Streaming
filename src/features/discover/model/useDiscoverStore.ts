@@ -16,6 +16,7 @@ interface DiscoverState {
   hasNextPage: boolean;
   platform: PlatformId | null;
   categorySelection: CategorySelection | null;
+  requestEpoch: number;
   setCategorySelection: (selection: CategorySelection | null) => void;
   fetchFirstPage: (platform: PlatformId) => Promise<void>;
   fetchNextPage: (platform: PlatformId) => Promise<void>;
@@ -29,6 +30,7 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
   hasNextPage: true,
   platform: null,
   categorySelection: null,
+  requestEpoch: 0,
 
   setCategorySelection: (selection) => {
     const { platform, categorySelection } = get();
@@ -37,7 +39,16 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
 
     if (categorySelection?.categoryId === selection?.categoryId) return;
 
-    set({ categorySelection: selection, isLoading: true, rooms: [], page: 0, hasNextPage: true });
+    const requestEpoch = get().requestEpoch + 1;
+    set({
+      categorySelection: selection,
+      requestEpoch,
+      isLoading: true,
+      error: null,
+      rooms: [],
+      page: 0,
+      hasNextPage: true,
+    });
 
     const doFetch = async () => {
       try {
@@ -50,13 +61,15 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
               selection.shortName ?? undefined,
             )
           : await getFeatured(platform, 1);
+        if (get().requestEpoch !== requestEpoch) return;
         set({ rooms: data, isLoading: false, page: 1, hasNextPage: data.length > 0 });
       } catch (e) {
+        if (get().requestEpoch !== requestEpoch) return;
         set({ isLoading: false, error: String(e) });
       }
     };
 
-    doFetch();
+    void doFetch();
   },
 
   fetchFirstPage: async (platform) => {
@@ -64,8 +77,10 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
 
     const needsReset = currentPlatform !== null && currentPlatform !== platform;
     const newCategorySelection = needsReset ? null : categorySelection;
+    const requestEpoch = get().requestEpoch + 1;
 
     set({
+      requestEpoch,
       isLoading: true,
       error: null,
       rooms: [],
@@ -85,8 +100,10 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
             newCategorySelection.shortName ?? undefined,
           )
         : await getFeatured(platform, 1);
+      if (get().requestEpoch !== requestEpoch) return;
       set({ rooms: data, isLoading: false, page: 1, hasNextPage: data.length > 0 });
     } catch (e) {
+      if (get().requestEpoch !== requestEpoch) return;
       set({ isLoading: false, error: String(e) });
     }
   },
@@ -94,6 +111,7 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
   fetchNextPage: async (platform) => {
     const { isLoading, hasNextPage, page, platform: currentPlatform, categorySelection } = get();
     if (isLoading || !hasNextPage || currentPlatform !== platform) return;
+    const requestEpoch = get().requestEpoch;
     set({ isLoading: true });
     try {
       const nextPage = page + 1;
@@ -106,6 +124,7 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
             categorySelection.shortName ?? undefined,
           )
         : await getFeatured(platform, nextPage);
+      if (get().requestEpoch !== requestEpoch) return;
       set((state) => {
         // De-duplicate across pages: B站 may return the same room_id on
         // consecutive pages (page boundary overlap or cross-section repeats).
@@ -119,6 +138,7 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
         };
       });
     } catch (e) {
+      if (get().requestEpoch !== requestEpoch) return;
       set({ isLoading: false, error: String(e) });
     }
   },

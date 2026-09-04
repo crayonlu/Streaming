@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toggleFollow } from "@/shared/api/commands";
 import type { RoomCard } from "@/shared/types/domain";
+import { useFollowStore } from "@/features/follows/model/useFollowStore";
 
 interface FollowButtonProps {
   room: Pick<RoomCard, "platform" | "roomId" | "followed" | "title" | "streamerName" | "coverUrl">;
@@ -22,7 +23,8 @@ export function FollowButton({ room, compact = false }: FollowButtonProps) {
         streamerName: room.streamerName,
         coverUrl: room.coverUrl,
       }),
-    onSuccess: () => {
+    onSuccess: (records) => {
+      useFollowStore.getState().replaceFollows(records);
       void queryClient.invalidateQueries({ queryKey: ["follows"] });
       void queryClient.invalidateQueries({ queryKey: ["room-detail"] });
     },

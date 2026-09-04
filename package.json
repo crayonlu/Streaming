@@ -1,7 +1,7 @@
 {
   "name": "streaming",
   "private": true,
-  "version": "0.5.2",
+  "version": "0.5.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,8 @@
     "tauri": "tauri",
     "lint": "biome lint ./src",
     "format": "biome format --write ./src vite.config.ts",
-    "check": "biome check --write ./src vite.config.ts"
+    "check": "biome check --write ./src vite.config.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -49,7 +50,8 @@
     "@vitejs/plugin-react": "^4.6.0",
     "shadcn": "^4.3.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.1.11"
   },
   "packageManager": "pnpm@11.25.0+sha512.5cde925b4f075f725eb71fbae18a42ffe784524789f19b61c731cb8721ec28aaee160e01a8d5af4fedb2a42cdbf300efe23db356b0d4a17b4d63e11f8ab7c956"
 }

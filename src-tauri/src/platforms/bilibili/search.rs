@@ -46,7 +46,7 @@ fn parse_bili_search_items_with_fallback(
         let raw_title = value_to_string(item.get("title"));
         let fallback_info = room_info_map.get(&room_id);
         let title = if !raw_title.is_empty() {
-            raw_title.clone()
+            strip_em_tags(&raw_title)
         } else {
             fallback_info
                 .as_ref()
@@ -248,4 +248,24 @@ async fn search_rooms_once(keyword: &str, page: u32) -> Result<Vec<RoomCard>, St
 pub async fn search_rooms(keyword: &str, page: u32) -> Result<Vec<RoomCard>, String> {
     let kw = keyword.to_owned();
     retry(2, || search_rooms_once(&kw, page)).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn search_titles_strip_keyword_markup() {
+        let items = vec![serde_json::json!({
+            "roomid": "123",
+            "title": "[<em class=\"keyword\">鬼武者</em>] 首发直播",
+            "uname": "主播",
+            "cover": "https://example.com/cover.jpg",
+            "online": 42,
+        })];
+
+        let cards = parse_bili_search_items_with_fallback(&items, &HashMap::new());
+
+        assert_eq!(cards[0].title, "[鬼武者] 首发直播");
+    }
 }

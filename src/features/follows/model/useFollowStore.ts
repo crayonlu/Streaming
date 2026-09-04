@@ -20,6 +20,7 @@ interface FollowState {
   refreshLiveStatus: () => Promise<void>;
   /** Silently refresh room metadata (title, streamerName, coverUrl) in the background. */
   refreshFollowDetails: () => Promise<void>;
+  replaceFollows: (follows: FollowRecord[]) => void;
   removeFollow: (platform: string, roomId: string) => void;
 }
 
@@ -94,6 +95,10 @@ export const useFollowStore = create<FollowState>((set, get) => ({
         }));
       }
     });
+  },
+
+  replaceFollows: (follows) => {
+    set({ follows });
   },
 
   removeFollow: (platform, roomId) => {

@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { os } from "@/shared/lib/os";
 import { INITIAL_RECOVERY_STATE, planHlsRecovery, type RecoveryState } from "./recovery";
 
 export type PlayerFormat = "hls" | "flv" | "mp4";
@@ -201,11 +202,15 @@ export function usePlayerEngine({
             // to smooth the bursts, and chase the live edge only when the
             // buffered latency exceeds a cap, so delay stays bounded
             // without draining the buffer into repeated stalls.
+            // Linux WebKitGTK decodes in software, so the buffered latency
+            // grows in erratic steps; the default tight cap makes the chaser
+            // yank the playhead forward every few seconds (visible jitter),
+            // so relax it there.
             ...(isLive
               ? {
                   liveBufferLatencyChasing: true,
-                  liveBufferLatencyMaxLatency: 6,
-                  liveBufferLatencyMinRemain: 2,
+                  liveBufferLatencyMaxLatency: os === "linux" ? 10 : 6,
+                  liveBufferLatencyMinRemain: os === "linux" ? 4 : 2,
                 }
               : {}),
           },

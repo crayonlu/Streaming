@@ -220,6 +220,8 @@ export function VideoPlayer({
 }
 
 // Shows a spinner until ready AND the <video> has buffered past HAVE_CURRENT_DATA.
+// The overlay itself is debounced: on Linux, software decoding hiccups fire
+// brief "waiting" events constantly and an instant overlay visibly flickers.
 function LoadingOverlay({
   videoRef,
   ready,
@@ -228,6 +230,7 @@ function LoadingOverlay({
   ready: boolean;
 }) {
   const [buffering, setBuffering] = useState(!ready);
+  const [show, setShow] = useState(false);
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -244,7 +247,17 @@ function LoadingOverlay({
     };
   }, [videoRef]);
 
-  if (!buffering) return null;
+  // Only surface the overlay once buffering has persisted for a while.
+  useEffect(() => {
+    if (!buffering) {
+      setShow(false);
+      return;
+    }
+    const t = setTimeout(() => setShow(true), 400);
+    return () => clearTimeout(t);
+  }, [buffering]);
+
+  if (!show) return null;
   return (
     <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center bg-black/40">
       <Loader2 size={30} className="animate-spin text-white/60" strokeWidth={1.8} />

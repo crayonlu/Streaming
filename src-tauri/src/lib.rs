@@ -278,6 +278,16 @@ async fn check_rooms_live_status(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Linux: NVIDIA's proprietary driver combined with WebKitGTK's DMABUF
+    // zero-copy video path glitches on hybrid-GPU setups (flicker, corrupted
+    // or frozen frames during playback). Fall back to the plain GL renderer
+    // only in that case — Mesa / single-GPU systems keep DMABUF.
+    #[cfg(target_os = "linux")]
+    if std::path::Path::new("/proc/driver/nvidia/version").exists() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        tracing::info!("nvidia detected: disabled webkit dmabuf renderer");
+    }
+
     // Debug file logging on macOS.
     #[cfg(target_os = "macos")]
     {

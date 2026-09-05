@@ -278,16 +278,6 @@ async fn check_rooms_live_status(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Linux: NVIDIA's proprietary driver combined with WebKitGTK's DMABUF
-    // zero-copy video path glitches on hybrid-GPU setups (flicker, corrupted
-    // or frozen frames during playback). Fall back to the plain GL renderer
-    // only in that case — Mesa / single-GPU systems keep DMABUF.
-    #[cfg(target_os = "linux")]
-    if std::path::Path::new("/proc/driver/nvidia/version").exists() {
-        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-        tracing::info!("nvidia detected: disabled webkit dmabuf renderer");
-    }
-
     // Debug file logging on macOS.
     #[cfg(target_os = "macos")]
     {
@@ -315,6 +305,18 @@ pub fn run() {
             )
             .with_target(false)
             .init();
+    }
+
+    // Linux: NVIDIA's proprietary driver combined with WebKitGTK's GPU
+    // compositing glitches on hybrid-GPU setups — the video surface
+    // flickers, shows corrupted frames and stutters (DMABUF-renderer-only
+    // disable was tested and is NOT enough; full software compositing is).
+    // Keep the CPU cost in check by preferring lighter stream defaults (see
+    // douyu quality selection) and VA-API hardware decoding via GStreamer.
+    #[cfg(target_os = "linux")]
+    if platforms::nvidia_driver_loaded() {
+        std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+        tracing::info!("nvidia detected: disabled webkit accelerated compositing");
     }
 
     tauri::Builder::default()

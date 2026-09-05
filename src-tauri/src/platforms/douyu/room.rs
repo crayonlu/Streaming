@@ -130,6 +130,22 @@ fn quality_label_for(rate: i32, server_name: &str) -> String {
     server_name.to_string()
 }
 
+/// Index of the stream source that should be the default.
+///
+/// With `prefer_30fps` (Linux + NVIDIA, software playback path), pick the
+/// 蓝光4M (rate 4) 30fps variant; fall back to any non-原画 quality, then to
+/// the first source. Otherwise the first (highest) quality is the default.
+fn pick_default_index(sources: &[StreamSource], prefer_30fps: bool) -> usize {
+    if !prefer_30fps {
+        return 0;
+    }
+    sources
+        .iter()
+        .position(|s| s.quality_key == "4")
+        .or_else(|| sources.iter().position(|s| s.quality_key != "0"))
+        .unwrap_or(0)
+}
+
 // ── DouyuClient: handles signing & stream URL resolution ─────────────────────
 
 struct DouyuClient {
@@ -495,9 +511,23 @@ pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, Stri
                     quality_label: quality_label_for(variant.rate, &variant.name),
                     stream_url,
                     format: StreamFormat::Flv,
-                    is_default: Some(sources.is_empty()),
+                    is_default: None,
                     cdn: Some("主线路".to_string()),
                 });
+            }
+        }
+
+        // Default quality: on machines where playback runs on software
+        // compositing + software decode (NVIDIA Linux, see
+        // `nvidia_driver_loaded`), 原画's 63fps 10Mbps stream visibly
+        // stutters — default to the 30fps 蓝光4M variant instead. Users can
+        // still pick 原画 from the quality menu. Everywhere else the
+        // highest quality stays the default.
+        if !sources.is_empty() {
+            let default_idx =
+                pick_default_index(&sources, super::super::nvidia_driver_loaded());
+            for (i, s) in sources.iter_mut().enumerate() {
+                s.is_default = Some(i == default_idx);
             }
         }
 
@@ -545,5 +575,34 @@ mod tests {
         assert_eq!(quality_label_for(0, ""), "原画");
         assert_eq!(quality_label_for(0, "默认"), "原画");
         assert_eq!(quality_label_for(4, "蓝光4M"), "蓝光4M");
+    }
+
+    fn source(rate: i32, idx: usize) -> StreamSource {
+        StreamSource {
+            id: format!("douyu-{rate}-{idx}"),
+            platform: PlatformId::Douyu,
+            room_id: "1".to_string(),
+            quality_key: rate.to_string(),
+            quality_label: quality_label_for(rate, ""),
+            stream_url: String::new(),
+            format: StreamFormat::Flv,
+            is_default: None,
+            cdn: Some("主线路".to_string()),
+        }
+    }
+
+    #[test]
+    fn default_index_prefers_30fps_variant_on_software_platforms() {
+        let sources = vec![source(0, 0), source(4, 1), source(3, 2)];
+        assert_eq!(pick_default_index(&sources, true), 1);
+        assert_eq!(pick_default_index(&sources, false), 0);
+    }
+
+    #[test]
+    fn default_index_falls_back_when_4m_missing() {
+        let sources = vec![source(0, 0), source(3, 1)];
+        assert_eq!(pick_default_index(&sources, true), 1);
+        // Only 原画 exists → stay on it.
+        assert_eq!(pick_default_index(&[source(0, 0)], true), 0);
     }
 }

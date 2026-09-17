@@ -6,13 +6,7 @@
  */
 
 import { Maximize2, Minimize2, Pause, Play, Volume2, VolumeX } from "lucide-react";
-import {
-  createContext,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { createContext, useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useFullscreen } from "../model/useFullscreen";
 import { PlayerProgress } from "./PlayerProgress";
@@ -24,9 +18,7 @@ import type { PlayerQualityItem } from "./VideoPlayer";
  * dropdown) call this when they open/close, so the controls bar stays
  * visible for as long as a panel is open instead of auto-hiding.
  */
-export const ControlsPanelContext = createContext<(open: boolean) => void>(
-  () => undefined,
-);
+export const ControlsPanelContext = createContext<(open: boolean) => void>(() => undefined);
 
 function readVol(): number {
   try {
@@ -223,6 +215,22 @@ export function ControlsOverlay({
     idleRef.current = setTimeout(() => setVisible(false), 3500);
   }, []);
 
+  // Coming back from another Space (macOS Ctrl+←/→) or from a hidden app
+  // leaves the bar in its idle-hidden state, so the player reads as a bare
+  // black stage until the mouse happens to move. Bring the controls back with
+  // the window instead.
+  useEffect(() => {
+    const onVisible = () => {
+      if (!document.hidden) resetIdle();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [resetIdle]);
+
   const handleQualityOpen = useCallback(
     (open: boolean) => {
       setQualityOpen(open);
@@ -287,121 +295,121 @@ export function ControlsOverlay({
 
   return (
     <ControlsPanelContext.Provider value={setPanelOpen}>
-    {/* biome-ignore lint/a11y/noStaticElementInteractions: mouse-idle tracking overlay */}
-    {/* biome-ignore lint/a11y/useKeyWithClickEvents: focus intent only, keyboard shortcuts handled on stageRef */}
-    <div
-      className="absolute inset-0 z-10 select-none"
-      onMouseMove={resetIdle}
-      onMouseEnter={resetIdle}
-      onClick={onFocusStage}
-      onDoubleClick={toggleFullscreen}
-      onMouseLeave={() => {
-        if (anyMenuOpenRef.current) return;
-        clearTimeout(idleRef.current);
-        setVisible(false);
-      }}
-    >
-      {/* ── Bottom controls bar ── */}
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: stopPropagation only */}
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: stopPropagation only */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: mouse-idle tracking overlay */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: focus intent only, keyboard shortcuts handled on stageRef */}
       <div
-        className={cn(
-          "absolute bottom-0 left-0 right-0 transition-all duration-200",
-          visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1 pointer-events-none",
-        )}
-        onClick={(e) => e.stopPropagation()}
-        onDoubleClick={(e) => e.stopPropagation()}
-        onMouseMove={(e) => e.stopPropagation()}
+        className="absolute inset-0 z-10 select-none"
+        onMouseMove={resetIdle}
+        onMouseEnter={resetIdle}
+        onClick={onFocusStage}
+        onDoubleClick={toggleFullscreen}
+        onMouseLeave={() => {
+          if (anyMenuOpenRef.current) return;
+          clearTimeout(idleRef.current);
+          setVisible(false);
+        }}
       >
-        {/* Gradient scrim */}
+        {/* ── Bottom controls bar ── */}
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: stopPropagation only */}
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: stopPropagation only */}
         <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(to top, var(--player-scrim) 0%, oklch(8% 0.006 250 / 0.32) 60%, transparent 100%)",
-          }}
-          aria-hidden
-        />
+          className={cn(
+            "absolute bottom-0 left-0 right-0 transition-all duration-200",
+            visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1 pointer-events-none",
+          )}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onMouseMove={(e) => e.stopPropagation()}
+        >
+          {/* Gradient scrim */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(to top, var(--player-scrim) 0%, oklch(8% 0.006 250 / 0.32) 60%, transparent 100%)",
+            }}
+            aria-hidden
+          />
 
-        <div className="relative px-3 pb-2.5 pt-9 flex flex-col gap-2">
-          {/* ── Progress row ── */}
-          <PlayerProgress playerRef={playerRef} isLive={isLive} playerReady={playerReady} />
+          <div className="relative px-3 pb-2.5 pt-9 flex flex-col gap-2">
+            {/* ── Progress row ── */}
+            <PlayerProgress playerRef={playerRef} isLive={isLive} playerReady={playerReady} />
 
-          {/* ── Controls row ── */}
-          <div className="flex items-center justify-between gap-1">
-            {/* Left: play + volume */}
-            <div className="flex items-center gap-0.5">
-              <button
-                type="button"
-                onClick={togglePlay}
-                className="ctrl-btn"
-                aria-label={playing ? "暂停" : "播放"}
-              >
-                {playing ? (
-                  <Pause size={15} strokeWidth={1.9} />
-                ) : (
-                  <Play size={15} strokeWidth={1.9} />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={toggleMute}
-                className="ctrl-btn"
-                aria-label={muted ? "取消静音" : "静音"}
-              >
-                {effectiveVol === 0 ? (
-                  <VolumeX size={15} strokeWidth={1.8} />
-                ) : (
-                  <Volume2 size={15} strokeWidth={1.8} />
-                )}
-              </button>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.025}
-                value={effectiveVol}
-                onChange={handleVolume}
-                aria-label="音量"
-                aria-valuenow={Math.round(effectiveVol * 100)}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                className="vol-slider"
-                style={{
-                  background: `linear-gradient(90deg, oklch(96% 0.004 250 / 0.78) ${effectiveVol * 100}%, oklch(96% 0.004 250 / 0.18) ${effectiveVol * 100}%)`,
-                }}
-              />
-            </div>
-
-            {/* Right: quality + fullscreen */}
-            <div className="flex items-center gap-1">
-              {qualities.length > 1 && (
-                <QualityMenu
-                  items={qualities}
-                  selectedId={selectedQualityId}
-                  open={qualityOpen}
-                  onOpenChange={handleQualityOpen}
-                  onSelect={onQualityChange}
+            {/* ── Controls row ── */}
+            <div className="flex items-center justify-between gap-1">
+              {/* Left: play + volume */}
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={togglePlay}
+                  className="ctrl-btn"
+                  aria-label={playing ? "暂停" : "播放"}
+                >
+                  {playing ? (
+                    <Pause size={15} strokeWidth={1.9} />
+                  ) : (
+                    <Play size={15} strokeWidth={1.9} />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleMute}
+                  className="ctrl-btn"
+                  aria-label={muted ? "取消静音" : "静音"}
+                >
+                  {effectiveVol === 0 ? (
+                    <VolumeX size={15} strokeWidth={1.8} />
+                  ) : (
+                    <Volume2 size={15} strokeWidth={1.8} />
+                  )}
+                </button>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.025}
+                  value={effectiveVol}
+                  onChange={handleVolume}
+                  aria-label="音量"
+                  aria-valuenow={Math.round(effectiveVol * 100)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  className="vol-slider"
+                  style={{
+                    background: `linear-gradient(90deg, oklch(96% 0.004 250 / 0.78) ${effectiveVol * 100}%, oklch(96% 0.004 250 / 0.18) ${effectiveVol * 100}%)`,
+                  }}
                 />
-              )}
-              {controlsEndSlot}
-              <button
-                type="button"
-                onClick={toggleFullscreen}
-                className="ctrl-btn"
-                aria-label={isFs ? "退出全屏" : "全屏"}
-              >
-                {isFs ? (
-                  <Minimize2 size={15} strokeWidth={1.8} />
-                ) : (
-                  <Maximize2 size={15} strokeWidth={1.8} />
+              </div>
+
+              {/* Right: quality + fullscreen */}
+              <div className="flex items-center gap-1">
+                {qualities.length > 1 && (
+                  <QualityMenu
+                    items={qualities}
+                    selectedId={selectedQualityId}
+                    open={qualityOpen}
+                    onOpenChange={handleQualityOpen}
+                    onSelect={onQualityChange}
+                  />
                 )}
-              </button>
+                {controlsEndSlot}
+                <button
+                  type="button"
+                  onClick={toggleFullscreen}
+                  className="ctrl-btn"
+                  aria-label={isFs ? "退出全屏" : "全屏"}
+                >
+                  {isFs ? (
+                    <Minimize2 size={15} strokeWidth={1.8} />
+                  ) : (
+                    <Maximize2 size={15} strokeWidth={1.8} />
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
     </ControlsPanelContext.Provider>
   );
 }

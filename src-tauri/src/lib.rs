@@ -1,13 +1,15 @@
 mod danmaku;
 mod models;
 mod platforms;
+mod power;
 mod proxy;
+mod tray;
 
 use models::{
     AppPreferences, Category, PlatformId, ProxyMode, ReplayItem, ReplayQuality, RoomCard,
     RoomDetail, SearchResult, StreamSource,
 };
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, WindowEvent};
 use tauri_plugin_store::StoreExt;
 
 #[tauri::command]
@@ -319,7 +321,7 @@ pub fn run() {
         tracing::info!("nvidia detected: disabled webkit accelerated compositing");
     }
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .setup(|app| {
             tracing::info!("starting image proxy");
             // Log the merged window config so we can verify platform overrides
@@ -328,12 +330,39 @@ pub fn run() {
                 tracing::info!("window decorations = {:?}", win.is_decorated());
             }
             proxy::start();
+
+            // Background playback support, layer 1 of 2: stop macOS from
+            // throttling this process (App Nap) once no window is visible.
+            // Layer 2 is `backgroundThrottling: "disabled"` in
+            // tauri.macos.conf.json, which does the same for the web view.
+            power::prevent_app_nap();
+
+            // Tray owns the playback title and the background-residency UI.
+            app.manage(tray::TrayState::default());
+            if let Err(e) = tray::init(app.handle()) {
+                // A missing tray icon is not fatal: the app is fully usable
+                // without it, so log and carry on.
+                tracing::error!("failed to create tray icon: {e}");
+            }
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_os::init())
         .manage(danmaku::DanmakuRegistry::default())
+        // Closing the main window parks the app in the tray instead of
+        // quitting, so playback keeps running in the background. The user
+        // leaves for real via the tray menu's 退出 or Cmd+Q, both of which
+        // exit with an explicit code and therefore still terminate.
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    tracing::info!("main window hidden — app stays resident in the tray");
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             get_featured,
             search_rooms,
@@ -353,8 +382,12 @@ pub fn run() {
             close_bilibili_login_window,
             check_rooms_live_status,
             danmaku::start_danmaku,
-            danmaku::stop_danmaku
+            danmaku::stop_danmaku,
+            tray::set_now_playing,
+            tray::clear_now_playing
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|_app_handle, _event| {});
 }

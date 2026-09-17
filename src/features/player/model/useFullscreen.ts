@@ -10,6 +10,17 @@
  * transition fires resize events mid-animation and isFullscreen() can briefly
  * read false. pendingRef skips the external sync during our own transition.
  *
+ * The guard has to outlive the *animation*, not the command: on macOS
+ * `setFullscreen()` resolves as soon as the transition starts, while
+ * `tauri://resize` keeps firing for the whole ~0.5s Space animation and
+ * isFullscreen() still reports the old value. Clearing the guard on the
+ * promise's resolution (the previous behaviour) let the external sync observe
+ * a stale `false` and strip the overlay off mid-animation — the video dropped
+ * back into the document flow and its compositing layer was rebuilt, which
+ * shows up as a black flash. `settle()` now polls until the platform agrees
+ * with the intent, with a timeout so a failed transition can never wedge the
+ * guard on forever.
+ *
  * Notch: handled in player.css via env(safe-area-inset-*) on the overlay, so
  * the video top never sits under the camera.
  *
@@ -20,6 +31,11 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const FS_CLASS = "player-stage--fullscreen";
+
+/** Upper bound on how long the external sync stays disabled after a request. */
+const SETTLE_TIMEOUT_MS = 1200;
+/** Poll interval while waiting for the native transition to land. */
+const SETTLE_POLL_MS = 60;
 
 export function useFullscreen(stageRef: React.RefObject<HTMLElement | null>) {
   const [isFs, setIsFs] = useState(false);
@@ -36,6 +52,26 @@ export function useFullscreen(stageRef: React.RefObject<HTMLElement | null>) {
     [stageRef],
   );
 
+  /**
+   * Holds pendingRef until the window actually reports `expect`, so resize
+   * events emitted during the native animation cannot be mistaken for an
+   * external fullscreen change.
+   */
+  const settle = useCallback(async (expect: boolean) => {
+    const win = getCurrentWindow();
+    const deadline = Date.now() + SETTLE_TIMEOUT_MS;
+    try {
+      while (Date.now() < deadline) {
+        const actual = await win.isFullscreen().catch(() => expect);
+        if (actual === expect) return;
+        await new Promise((resolve) => setTimeout(resolve, SETTLE_POLL_MS));
+      }
+      console.warn("[fs] settle timed out waiting for isFullscreen =", expect);
+    } finally {
+      pendingRef.current = false;
+    }
+  }, []);
+
   const enter = useCallback(async () => {
     console.log("[fs] enter");
     applyOverlay(true);
@@ -44,33 +80,41 @@ export function useFullscreen(stageRef: React.RefObject<HTMLElement | null>) {
     const win = getCurrentWindow();
     wasWindowFsRef.current = await win.isFullscreen().catch(() => false);
     console.log("[fs] enter, wasWindowFs =", wasWindowFsRef.current);
-    if (!wasWindowFsRef.current) {
-      try {
-        await win.setFullscreen(true);
-      } catch (e) {
-        console.warn("[fs] setFullscreen(true) failed", e);
-      }
+    if (wasWindowFsRef.current) {
+      pendingRef.current = false;
+      return;
     }
-    pendingRef.current = false;
-  }, [applyOverlay]);
+    try {
+      await win.setFullscreen(true);
+    } catch (e) {
+      console.warn("[fs] setFullscreen(true) failed", e);
+      pendingRef.current = false;
+      return;
+    }
+    await settle(true);
+  }, [applyOverlay, settle]);
 
   const exit = useCallback(async () => {
     console.log("[fs] exit, wasWindowFs =", wasWindowFsRef.current);
     applyOverlay(false);
     setIsFs(false);
     pendingRef.current = true;
-    const win = getCurrentWindow();
     // Only exit window fullscreen if the player was responsible for entering
     // it. If the window was already fullscreen before, leave it alone.
-    if (!wasWindowFsRef.current) {
-      try {
-        await win.setFullscreen(false);
-      } catch (e) {
-        console.warn("[fs] setFullscreen(false) failed", e);
-      }
+    if (wasWindowFsRef.current) {
+      pendingRef.current = false;
+      return;
     }
-    pendingRef.current = false;
-  }, [applyOverlay]);
+    const win = getCurrentWindow();
+    try {
+      await win.setFullscreen(false);
+    } catch (e) {
+      console.warn("[fs] setFullscreen(false) failed", e);
+      pendingRef.current = false;
+      return;
+    }
+    await settle(false);
+  }, [applyOverlay, settle]);
 
   const toggle = useCallback(() => {
     console.log("[fs] toggle, current isFs =", isFs);

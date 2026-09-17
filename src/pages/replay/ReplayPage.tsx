@@ -178,6 +178,9 @@ export function ReplayPage() {
                 onQualityChange={setSelectedQualityId}
                 onEnded={handleEnded}
                 onNearEnd={handleNearEnd}
+                nowPlaying={
+                  activeItem ? { title: activeItem.title, streamer: room?.streamerName } : null
+                }
               />
             ) : (
               /* Empty / loading / error — same container, no height jump */

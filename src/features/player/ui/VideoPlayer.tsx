@@ -11,12 +11,14 @@ import { useEffect, useRef, useState } from "react";
 import { os } from "@/shared/lib/os";
 import "@/app/styles/player.css";
 import { detectHevcSupport } from "@/shared/lib/hevc";
+import { type NowPlayingInfo, useNowPlaying } from "../model/useNowPlaying";
 import { useOnlineStatus } from "../model/useOnlineStatus";
 import {
   type PlayerController,
   type PlayerFormat,
   usePlayerEngine,
 } from "../model/usePlayerEngine";
+import { useVisibilityResume } from "../model/useVisibilityResume";
 import { ControlsOverlay } from "./ControlsOverlay";
 
 export interface PlayerQualityItem {
@@ -51,6 +53,9 @@ export interface VideoPlayerProps {
   /** Overrides the static error-overlay text during stall recovery
    *  (e.g. "播放失败 · 正在重新拉流（第 2 次）"). */
   recoveryHint?: string;
+  /** Stream identity mirrored into the OS tray / macOS menu bar.
+   *  Omit (or pass null) to leave the tray untouched. */
+  nowPlaying?: NowPlayingInfo | null;
 }
 
 export function VideoPlayer({
@@ -71,6 +76,7 @@ export function VideoPlayer({
   overlaySlot,
   controlsEndSlot,
   recoveryHint,
+  nowPlaying,
 }: VideoPlayerProps) {
   const { videoRef, controller, ready, error, codecUnsupported } = usePlayerEngine({
     url: streamUrl,
@@ -87,6 +93,13 @@ export function VideoPlayer({
   });
 
   const online = useOnlineStatus();
+
+  // Publish what is playing to the tray, and let the tray menu drive the
+  // media element back.
+  useNowPlaying(nowPlaying, videoRef);
+  // Nudge the engine back to life when the window returns from another Space
+  // (macOS parks invisible windows — see useVisibilityResume).
+  useVisibilityResume(videoRef, controller.engine);
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   // biome-ignore lint/suspicious/noExplicitAny: ControlsOverlay expects a mutable ref

@@ -345,6 +345,7 @@ export function PlayerPage() {
                 onError={() => handleSourceError(selectedSource)}
                 onPlaybackStall={handlePlaybackStall}
                 onUserPlay={handleUserPlay}
+                nowPlaying={room ? { title: room.title, streamer: room.streamerName } : null}
                 recoveryHint={
                   stallCount > 0 ? `播放失败 · 正在重新拉流（第 ${stallCount} 次）` : undefined
                 }

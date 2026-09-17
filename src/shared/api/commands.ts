@@ -303,3 +303,28 @@ export async function startDanmaku(platform: PlatformId, roomId: string): Promis
 export async function stopDanmaku(platform: PlatformId, roomId: string): Promise<void> {
   await safeInvoke("stop_danmaku", { platform, roomId });
 }
+
+// ── Tray / menu-bar now-playing ──────────────────────────────────────────────
+
+export interface NowPlayingPayload {
+  /** Live stream or replay title — rendered next to the tray icon. */
+  title: string;
+  /** Streamer name — shown in the tray tooltip, not in the menu bar. */
+  streamer?: string;
+  playing: boolean;
+  muted: boolean;
+}
+
+/**
+ * Mirrors the current stream into the OS tray (on macOS: the menu-bar status
+ * item title, tooltip and transport menu). The tray truncates the title for
+ * the menu bar and keeps the full text in the tooltip.
+ */
+export async function setNowPlaying(payload: NowPlayingPayload): Promise<void> {
+  await safeInvoke("set_now_playing", { update: payload });
+}
+
+/** Clears the tray title — call when playback stops or the player unmounts. */
+export async function clearNowPlaying(): Promise<void> {
+  await safeInvoke("clear_now_playing");
+}

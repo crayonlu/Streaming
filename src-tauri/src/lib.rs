@@ -1,5 +1,6 @@
 mod danmaku;
 mod models;
+mod occlusion;
 mod platforms;
 mod power;
 mod proxy;
@@ -328,13 +329,20 @@ pub fn run() {
             // (tauri.macos.conf.json) actually took effect.
             if let Some(win) = app.get_webview_window("main") {
                 tracing::info!("window decorations = {:?}", win.is_decorated());
+
+                // Background playback, layer 1 of 3. WebKit stops painting a
+                // page whose window is not in `NSWindowOcclusionStateVisible`
+                // — which is exactly what a window on an inactive Space is —
+                // so Ctrl+←/→ used to park the video and leave a black stage.
+                // See `occlusion.rs` for the WebKit source this turns off.
+                occlusion::disable_window_occlusion_detection(&win);
             }
             proxy::start();
 
-            // Background playback support, layer 1 of 2: stop macOS from
-            // throttling this process (App Nap) once no window is visible.
-            // Layer 2 is `backgroundThrottling: "disabled"` in
-            // tauri.macos.conf.json, which does the same for the web view.
+            // Background playback, layer 2 of 3: stop macOS from throttling
+            // this process (App Nap) once no window is visible. Layer 3 is
+            // `backgroundThrottling: "disabled"` in tauri.macos.conf.json,
+            // which does the same for the web view's own scheduler.
             power::prevent_app_nap();
 
             // Tray owns the playback title and the background-residency UI.

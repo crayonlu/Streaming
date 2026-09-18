@@ -2,18 +2,19 @@
  * useVisibilityResume — recovers the live pipeline after the window has been
  * out of sight.
  *
- * macOS/WebKit treats a window on another Space (Ctrl+←/→), a minimised window
- * and a hidden app all as *not visible*: the compositor stops repainting and
- * the MSE pipeline is parked. Coming back therefore needs an explicit nudge —
- * without one, the stage keeps showing its black background until a new
- * segment happens to arrive on its own.
+ * This is a *safety net*, not the primary fix. The primary fix is
+ * `disable_window_occlusion_detection` on the Rust side (`src-tauri/src/
+ * occlusion.rs`), which stops WebKit from clearing `ActivityState::IsVisible`
+ * when the window moves to another Space — the actual cause of the black
+ * stage on Ctrl+←/→.
+ *
+ * It still matters for the cases that flag cannot cover, because WebKit also
+ * bails out of `isViewVisible()` when the window itself is not visible:
+ * minimising, or hiding the app (which is what our close-to-tray path does).
+ * Those leave the MSE pipeline parked, so coming back needs a nudge.
  *
  * Only acts when playback was actually running at the moment the window went
  * away, so a stream the user deliberately paused is never started again.
- *
- * Note this is a mitigation, not the root fix: the root fix is
- * `backgroundThrottling: "disabled"` (tauri.macos.conf.json), which stops
- * WebKit from parking the page in the first place.
  */
 
 import { useEffect, useRef } from "react";
@@ -22,6 +23,9 @@ type ResumableEngine = {
   /** hls.js: resume loading after a stall or an explicit stopLoad(). */
   startLoad?: (position?: number) => void;
 };
+
+/** Tolerance when testing whether the buffer still covers the playhead. */
+const BUFFER_EPSILON_S = 0.5;
 
 export function useVisibilityResume(
   videoRef: React.RefObject<HTMLVideoElement | null>,
@@ -34,13 +38,29 @@ export function useVisibilityResume(
     const video = videoRef.current;
     if (!video) return;
 
+    const bufferedAtPlayhead = () => {
+      const t = video.currentTime;
+      for (let i = 0; i < video.buffered.length; i += 1) {
+        if (t >= video.buffered.start(i) - BUFFER_EPSILON_S && t <= video.buffered.end(i)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     const resume = () => {
       if (!wasPlayingRef.current) return;
       wasPlayingRef.current = false;
-      // hls.js parks its loader while the page is hidden; mpegts.js keeps its
-      // connection, so `startLoad` is simply absent there.
-      (engine as ResumableEngine | null)?.startLoad?.();
+
       if (video.paused) void video.play().catch(() => undefined);
+
+      // Only nudge the loader when the buffer genuinely ran dry. Calling
+      // startLoad() on a healthy buffer throws away perfectly good data and
+      // forces a re-fetch, which shows up as the very black frame we are
+      // trying to avoid.
+      if (!bufferedAtPlayhead()) {
+        (engine as ResumableEngine | null)?.startLoad?.();
+      }
     };
 
     const onVisibilityChange = () => {

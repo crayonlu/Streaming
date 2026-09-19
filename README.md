@@ -98,3 +98,9 @@ xattr -dr com.apple.quarantine /Applications/streaming.app
 ## License
 
 [MIT](LICENSE)
+
+## 致谢
+
+菜单栏托盘图标取自 [Lucide](https://lucide.dev) 的 `radio-tower`（ISC License，Copyright © Lucide Icons and Contributors），
+源文件为 `src-tauri/icons/tray-icon.svg`，由 `src-tauri/icons/gen_tray_icon.py` 生成 template image 形式的 PNG。
+完整许可文本见该脚本头部。

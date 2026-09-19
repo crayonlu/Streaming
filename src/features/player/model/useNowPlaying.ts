@@ -1,9 +1,11 @@
 /**
  * useNowPlaying — mirrors the current stream into the OS tray.
  *
- * On macOS the tray is the menu-bar status item, which renders `icon + title`.
- * We feed it the live stream title so the user can see what is playing without
- * bringing the window forward, and the streamer name for the tooltip.
+ * On macOS the tray is the menu-bar status item. It stays **icon-only**: the
+ * playback line (play/pause glyph, streamer, title) is the first row of the
+ * tray menu, so it only shows up once the user clicks the icon. Putting it in
+ * the menu bar itself made the title permanently visible and far too long.
+ * The tooltip carries the streamer name for a hover peek.
  *
  * Transport controls run the other way: the Rust tray menu emits events and
  * this hook applies them to the media element, because the `<video>` element —
@@ -23,7 +25,7 @@ export const TRAY_TOGGLE_PLAY_EVENT = "tray://toggle-play";
 export const TRAY_TOGGLE_MUTE_EVENT = "tray://toggle-mute";
 
 export interface NowPlayingInfo {
-  /** Live stream or replay title — rendered next to the tray icon. */
+  /** Live stream or replay title — shown in the tray menu's header row. */
   title: string;
   /** Streamer name — tooltip only. */
   streamer?: string;
@@ -69,8 +71,8 @@ export function useNowPlaying(
     };
   }, [title, streamer, videoRef]);
 
-  // Drop the tray title when the player goes away (back navigation, route
-  // change) so the menu bar never advertises a stream that is no longer open.
+  // Drop the tray info when the player goes away (back navigation, route
+  // change) so the tray never advertises a stream that is no longer open.
   useEffect(() => {
     return () => {
       lastSentRef.current = null;

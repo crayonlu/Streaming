@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ArrowLeft, ExternalLink, Film, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,10 @@ import { useDanmakuStore } from "@/features/danmaku/model/useDanmakuStore";
 import { DanmakuControls } from "@/features/danmaku/ui/DanmakuControls";
 import { DanmakuOverlay } from "@/features/danmaku/ui/DanmakuOverlay";
 import { FollowButton } from "@/features/follow-button/ui/FollowButton";
+import {
+  liveRecoveryDelayMs,
+  MAX_LIVE_RECOVERY_ATTEMPTS,
+} from "@/features/player/model/liveRecovery";
 import { useBilibiliAuth } from "@/features/player/model/useBilibiliAuth";
 import { useOnlineStatus } from "@/features/player/model/useOnlineStatus";
 import { useStreamLifecycle } from "@/features/player/model/useStreamLifecycle";
@@ -44,6 +48,7 @@ export function PlayerPage() {
   const [failedSourceIds, setFailedSourceIds] = useState<Set<string>>(new Set());
   const [stallCount, setStallCount] = useState(0);
   const [retryKey, setRetryKey] = useState(0);
+  const recoveryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { loginState: bilibiliLoginState, login: handleBilibiliLogin } = useBilibiliAuth(platform);
   const streamLifecycle = useStreamLifecycle();
   const onlineCount = useDanmakuStore((s) => s.onlineCount);
@@ -91,11 +96,19 @@ export function PlayerPage() {
   }, []);
 
   const handleRetryAll = () => {
+    if (recoveryTimerRef.current) clearTimeout(recoveryTimerRef.current);
     setFailedSourceIds(new Set());
     setManualSelection(null);
     setStallCount(0);
     setRetryKey((k) => k + 1);
   };
+
+  useEffect(
+    () => () => {
+      if (recoveryTimerRef.current) clearTimeout(recoveryTimerRef.current);
+    },
+    [],
+  );
 
   const handleUserPlay = useCallback(() => {
     if (streamQuery.isFetching) return;
@@ -115,20 +128,43 @@ export function PlayerPage() {
 
   const handlePlaybackStall = useCallback(
     (reason: "error" | "waiting-timeout") => {
-      if (streamQuery.isFetching) return;
-      streamLifecycle.recordFetch();
-      setStallCount((c) => c + 1);
-      setFailedSourceIds((prev) => {
-        const next = new Set(prev);
-        if (selectedSource) next.delete(selectedSource.id);
-        return next;
-      });
-      void streamQuery.refetch();
+      if (streamQuery.isFetching || recoveryTimerRef.current) return;
+      const nextAttempt = stallCount + 1;
+      if (nextAttempt > MAX_LIVE_RECOVERY_ATTEMPTS) return;
+      setStallCount(nextAttempt);
+      const nextFailed = new Set(failedSourceIds);
+      if (selectedSource) nextFailed.add(selectedSource.id);
+      setFailedSourceIds(nextFailed);
+      if (
+        sources.length > 0 &&
+        nextFailed.size >= sources.length &&
+        nextAttempt < MAX_LIVE_RECOVERY_ATTEMPTS
+      ) {
+        const delay = liveRecoveryDelayMs(nextAttempt);
+        recoveryTimerRef.current = setTimeout(() => {
+          recoveryTimerRef.current = null;
+          void streamQuery.refetch().then((result) => {
+            if (result.isSuccess) setFailedSourceIds(new Set());
+          });
+        }, delay);
+      }
       // biome-ignore lint/suspicious/noConsole: debug
-      console.log("[PlayerPage] playback stall, refreshing stream sources", { reason });
+      console.log("[PlayerPage] playback stall, advancing recovery route", {
+        reason,
+        attempt: nextAttempt,
+      });
     },
-    [streamLifecycle, streamQuery, selectedSource],
+    [failedSourceIds, stallCount, streamQuery, selectedSource, sources],
   );
+
+  const handlePlaybackRecovered = useCallback(() => {
+    if (recoveryTimerRef.current) {
+      clearTimeout(recoveryTimerRef.current);
+      recoveryTimerRef.current = null;
+    }
+    setStallCount(0);
+    setFailedSourceIds(new Set());
+  }, []);
 
   // ── Early return after all hooks ──────────────────────────────────────────
   if (!validRoute) {
@@ -158,12 +194,24 @@ export function PlayerPage() {
   });
 
   // Map StreamSource[] → PlayerQualityItem[] for VideoPlayer
-  const qualityItems: PlayerQualityItem[] = sources.map((s) => ({
-    id: s.id,
-    label: s.qualityLabel,
-    cdn: s.cdn,
-    failed: failedSourceIds.has(s.id),
-  }));
+  // Quality is a user choice; CDN/format is an automatic recovery route.
+  // Grouping prevents duplicate, reordering options as probe completion order
+  // changes during initial load or a background refresh.
+  const qualityItems: PlayerQualityItem[] = Array.from(
+    sources.reduce((groups, source) => {
+      const current = groups.get(source.qualityKey);
+      if (!current) {
+        groups.set(source.qualityKey, {
+          id: source.qualityKey,
+          label: source.qualityLabel,
+          failed: failedSourceIds.has(source.id),
+        });
+      } else if (!failedSourceIds.has(source.id)) {
+        current.failed = false;
+      }
+      return groups;
+    }, new Map<string, PlayerQualityItem>()),
+  ).map(([, item]) => item);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -176,6 +224,8 @@ export function PlayerPage() {
             size="icon-sm"
             onClick={() => navigate(-1)}
             className="shrink-0 -ml-1"
+            aria-label="返回"
+            title="返回"
           >
             <ArrowLeft size={15} />
           </Button>
@@ -332,18 +382,23 @@ export function PlayerPage() {
                 poster={room?.coverUrl}
                 isLive
                 qualities={qualityItems}
-                selectedQualityId={selectedSource.id}
-                onQualityChange={(id) => {
-                  const picked = sources.find((s) => s.id === id);
+                selectedQualityId={selectedSource.qualityKey}
+                onQualityChange={(qualityKey) => {
+                  const picked = sources.find(
+                    (s) => s.qualityKey === qualityKey && !failedSourceIds.has(s.id),
+                  );
                   if (picked) setManualSelection(selectionOf(picked));
                   setFailedSourceIds((prev) => {
                     const next = new Set(prev);
-                    next.delete(id);
+                    for (const source of sources) {
+                      if (source.qualityKey === qualityKey) next.delete(source.id);
+                    }
                     return next;
                   });
                 }}
                 onError={() => handleSourceError(selectedSource)}
                 onPlaybackStall={handlePlaybackStall}
+                onPlaybackRecovered={handlePlaybackRecovered}
                 onUserPlay={handleUserPlay}
                 nowPlaying={room ? { title: room.title, streamer: room.streamerName } : null}
                 recoveryHint={

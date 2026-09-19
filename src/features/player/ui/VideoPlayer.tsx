@@ -38,6 +38,7 @@ export interface VideoPlayerProps {
   onQualityChange?: (id: string) => void;
   onError?: () => void;
   onPlaybackStall?: (reason: "error" | "waiting-timeout") => void;
+  onPlaybackRecovered?: () => void;
   onUserPlay?: () => void;
   onUserPause?: () => void;
   /** Fires once when playback ends (VOD). */
@@ -68,6 +69,7 @@ export function VideoPlayer({
   onQualityChange,
   onError,
   onPlaybackStall,
+  onPlaybackRecovered,
   onUserPlay,
   onUserPause,
   onEnded,
@@ -114,6 +116,13 @@ export function VideoPlayer({
   ctrlRef.current = controller;
 
   const nearEndFiredRef = useRef(false);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !isLive || !onPlaybackRecovered) return;
+    video.addEventListener("playing", onPlaybackRecovered);
+    return () => video.removeEventListener("playing", onPlaybackRecovered);
+  }, [isLive, onPlaybackRecovered, videoRef]);
 
   // VOD: onNearEnd fires once 8s before the end (for prefetching the next
   // part), onEnded fires when playback finishes.
@@ -197,14 +206,14 @@ export function VideoPlayer({
       )}
 
       {/* Loading: before ready or while buffering */}
-      {streamUrl && !error && !codecUnsupported && (
+      {online && streamUrl && !error && !codecUnsupported && (
         <LoadingOverlay videoRef={videoRef} ready={ready} />
       )}
 
       {/* Terminal failure: the WebView cannot decode H.264/AAC at all
           (Linux WebKitGTK without GStreamer decoder packages). Refetching
           stream sources cannot help — show the fix instead of a spinner. */}
-      {codecUnsupported && streamUrl && (
+      {online && codecUnsupported && streamUrl && (
         <div className="absolute inset-0 z-20 pointer-events-none flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
           <AlertCircle size={28} strokeWidth={1.6} className="text-white/60" />
           <span className="text-sm text-white/70">当前系统缺少视频解码器，无法播放</span>
@@ -217,7 +226,7 @@ export function VideoPlayer({
       )}
 
       {/* Error: in-place recovery exhausted */}
-      {error && streamUrl && (
+      {online && error && !codecUnsupported && streamUrl && (
         <div className="absolute inset-0 z-20 pointer-events-none flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
           <AlertCircle size={28} strokeWidth={1.6} className="text-white/60" />
           <span className="text-sm text-white/70">{recoveryHint ?? "播放失败 · 正在尝试恢复"}</span>

@@ -21,7 +21,16 @@ interface PlayerProgressProps {
 export function PlayerProgress({ playerRef, isLive, playerReady }: PlayerProgressProps) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [liveLatency, setLiveLatency] = useState(0);
   const seeking = useRef(false);
+
+  useEffect(() => {
+    if (!isLive || !playerReady) return;
+    const timer = window.setInterval(() => {
+      setLiveLatency(playerRef.current?.liveLatency ?? 0);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [isLive, playerReady, playerRef]);
 
   useEffect(() => {
     if (isLive || !playerReady) return;
@@ -43,32 +52,20 @@ export function PlayerProgress({ playerRef, isLive, playerReady }: PlayerProgres
     if (isLive || !playerReady) return;
     const p = playerRef.current;
     if (!p) return;
-    let rafId = 0;
+    let timerId = 0;
 
-    // Skip RAF entirely while the user is dragging the scrubber (Q-007).
-    // When seeking, currentTime is driven by handleSeek directly, so the
-    // loop would only waste CPU producing no-op frames.
+    // Player chrome does not need a display-rate update loop. Four updates a
+    // second remain visually smooth while avoiding a React render per frame.
     const tick = () => {
       if (!seeking.current) {
         const t = (p.video ?? p.media)?.currentTime ?? p.currentTime ?? 0;
         setCurrentTime(t);
-        rafId = requestAnimationFrame(tick);
-      } else {
-        // Pause the loop; it will be restarted by the seekend handler.
-        rafId = 0;
       }
     };
-
-    const onSeekEnd = () => {
-      // Restart the RAF loop after the seek completes.
-      if (rafId === 0) rafId = requestAnimationFrame(tick);
-    };
-
-    p.on?.("seeked", onSeekEnd);
-    rafId = requestAnimationFrame(tick);
+    tick();
+    timerId = window.setInterval(tick, 250);
     return () => {
-      cancelAnimationFrame(rafId);
-      p.off?.("seeked", onSeekEnd);
+      window.clearInterval(timerId);
     };
   }, [playerRef, isLive, playerReady]);
 
@@ -84,14 +81,27 @@ export function PlayerProgress({ playerRef, isLive, playerReady }: PlayerProgres
   );
 
   if (isLive) {
+    const behindLive = liveLatency > 3;
     return (
       <div className="flex items-center gap-2">
-        <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-live px-1.5 py-0.5 text-[9px] font-semibold tracking-widest text-white uppercase">
+        <button
+          type="button"
+          onClick={() => playerRef.current?.seekToLiveEdge?.()}
+          disabled={!behindLive}
+          className="shrink-0 inline-flex items-center gap-1 rounded-full bg-live px-1.5 py-0.5 text-[9px] font-semibold tracking-widest text-white uppercase disabled:cursor-default"
+          aria-label={
+            behindLive ? `落后直播约 ${Math.round(liveLatency)} 秒，点击回到直播` : "直播中"
+          }
+          title={behindLive ? "回到直播" : "直播中"}
+        >
           <Radio size={7} strokeWidth={2.5} />
-          Live
-        </span>
+          {behindLive ? "回到直播" : "Live"}
+        </button>
         <div className="flex-1 h-0.75 rounded-full overflow-hidden bg-white/15">
-          <div className="h-full w-full rounded-full bg-white/55" />
+          <div
+            className="h-full rounded-full bg-white/55 transition-[width] duration-300"
+            style={{ width: behindLive ? "82%" : "100%" }}
+          />
         </div>
       </div>
     );
@@ -110,10 +120,17 @@ export function PlayerProgress({ playerRef, isLive, playerReady }: PlayerProgres
         max={duration || 100}
         step={1}
         value={currentTime}
-        onMouseDown={() => {
+        onPointerDown={(event) => {
           seeking.current = true;
+          event.currentTarget.setPointerCapture(event.pointerId);
         }}
-        onMouseUp={() => {
+        onPointerUp={(event) => {
+          seeking.current = false;
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
+        }}
+        onPointerCancel={() => {
           seeking.current = false;
         }}
         onChange={handleSeek}

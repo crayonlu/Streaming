@@ -433,6 +433,28 @@ pub async fn get_stream_sources(room_id: &str) -> Result<Vec<StreamSource>, Stri
         // rather than failing the room entirely.
         return get_stream_sources_legacy(&detail).await;
     }
+    // JoinSet yields in completion order, which is deliberately non-deterministic.
+    // Never expose that ordering (or the array index based ids) to the player UI.
+    sources.sort_by(|a, b| {
+        let quality_rank = |key: &str| match key {
+            "source" => 0,
+            "hd" => 1,
+            "sd" => 2,
+            _ => 3,
+        };
+        quality_rank(&a.quality_key)
+            .cmp(&quality_rank(&b.quality_key))
+            .then_with(|| a.cdn.cmp(&b.cdn))
+            .then_with(|| a.stream_url.cmp(&b.stream_url))
+    });
+    for source in &mut sources {
+        let cdn = source.cdn.as_deref().unwrap_or("unknown");
+        source.id = format!("huya-{}-{}-flv", source.quality_key, cdn);
+        source.is_default = Some(false);
+    }
+    if let Some(first) = sources.first_mut() {
+        first.is_default = Some(true);
+    }
     Ok(sources)
 }
 

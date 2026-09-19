@@ -25,6 +25,8 @@ export interface PlayerController {
   play(): Promise<void>;
   pause(): void;
   seek(time: number): void;
+  seekToLiveEdge(): void;
+  readonly liveLatency: number;
   readonly currentTime: number;
   readonly duration: number;
   readonly paused: boolean;
@@ -92,12 +94,14 @@ export function usePlayerEngine({
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    video.volume = readVol();
 
     const prev = prevRef.current;
     const engine = engineRef.current;
 
     // ── Soft switch: same engine family, only the URL changed ────────────
     if (prev && prev.format === format && prev.isLive === isLive && engine) {
+      const resumeAt = !isLive && Number.isFinite(video.currentTime) ? video.currentTime : 0;
       recoveryRef.current = INITIAL_RECOVERY_STATE;
       setError(false);
       if (format === "hls" && engine.loadSource) {
@@ -109,6 +113,16 @@ export function usePlayerEngine({
         engine.load();
       } else {
         video.src = url;
+      }
+      if (!isLive && resumeAt > 0) {
+        const restore = () => {
+          video.currentTime = Math.min(
+            resumeAt,
+            Number.isFinite(video.duration) ? video.duration : resumeAt,
+          );
+          video.removeEventListener("loadedmetadata", restore);
+        };
+        video.addEventListener("loadedmetadata", restore);
       }
       void video.play().catch(() => undefined);
       return;
@@ -286,6 +300,20 @@ export function usePlayerEngine({
       pause: () => v?.pause(),
       seek: (t: number) => {
         if (v) v.currentTime = t;
+      },
+      seekToLiveEdge: () => {
+        if (!v) return;
+        const engineEdge = engineRef.current?.liveSyncPosition;
+        const bufferedEdge = v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0;
+        const edge = Number.isFinite(engineEdge) ? Number(engineEdge) : bufferedEdge;
+        if (edge > 0) v.currentTime = edge;
+      },
+      get liveLatency() {
+        if (!v) return 0;
+        const engineEdge = engineRef.current?.liveSyncPosition;
+        const bufferedEdge = v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0;
+        const edge = Number.isFinite(engineEdge) ? Number(engineEdge) : bufferedEdge;
+        return Math.max(0, edge - v.currentTime);
       },
       get currentTime() {
         return v?.currentTime ?? 0;

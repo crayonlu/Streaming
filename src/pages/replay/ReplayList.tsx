@@ -8,6 +8,7 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { ChevronRight, Clock, Eye, Film, PlayCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { getReplayProgress, replayProgressKey } from "@/features/replay/model/progress";
 import { cn } from "@/lib/utils";
 import { getReplayList, getReplayParts } from "@/shared/api/commands";
 import { fmtDate, fmtDuration } from "@/shared/lib/dom";
@@ -24,6 +25,12 @@ function PartRow({
   active: boolean;
   onPlay: (item: ReplayItem) => void;
 }) {
+  const progress = getReplayProgress(replayProgressKey(part.platform, part.roomId, part.id));
+  const percent = progress?.completed
+    ? 100
+    : progress && progress.duration > 0
+      ? Math.round((progress.position / progress.duration) * 100)
+      : 0;
   return (
     <button
       type="button"
@@ -43,7 +50,14 @@ function PartRow({
       >
         P{part.partNum}
       </span>
-      <span className="flex-1 truncate text-xs">{part.showRemark || part.title}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-xs">{part.showRemark || part.title}</span>
+        {percent > 0 && (
+          <span className="mt-1 block h-0.5 overflow-hidden rounded-full bg-muted">
+            <span className="block h-full bg-primary/70" style={{ width: `${percent}%` }} />
+          </span>
+        )}
+      </span>
       <span className="shrink-0 tabular-nums text-[11px] text-muted-foreground">
         {fmtDuration(part.durationStr)}
       </span>
@@ -71,12 +85,18 @@ function SessionRow({
   onPlay: (item: ReplayItem) => void;
 }) {
   const hasParts = session.totalParts > 1;
+  const progress = !hasParts
+    ? getReplayProgress(replayProgressKey(session.platform, session.roomId, session.id))
+    : null;
 
   return (
     <div>
       <button
         type="button"
-        onClick={hasParts ? onToggle : () => onPlay(session)}
+        onClick={() => {
+          if (hasParts) onToggle();
+          onPlay(session);
+        }}
         aria-expanded={hasParts ? expanded : undefined}
         className={cn(
           "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors group",
@@ -113,6 +133,13 @@ function SessionRow({
                 {session.viewCountText}
               </span>
             )}
+            {progress?.completed ? (
+              <span className="text-primary/80">已看完</span>
+            ) : progress && progress.duration > 0 ? (
+              <span className="text-primary/80">
+                继续观看 {Math.round((progress.position / progress.duration) * 100)}%
+              </span>
+            ) : null}
           </div>
         </div>
 

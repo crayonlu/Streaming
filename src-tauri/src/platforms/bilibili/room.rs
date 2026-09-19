@@ -581,18 +581,37 @@ pub async fn get_stream_sources(
     reachable.sort_by(|a, b| {
         let priority_a = source_priority(a);
         let priority_b = source_priority(b);
-        priority_b.cmp(&priority_a)
+        priority_b
+            .cmp(&priority_a)
+            .then_with(|| b.quality_key.cmp(&a.quality_key))
+            .then_with(|| a.cdn.cmp(&b.cdn))
+            .then_with(|| format!("{:?}", a.format).cmp(&format!("{:?}", b.format)))
+            .then_with(|| a.stream_url.cmp(&b.stream_url))
     });
 
     // Group by quality, mark the first one in each quality group as default
     let mut quality_groups: HashMap<String, usize> = HashMap::new();
     for (idx, source) in reachable.iter_mut().enumerate() {
+        source.is_default = Some(false);
         let entry = quality_groups
             .entry(source.quality_key.clone())
             .or_insert(idx);
         if *entry == idx {
             source.is_default = Some(true);
         }
+    }
+
+    // Source identity must survive URL refreshes and concurrent probe order.
+    for source in &mut reachable {
+        let format = match source.format {
+            crate::models::StreamFormat::Hls => "hls",
+            crate::models::StreamFormat::Flv => "flv",
+        };
+        source.id = format!(
+            "bili-{}-{}-{format}",
+            source.quality_key,
+            source.cdn.as_deref().unwrap_or("unknown")
+        );
     }
 
     // Route all HLS streams through the local proxy so that WebView2 does not

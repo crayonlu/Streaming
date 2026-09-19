@@ -12,8 +12,9 @@ import type { StreamSource } from "@/shared/types/domain";
 
 export interface ManualSelection {
   qualityKey: string;
-  cdn: string | null;
-  format: StreamSource["format"];
+  /** Preferred route within the quality. It may disappear after a refresh. */
+  cdn?: string | null;
+  format?: StreamSource["format"];
 }
 
 export function selectionOf(s: StreamSource): ManualSelection {
@@ -21,7 +22,11 @@ export function selectionOf(s: StreamSource): ManualSelection {
 }
 
 function sameSelection(s: StreamSource, sel: ManualSelection): boolean {
-  return s.qualityKey === sel.qualityKey && (s.cdn ?? null) === sel.cdn && s.format === sel.format;
+  return (
+    s.qualityKey === sel.qualityKey &&
+    (sel.cdn === undefined || (s.cdn ?? null) === sel.cdn) &&
+    (sel.format === undefined || s.format === sel.format)
+  );
 }
 
 export function selectStreamSource(
@@ -33,6 +38,12 @@ export function selectStreamSource(
   if (manual) {
     const matched = sources.find((s) => sameSelection(s, manual));
     if (matched && !failedIds.has(matched.id)) return matched;
+    // Keep the user's chosen quality when a refreshed source catalogue no
+    // longer contains the exact CDN/format route.
+    const sameQuality = sources.find(
+      (s) => s.qualityKey === manual.qualityKey && !failedIds.has(s.id),
+    );
+    if (sameQuality) return sameQuality;
   }
   const available = sources.filter((s) => !failedIds.has(s.id));
   if (!available.length) return null;

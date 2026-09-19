@@ -5,7 +5,7 @@
  * Includes play/pause, volume, quality selector, fullscreen, and VOD scrub bar.
  */
 
-import { Maximize2, Minimize2, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { Loader2, Maximize2, Minimize2, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { createContext, useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useFullscreen } from "../model/useFullscreen";
@@ -73,6 +73,7 @@ export function ControlsOverlay({
   const [muted, setMuted] = useState(false);
   // playing state is driven by <video> events (playing/pause/waiting/ended).
   const [playing, setPlaying] = useState(false);
+  const [buffering, setBuffering] = useState(false);
   const [visible, setVisible] = useState(true);
   const [qualityOpen, setQualityOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -105,10 +106,19 @@ export function ControlsOverlay({
     // "pause"   fires when the player actually pauses.
     // "waiting" fires when buffering stalls playback — treat as not-playing.
     // "ended"   fires when VOD reaches the end.
-    const onPlaying = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
-    const onWaiting = () => setPlaying(false);
-    const onEnded = () => setPlaying(false);
+    const onPlaying = () => {
+      setPlaying(true);
+      setBuffering(false);
+    };
+    const onPause = () => {
+      setPlaying(false);
+      setBuffering(false);
+    };
+    const onWaiting = () => setBuffering(true);
+    const onEnded = () => {
+      setPlaying(false);
+      setBuffering(false);
+    };
 
     p.on?.("volumechange", onVolumeChange);
     p.on?.("playing", onPlaying);
@@ -158,6 +168,12 @@ export function ControlsOverlay({
           const next = !muted;
           p.muted = next;
           setMuted(next);
+          break;
+        }
+        case "d":
+        case "D": {
+          e.preventDefault();
+          window.dispatchEvent(new CustomEvent("streaming:toggle-danmaku"));
           break;
         }
         case "f":
@@ -274,7 +290,9 @@ export function ControlsOverlay({
     const next = !muted;
     p.muted = next;
     setMuted(next);
-    saveVol(next ? 0 : vol);
+    // Muting is temporary; preserve the last audible volume for unmute and
+    // the next session instead of persisting zero.
+    if (!next) saveVol(vol);
   }, [muted, vol, playerRef]);
 
   const handleVolume = useCallback(
@@ -343,9 +361,12 @@ export function ControlsOverlay({
                   type="button"
                   onClick={togglePlay}
                   className="ctrl-btn"
-                  aria-label={playing ? "暂停" : "播放"}
+                  aria-label={buffering ? "暂停，正在缓冲" : playing ? "暂停" : "播放"}
+                  title={`${buffering ? "正在缓冲，点击暂停" : playing ? "暂停" : "播放"}（空格）`}
                 >
-                  {playing ? (
+                  {buffering ? (
+                    <Loader2 size={15} strokeWidth={1.9} className="animate-spin" />
+                  ) : playing ? (
                     <Pause size={15} strokeWidth={1.9} />
                   ) : (
                     <Play size={15} strokeWidth={1.9} />
@@ -356,6 +377,7 @@ export function ControlsOverlay({
                   onClick={toggleMute}
                   className="ctrl-btn"
                   aria-label={muted ? "取消静音" : "静音"}
+                  title={`${muted ? "取消静音" : "静音"}（M）`}
                 >
                   {effectiveVol === 0 ? (
                     <VolumeX size={15} strokeWidth={1.8} />
@@ -398,6 +420,7 @@ export function ControlsOverlay({
                   onClick={toggleFullscreen}
                   className="ctrl-btn"
                   aria-label={isFs ? "退出全屏" : "全屏"}
+                  title={`${isFs ? "退出全屏" : "全屏"}（F）`}
                 >
                   {isFs ? (
                     <Minimize2 size={15} strokeWidth={1.8} />

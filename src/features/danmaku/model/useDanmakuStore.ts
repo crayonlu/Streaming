@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { DanmakuState } from "@/shared/types/domain";
 
 export type DanmakuFontSize = "small" | "medium" | "large";
 
@@ -14,6 +15,9 @@ interface DanmakuSettings {
   setOpacity: (v: number) => void;
   setArea: (v: number) => void;
   setFontSize: (v: DanmakuFontSize) => void;
+
+  connectionState: DanmakuState;
+  setConnectionState: (v: DanmakuState) => void;
 
   /** Runtime state (NOT persisted): current room's online viewer count,
    *  fed by danmaku "online" events. Null when unknown / no room. */
@@ -87,6 +91,8 @@ export const useDanmakuStore = create<DanmakuSettings>((set, get) => ({
     const { enabled, opacity, area, fontSize } = get();
     persist({ enabled, opacity, area, fontSize });
   },
+  connectionState: "closed",
+  setConnectionState: (v) => set({ connectionState: v }),
   onlineCount: null,
   setOnlineCount: (v) => set({ onlineCount: v }),
 }));

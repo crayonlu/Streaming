@@ -94,6 +94,10 @@ export function DanmakuOverlay({ platform, roomId }: DanmakuOverlayProps) {
         }
         return;
       }
+      if (msg.kind === "status") {
+        if (msg.state) useDanmakuStore.getState().setConnectionState(msg.state);
+        return;
+      }
       if (msg.kind !== "chat") return;
 
       const state = useDanmakuStore.getState();

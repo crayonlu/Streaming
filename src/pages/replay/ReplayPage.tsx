@@ -7,13 +7,24 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Film, RotateCcw } from "lucide-react";
+import { ArrowLeft, Film, ListVideo, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import type { PlayerController } from "@/features/player/model/usePlayerEngine";
 import type { PlayerQualityItem } from "@/features/player/ui/VideoPlayer";
 import { VideoPlayer } from "@/features/player/ui/VideoPlayer";
-import { getReplayQualities, getRoomDetail, loadPreferences } from "@/shared/api/commands";
+import {
+  loadReplayProgress,
+  replayProgressKey,
+  saveReplayProgress,
+} from "@/features/replay/model/progress";
+import {
+  getReplayParts,
+  getReplayQualities,
+  getRoomDetail,
+  loadPreferences,
+} from "@/shared/api/commands";
 import { fmtDuration } from "@/shared/lib/dom";
 import { isPlatform } from "@/shared/lib/platform";
 import type { PlatformId, ReplayItem, ReplayQuality } from "@/shared/types/domain";
@@ -35,8 +46,12 @@ export function ReplayPage() {
   const [currentParts, setCurrentParts] = useState<ReplayItem[]>([]);
   const [ended, setEnded] = useState(false);
   const [autoPlayNext, setAutoPlayNext] = useState(true);
+  const [listOpen, setListOpen] = useState(true);
   // Cache of prefetched qualities keyed by part id, to skip the fetch on switch.
   const prefetchRef = useRef<Map<string, ReplayQuality[]>>(new Map());
+  const partsRef = useRef<Map<number, ReplayItem[]>>(new Map());
+  const playerRef = useRef<PlayerController | null>(null);
+  const restoredItemRef = useRef<string | null>(null);
 
   useEffect(() => {
     void loadPreferences()
@@ -60,6 +75,21 @@ export function ReplayPage() {
     setQualities([]);
     setSelectedQualityId(null);
     setUrlError(null);
+    if (item.totalParts > 1) {
+      const cachedParts = partsRef.current.get(item.showId);
+      if (cachedParts) {
+        setCurrentParts(cachedParts);
+      } else {
+        void getReplayParts(item.platform, item.roomId, item.id, item.upId)
+          .then((parts) => {
+            partsRef.current.set(item.showId, parts);
+            setCurrentParts(parts);
+          })
+          .catch(() => undefined);
+      }
+    } else {
+      setCurrentParts([item]);
+    }
     const cached = prefetchRef.current.get(item.id);
     if (cached) {
       setQualities(cached);
@@ -97,12 +127,19 @@ export function ReplayPage() {
 
   // On ended: auto-play next, or surface the finished state.
   const handleEnded = useCallback(() => {
+    if (activeItem && isPlatform(platform) && roomId && playerRef.current) {
+      saveReplayProgress(
+        replayProgressKey(platform, roomId, activeItem.id),
+        playerRef.current.duration,
+        playerRef.current.duration,
+      );
+    }
     if (autoPlayNext && nextPart) {
       void handlePlay(nextPart);
     } else {
       setEnded(true);
     }
-  }, [autoPlayNext, nextPart, handlePlay]);
+  }, [activeItem, autoPlayNext, nextPart, handlePlay, platform, roomId]);
 
   // Map ReplayQuality[] → PlayerQualityItem[] for VideoPlayer
   const qualityItems: PlayerQualityItem[] = qualities.map((q) => ({
@@ -115,6 +152,37 @@ export function ReplayPage() {
     : streamUrl?.includes(".flv")
       ? "flv"
       : "mp4";
+
+  // Restore once per replay item and persist at a low frequency plus lifecycle
+  // boundaries. Quality changes keep the same item and therefore the same key.
+  useEffect(() => {
+    if (!activeItem || !streamUrl || !isPlatform(platform) || !roomId) return;
+    const controller = playerRef.current;
+    if (!controller) return;
+    const key = replayProgressKey(platform, roomId, activeItem.id);
+    const save = () => saveReplayProgress(key, controller.currentTime, controller.duration);
+    const restore = () => {
+      if (restoredItemRef.current === activeItem.id) return;
+      const progress = loadReplayProgress(key);
+      if (progress && progress.position < controller.duration) controller.seek(progress.position);
+      restoredItemRef.current = activeItem.id;
+    };
+    controller.on("loadedmetadata", restore);
+    controller.on("pause", save);
+    const interval = window.setInterval(save, 5000);
+    const onHidden = () => {
+      if (document.hidden) save();
+    };
+    document.addEventListener("visibilitychange", onHidden);
+    restore();
+    return () => {
+      save();
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onHidden);
+      controller.off("loadedmetadata", restore);
+      controller.off("pause", save);
+    };
+  }, [activeItem, streamUrl, platform, roomId]);
 
   if (!isPlatform(platform) || !roomId) {
     return (
@@ -133,6 +201,8 @@ export function ReplayPage() {
           size="icon-sm"
           onClick={() => navigate(-1)}
           className="-ml-1 shrink-0"
+          aria-label="返回"
+          title="返回"
         >
           <ArrowLeft size={15} />
         </Button>
@@ -156,6 +226,16 @@ export function ReplayPage() {
             {activeItem.showRemark || activeItem.title}
           </span>
         )}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={listOpen ? "隐藏回放列表" : "显示回放列表"}
+          aria-pressed={listOpen}
+          title={listOpen ? "隐藏回放列表" : "显示回放列表"}
+          onClick={() => setListOpen((open) => !open)}
+        >
+          <ListVideo size={14} />
+        </Button>
       </div>
 
       {/* ── Main area ── */}
@@ -173,6 +253,7 @@ export function ReplayPage() {
                 streamUrl={streamUrl}
                 isLive={false}
                 format={streamFormat}
+                instanceRef={playerRef}
                 qualities={qualityItems}
                 selectedQualityId={selectedQualityId}
                 onQualityChange={setSelectedQualityId}
@@ -252,28 +333,30 @@ export function ReplayPage() {
         </div>
 
         {/* ── Replay list (right sidebar) ── */}
-        <aside className="flex w-72 shrink-0 flex-col border-l border-border/60 bg-card">
-          {/* Sidebar header */}
-          <div className="shrink-0 border-b border-border/50 px-3 py-2.5 flex items-center justify-between">
-            <span className="text-xs font-semibold">直播录像</span>
-            {roomQuery.data && (
-              <span className="text-[10px] text-muted-foreground">
-                {roomQuery.data.streamerName}
-              </span>
-            )}
-          </div>
+        {listOpen && (
+          <aside className="flex w-[min(18rem,42vw)] shrink-0 flex-col border-l border-border/60 bg-card">
+            {/* Sidebar header */}
+            <div className="shrink-0 border-b border-border/50 px-3 py-2.5 flex items-center justify-between">
+              <span className="text-xs font-semibold">直播录像</span>
+              {roomQuery.data && (
+                <span className="text-[10px] text-muted-foreground">
+                  {roomQuery.data.streamerName}
+                </span>
+              )}
+            </div>
 
-          {/* Scrollable list */}
-          <div className="flex-1 overflow-y-auto">
-            <ReplayList
-              platform={platform}
-              roomId={roomId}
-              activeId={activeItem?.id ?? null}
-              onPlay={handlePlay}
-              onPartsChange={setCurrentParts}
-            />
-          </div>
-        </aside>
+            {/* Scrollable list */}
+            <div className="flex-1 overflow-y-auto">
+              <ReplayList
+                platform={platform}
+                roomId={roomId}
+                activeId={activeItem?.id ?? null}
+                onPlay={handlePlay}
+                onPartsChange={setCurrentParts}
+              />
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import {
   Check,
   Film,
   Globe,
+  MessageSquare,
   Monitor,
   Moon,
   Network,
@@ -14,6 +15,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useDanmakuStore } from "@/features/danmaku/model/useDanmakuStore";
 import { type ThemeMode, useThemeStore } from "@/features/theme/model/useThemeStore";
 import { cn } from "@/lib/utils";
 import { loadPreferences, savePreferences } from "@/shared/api/commands";
@@ -223,6 +225,13 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const danmakuOpacity = useDanmakuStore((s) => s.opacity);
+  const danmakuArea = useDanmakuStore((s) => s.area);
+  const danmakuFontSize = useDanmakuStore((s) => s.fontSize);
+  const setDanmakuOpacity = useDanmakuStore((s) => s.setOpacity);
+  const setDanmakuArea = useDanmakuStore((s) => s.setArea);
+  const setDanmakuFontSize = useDanmakuStore((s) => s.setFontSize);
 
   // Keep the appearance field in sync with the theme store so the header
   // toggle reflects here without a save.
@@ -257,6 +266,7 @@ export function SettingsPage() {
   const onSave = async () => {
     setSaving(true);
     setSaved(false);
+    setSaveError(false);
     try {
       const result = await savePreferences(prefs);
       setPrefs(result);
@@ -264,6 +274,8 @@ export function SettingsPage() {
       useThemeStore.getState().syncFromPreference(result.appearance as ThemeMode);
       setSaved(true);
       setTimeout(() => setSaved(false), 2200);
+    } catch {
+      setSaveError(true);
     } finally {
       setSaving(false);
     }
@@ -287,9 +299,53 @@ export function SettingsPage() {
                 已保存
               </span>
             )}
+            {saveError && <span className="text-xs text-destructive">保存失败，请重试</span>}
             <Button onClick={onSave} disabled={saving} size="sm" className="h-7 text-xs px-3">
               {saving ? "保存中…" : "保存"}
             </Button>
+          </div>
+        </div>
+
+        <div>
+          <SectionLabel icon={MessageSquare} label="弹幕" />
+          <div className="rounded-lg bg-card ring-1 ring-border/40 overflow-hidden">
+            <Row label="不透明度" description={`${Math.round(danmakuOpacity * 100)}%`}>
+              <input
+                type="range"
+                min={0.2}
+                max={1}
+                step={0.05}
+                value={danmakuOpacity}
+                onChange={(e) => setDanmakuOpacity(Number(e.target.value))}
+                aria-label="弹幕不透明度"
+                className="w-32"
+              />
+            </Row>
+            <Row label="显示区域" description="限制弹幕占用的画面高度">
+              <ToggleGroup
+                type="single"
+                value={String(danmakuArea)}
+                onValueChange={(v) => v && setDanmakuArea(Number(v))}
+              >
+                <ToggleGroupItem value="0.25">1/4</ToggleGroupItem>
+                <ToggleGroupItem value="0.5">半屏</ToggleGroupItem>
+                <ToggleGroupItem value="0.75">3/4</ToggleGroupItem>
+                <ToggleGroupItem value="1">全屏</ToggleGroupItem>
+              </ToggleGroup>
+            </Row>
+            <Row label="字号" last>
+              <ToggleGroup
+                type="single"
+                value={danmakuFontSize}
+                onValueChange={(v) => {
+                  if (v === "small" || v === "medium" || v === "large") setDanmakuFontSize(v);
+                }}
+              >
+                <ToggleGroupItem value="small">小</ToggleGroupItem>
+                <ToggleGroupItem value="medium">中</ToggleGroupItem>
+                <ToggleGroupItem value="large">大</ToggleGroupItem>
+              </ToggleGroup>
+            </Row>
           </div>
         </div>
 

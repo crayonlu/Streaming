@@ -114,6 +114,7 @@ export function QualityMenu({ items, selectedId, open, onOpenChange, onSelect }:
         type="button"
         className="ctrl-btn ctrl-btn-label"
         aria-label="切换画质"
+        title="切换画质"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}

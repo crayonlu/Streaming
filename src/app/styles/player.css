@@ -57,8 +57,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
   border-radius: var(--radius-sm);
   border: none;
@@ -91,6 +91,17 @@
 
 .ctrl-btn:active {
   background: var(--player-ctrl-bg-active);
+  transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-stage *,
+  .player-stage *::before,
+  .player-stage *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ── Volume slider ──────────────────────────────────────────── */

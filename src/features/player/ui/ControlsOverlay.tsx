@@ -2,7 +2,7 @@
  * ControlsOverlay
  *
  * Custom player controls rendered as a React overlay on the <video> element.
- * Includes play/pause, volume, quality selector, fullscreen, and VOD scrub bar.
+ * Includes play/pause, volume, quality switch, fullscreen, and VOD scrub bar.
  */
 
 import { Loader2, Maximize2, Minimize2, Pause, Play, Volume2, VolumeX } from "lucide-react";
@@ -10,7 +10,7 @@ import { createContext, useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useFullscreen } from "../model/useFullscreen";
 import { PlayerProgress } from "./PlayerProgress";
-import { QualityMenu } from "./QualityMenu";
+import { QualityButton } from "./QualityButton";
 import type { PlayerQualityItem } from "./VideoPlayer";
 
 /**
@@ -75,10 +75,9 @@ export function ControlsOverlay({
   const [playing, setPlaying] = useState(false);
   const [buffering, setBuffering] = useState(false);
   const [visible, setVisible] = useState(true);
-  const [qualityOpen, setQualityOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const anyMenuOpenRef = useRef(false);
-  anyMenuOpenRef.current = qualityOpen || panelOpen;
+  anyMenuOpenRef.current = panelOpen;
 
   const { isFs, toggle: toggleFullscreen } = useFullscreen(stageRef);
 
@@ -247,27 +246,16 @@ export function ControlsOverlay({
     };
   }, [resetIdle]);
 
-  const handleQualityOpen = useCallback(
-    (open: boolean) => {
-      setQualityOpen(open);
-      if (open) {
-        clearTimeout(idleRef.current);
-        setVisible(true);
-      } else resetIdle();
-    },
-    [resetIdle],
-  );
-
-  // While any menu/panel is open, keep the controls bar pinned and cancel
-  // any pending idle hide; when the last one closes, resume the idle timer.
+  // While a controls-bar panel is open, keep the bar pinned and cancel any
+  // pending idle hide; when it closes, resume the idle timer.
   useEffect(() => {
-    if (qualityOpen || panelOpen) {
+    if (panelOpen) {
       clearTimeout(idleRef.current);
       setVisible(true);
     } else {
       resetIdle();
     }
-  }, [qualityOpen, panelOpen, resetIdle]);
+  }, [panelOpen, resetIdle]);
 
   // ── Controls ────────────────────────────────────────────────────────────────
   const togglePlay = useCallback(() => {
@@ -316,7 +304,7 @@ export function ControlsOverlay({
       {/* biome-ignore lint/a11y/noStaticElementInteractions: mouse-idle tracking overlay */}
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: focus intent only, keyboard shortcuts handled on stageRef */}
       <div
-        className="absolute inset-0 z-10 select-none"
+        className="absolute inset-0 z-chrome select-none"
         onMouseMove={resetIdle}
         onMouseEnter={resetIdle}
         onClick={onFocusStage}
@@ -332,7 +320,7 @@ export function ControlsOverlay({
         {/* biome-ignore lint/a11y/noStaticElementInteractions: stopPropagation only */}
         <div
           className={cn(
-            "absolute bottom-0 left-0 right-0 transition-all duration-200",
+            "absolute bottom-0 left-0 right-0 transition-all duration-150",
             visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1 pointer-events-none",
           )}
           onClick={(e) => e.stopPropagation()}
@@ -344,19 +332,19 @@ export function ControlsOverlay({
             className="absolute inset-0"
             style={{
               background:
-                "linear-gradient(to top, var(--player-scrim) 0%, oklch(8% 0.006 250 / 0.32) 60%, transparent 100%)",
+                "linear-gradient(to top, var(--stage-scrim) 0%, color-mix(in oklab, var(--stage-scrim) 38%, transparent) 60%, transparent 100%)",
             }}
             aria-hidden
           />
 
-          <div className="relative px-3 pb-2.5 pt-9 flex flex-col gap-2">
+          <div className="relative px-3 pb-3 pt-8 flex flex-col gap-2">
             {/* ── Progress row ── */}
             <PlayerProgress playerRef={playerRef} isLive={isLive} playerReady={playerReady} />
 
             {/* ── Controls row ── */}
             <div className="flex items-center justify-between gap-1">
               {/* Left: play + volume */}
-              <div className="flex items-center gap-0.5">
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={togglePlay}
@@ -365,11 +353,11 @@ export function ControlsOverlay({
                   title={`${buffering ? "正在缓冲，点击暂停" : playing ? "暂停" : "播放"}（空格）`}
                 >
                   {buffering ? (
-                    <Loader2 size={15} strokeWidth={1.9} className="animate-spin" />
+                    <Loader2 size={16} strokeWidth={1.9} className="animate-spin" />
                   ) : playing ? (
-                    <Pause size={15} strokeWidth={1.9} />
+                    <Pause size={16} strokeWidth={1.9} />
                   ) : (
-                    <Play size={15} strokeWidth={1.9} />
+                    <Play size={16} strokeWidth={1.9} />
                   )}
                 </button>
                 <button
@@ -380,9 +368,9 @@ export function ControlsOverlay({
                   title={`${muted ? "取消静音" : "静音"}（M）`}
                 >
                   {effectiveVol === 0 ? (
-                    <VolumeX size={15} strokeWidth={1.8} />
+                    <VolumeX size={16} strokeWidth={1.8} />
                   ) : (
-                    <Volume2 size={15} strokeWidth={1.8} />
+                    <Volume2 size={16} strokeWidth={1.8} />
                   )}
                 </button>
                 <input
@@ -406,11 +394,9 @@ export function ControlsOverlay({
               {/* Right: quality + fullscreen */}
               <div className="flex items-center gap-1">
                 {qualities.length > 1 && (
-                  <QualityMenu
+                  <QualityButton
                     items={qualities}
                     selectedId={selectedQualityId}
-                    open={qualityOpen}
-                    onOpenChange={handleQualityOpen}
                     onSelect={onQualityChange}
                   />
                 )}
@@ -423,9 +409,9 @@ export function ControlsOverlay({
                   title={`${isFs ? "退出全屏" : "全屏"}（F）`}
                 >
                   {isFs ? (
-                    <Minimize2 size={15} strokeWidth={1.8} />
+                    <Minimize2 size={16} strokeWidth={1.8} />
                   ) : (
-                    <Maximize2 size={15} strokeWidth={1.8} />
+                    <Maximize2 size={16} strokeWidth={1.8} />
                   )}
                 </button>
               </div>

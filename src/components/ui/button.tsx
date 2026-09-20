@@ -5,27 +5,27 @@ import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
   [
-    "inline-flex items-center justify-center gap-1.5 whitespace-nowrap",
-    "rounded-sm text-sm font-medium",
-    "cursor-pointer select-none",
-    "transition-colors duration-160 ease-in-out",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap",
+    "rounded-xs text-sm font-medium",
+    "cursor-pointer select-none active:scale-[0.97]",
+    "transition-colors duration-150 ease-in-out",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
     "disabled:pointer-events-none disabled:opacity-40",
   ].join(" "),
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/85",
-        outline: "border border-border bg-transparent text-foreground hover:bg-muted",
-        ghost: "text-foreground hover:bg-muted",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/70",
-        muted: "bg-accent text-accent-foreground hover:bg-accent/70",
-        destructive: "bg-destructive text-white hover:bg-destructive/85",
+        default: "bg-primary text-primary-foreground hover:bg-primary-hover",
+        outline: "border border-border bg-transparent text-foreground hover:bg-muted-hover",
+        ghost: "text-foreground hover:bg-muted-hover",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary-hover",
+        muted: "bg-accent text-accent-foreground hover:bg-accent-hover",
+        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive-hover",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-8 px-3.5 py-2",
-        sm: "h-7 px-2.5 text-xs",
+        default: "h-8 px-4 py-2",
+        sm: "h-7 px-3 text-xs",
         lg: "h-9 px-4",
         icon: "h-8 w-8",
         "icon-sm": "h-7 w-7",

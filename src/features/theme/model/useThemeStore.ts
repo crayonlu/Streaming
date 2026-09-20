@@ -55,7 +55,6 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     set({ mode, theme });
   },
 
-  // biome-ignore lint/suspicious/noConsole: debug
   syncFromPreference(mode) {
     get().setMode(mode);
   },

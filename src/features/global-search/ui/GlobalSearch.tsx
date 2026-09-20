@@ -117,16 +117,19 @@ export function GlobalSearch() {
       <form
         onSubmit={onSubmit}
         className={cn(
-          "flex items-center gap-1.5 rounded-sm border px-2.5 py-1.5 transition-all duration-150",
-          focused ? "border-ring bg-card ring-1 ring-ring/20" : "border-border/60",
+          "flex items-center gap-2 rounded-xs border px-3 py-2 transition-all duration-150",
+          // 未聚焦也要用 border-input（≥3:1），不能用 border-border（1.2:1）——
+          // 这个框没有填充，描边是「这里能打字」的唯一视觉线索，SC 1.4.11。
+          // 这是全项目唯一真实存在的文本输入；`components/ui/input.tsx` 目前无人引用。
+          focused ? "border-ring bg-card ring-1 ring-ring" : "border-input",
         )}
       >
         <Search
-          size={13}
+          size={14}
           strokeWidth={2}
           className={cn(
             "shrink-0 transition-colors duration-150",
-            focused ? "text-primary" : "text-muted-foreground/70",
+            focused ? "text-primary" : "text-muted-foreground",
           )}
         />
         <input
@@ -144,7 +147,7 @@ export function GlobalSearch() {
           aria-label="搜索直播间"
           className={cn(
             "min-w-0 w-44 bg-transparent text-sm text-foreground",
-            "placeholder:text-muted-foreground/50",
+            "placeholder:text-subtle-foreground",
             "focus:outline-none",
             "[&::-webkit-search-cancel-button]:hidden",
           )}
@@ -153,12 +156,12 @@ export function GlobalSearch() {
 
       {/* ── Dropdown: search history + type-to-search ── */}
       {showDropdown && (
-        <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border border-border bg-popover shadow-md max-h-64 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 z-float mt-1 rounded-md border border-border bg-popover shadow-e2 max-h-64 overflow-y-auto">
           {/* Type-to-search suggestion */}
           {value.trim() && (
             <button
               type="button"
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-colors"
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors"
               onMouseDown={(e) => {
                 e.preventDefault();
                 navigateToSearch(value);
@@ -174,18 +177,18 @@ export function GlobalSearch() {
           {/* History entries */}
           {history.length > 0 && (
             <>
-              {value.trim() && <div className="my-1 border-t border-border/50" />}
+              {value.trim() && <div className="my-1 border-t border-border-faint" />}
               <div className="px-3 py-1">
-                <span className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+                <span className="text-xs font-medium text-subtle-foreground uppercase tracking-caps">
                   搜索历史
                 </span>
               </div>
               {history.map((item) => (
                 <div
                   key={item}
-                  className="group flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-colors"
+                  className="group flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors"
                 >
-                  <Clock size={12} className="shrink-0 text-muted-foreground/50" />
+                  <Clock size={12} className="shrink-0 text-subtle-foreground" />
                   <button
                     type="button"
                     className="flex-1 truncate text-left"
@@ -205,7 +208,7 @@ export function GlobalSearch() {
                       setHistory(removeHistoryItem(item));
                     }}
                   >
-                    <X size={11} />
+                    <X size={12} />
                   </button>
                 </div>
               ))}

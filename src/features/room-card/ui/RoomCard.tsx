@@ -16,10 +16,10 @@ export function RoomCard({ room }: RoomCardProps) {
   return (
     <li
       className={cn(
-        "group relative rounded-lg bg-card overflow-hidden cursor-pointer",
+        "group relative rounded-md bg-card overflow-hidden cursor-pointer",
         "ring-1 ring-transparent",
         "transition-all duration-150 ease-out",
-        "hover:ring-border hover:shadow-sm",
+        "hover:ring-border hover:bg-secondary-hover",
       )}
     >
       {/* ── Cover ── */}
@@ -35,24 +35,24 @@ export function RoomCard({ room }: RoomCardProps) {
               alt={room.title}
               loading="lazy"
               onError={() => setImgFailed(true)}
-              className="h-full w-full object-cover transition-transform duration-300"
+              className="h-full w-full object-cover transition-transform duration-250"
             />
           ) : (
-            <div className="h-full w-full bg-muted/80 flex flex-col items-center justify-center gap-1">
-              <ImageIcon size={20} strokeWidth={1.2} className="text-muted-foreground/30" />
-              <span className="text-[10px] text-muted-foreground/45">暂无封面</span>
+            <div className="h-full w-full bg-muted flex flex-col items-center justify-center gap-1">
+              <ImageIcon size={20} strokeWidth={1.2} className="text-disabled-foreground" />
+              <span className="text-xs text-subtle-foreground">暂无封面</span>
             </div>
           )}
 
           {/* Live pill */}
           {room.isLive && (
-            <span className="absolute left-2 top-2 rounded-full bg-live px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-white uppercase">
+            <span className="absolute left-2 top-2 rounded-xs bg-live px-2 py-1 text-xs font-semibold tracking-caps text-live-foreground uppercase">
               Live
             </span>
           )}
 
           {/* Platform chip */}
-          <span className="absolute right-2 top-2 rounded-full bg-black/38 px-1.5 py-0.5 text-[9px] font-medium text-white/90 backdrop-blur-sm">
+          <span className="absolute right-2 top-2 rounded-full bg-media-scrim px-2 py-1 text-xs font-medium text-stage-fg-1 backdrop-blur-sm">
             {PLATFORM_LABEL[room.platform] ?? room.platform}
           </span>
 
@@ -62,20 +62,20 @@ export function RoomCard({ room }: RoomCardProps) {
       </Link>
 
       {/* ── Meta ── */}
-      <div className="px-3 pb-2.5 pt-2 flex flex-col gap-1">
+      <div className="px-3 pb-3 pt-2 flex flex-col gap-1">
         <Link to={`/player/${room.platform}/${room.roomId}`}>
-          <p className="clamp-2 text-[13px] font-medium leading-snug text-foreground transition-colors duration-150 group-hover:text-primary">
+          <p className="clamp-2 text-md font-medium leading-snug text-foreground transition-colors duration-150 group-hover:text-primary">
             {room.title}
           </p>
         </Link>
 
         <div className="flex items-center gap-1 min-w-0">
-          <span className="clamp-1 text-[11px] text-muted-foreground">{room.streamerName}</span>
+          <span className="clamp-1 text-xs text-muted-foreground">{room.streamerName}</span>
           {room.viewerCountText && (
             <>
-              <span className="shrink-0 text-border select-none">·</span>
-              <span className="flex shrink-0 items-center gap-0.5 text-[11px] text-muted-foreground">
-                <Users size={9} strokeWidth={1.8} />
+              <span className="shrink-0 text-disabled-foreground select-none">·</span>
+              <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                <Users size={12} strokeWidth={1.8} />
                 {room.viewerCountText}
               </span>
             </>

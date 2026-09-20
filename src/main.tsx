@@ -5,7 +5,7 @@ import "./app/styles/globals.css";
 import { installHevcCodecShim } from "./shared/lib/hevc";
 import { isMac } from "./shared/lib/os";
 
-// Tag the platform on <html> so CSS can branch (e.g. skip rounded corners on
+// Tag the platform on <html> so CSS can branch (e.g. skip rounded-xs corners on
 // macOS where native decorations are used).
 if (isMac) document.documentElement.classList.add("is-mac");
 

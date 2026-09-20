@@ -72,7 +72,7 @@ export function SearchPage() {
     <section ref={sectionRef} className="page-stack">
       {keyword && (
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-sm text-muted-foreground truncate max-w-xs">
+          <p className="text-sm text-muted-foreground truncate max-w-80">
             <span className="text-foreground font-medium">"{keyword}"</span>
           </p>
           <div className="flex items-center gap-1">
@@ -84,7 +84,7 @@ export function SearchPage() {
                 <Button
                   variant={scope === opt.value ? "muted" : "ghost"}
                   size="sm"
-                  className="text-xs h-7 px-2.5"
+                  className="text-xs h-7 px-3"
                 >
                   {opt.label}
                 </Button>

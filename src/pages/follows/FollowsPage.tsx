@@ -39,7 +39,7 @@ export function FollowsPage() {
     <section className="page-stack">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Heart size={16} strokeWidth={1.8} className="text-muted-foreground/70" />
+          <Heart size={16} strokeWidth={1.8} className="text-muted-foreground" />
           <h1 className="text-base font-semibold tracking-tight">关注</h1>
         </div>
         {follows.length > 0 && (
@@ -47,11 +47,11 @@ export function FollowsPage() {
             type="button"
             onClick={() => void refreshLiveStatus()}
             disabled={isRefreshingStatus}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted-hover hover:text-foreground disabled:pointer-events-none disabled:opacity-60"
             aria-label="刷新直播状态"
             title="刷新直播状态"
           >
-            <RefreshCw size={13} className={isRefreshingStatus ? "animate-spin" : undefined} />
+            <RefreshCw size={14} className={isRefreshingStatus ? "animate-spin" : undefined} />
           </button>
         )}
       </div>

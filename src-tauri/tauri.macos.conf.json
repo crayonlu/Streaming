@@ -14,7 +14,7 @@
         "hiddenTitle": true,
         "trafficLightPosition": {
           "x": 18,
-          "y": 24
+          "y": 30
         },
         "backgroundThrottling": "disabled"
       }

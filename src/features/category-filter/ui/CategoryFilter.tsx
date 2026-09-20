@@ -103,7 +103,7 @@ export function CategoryFilter({ platform, selection, onSelect }: CategoryFilter
 
   if (loading) {
     return (
-      <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-none shrink-0">
+      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none shrink-0">
         {SKELETON_KEYS.map((key) => (
           <div key={key} className="h-7 w-16 rounded-full bg-muted animate-pulse shrink-0" />
         ))}
@@ -117,8 +117,8 @@ export function CategoryFilter({ platform, selection, onSelect }: CategoryFilter
   const hasMoreSubs = sortedSubs.length > SUB_COLLAPSED_COUNT;
 
   return (
-    <div className="shrink-0 space-y-1.5">
-      <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+    <div className="shrink-0 space-y-2">
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
         <button
           type="button"
           onClick={() => {
@@ -170,16 +170,16 @@ export function CategoryFilter({ platform, selection, onSelect }: CategoryFilter
               <button
                 type="button"
                 onClick={() => setSubExpanded((v) => !v)}
-                className="cat-chip cat-chip--expand cursor-pointer flex items-center gap-0.5"
+                className="cat-chip cat-chip--expand cursor-pointer flex items-center gap-1"
                 aria-expanded={subExpanded}
               >
                 {subExpanded ? (
                   <>
-                    收起 <ChevronUp size={10} />
+                    收起 <ChevronUp size={12} />
                   </>
                 ) : (
                   <>
-                    更多 <ChevronDown size={10} />
+                    更多 <ChevronDown size={12} />
                   </>
                 )}
               </button>

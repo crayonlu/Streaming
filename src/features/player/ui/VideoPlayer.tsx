@@ -199,9 +199,9 @@ export function VideoPlayer({
           error state swallows every click — including the fullscreen exit
           button (only Esc worked). */}
       {!online && streamUrl && (
-        <div className="absolute inset-0 z-20 pointer-events-none flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
-          <WifiOff size={28} strokeWidth={1.6} className="text-white/60" />
-          <span className="text-sm text-white/70">网络已断开 · 等待重连</span>
+        <div className="absolute inset-0 z-stage-msg pointer-events-none flex flex-col items-center justify-center gap-2 bg-stage-scrim backdrop-blur-sm">
+          <WifiOff size={28} strokeWidth={1.6} className="text-stage-fg-3" />
+          <span className="text-sm text-stage-fg-2">网络已断开 · 等待重连</span>
         </div>
       )}
 
@@ -214,10 +214,10 @@ export function VideoPlayer({
           (Linux WebKitGTK without GStreamer decoder packages). Refetching
           stream sources cannot help — show the fix instead of a spinner. */}
       {online && codecUnsupported && streamUrl && (
-        <div className="absolute inset-0 z-20 pointer-events-none flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
-          <AlertCircle size={28} strokeWidth={1.6} className="text-white/60" />
-          <span className="text-sm text-white/70">当前系统缺少视频解码器，无法播放</span>
-          <span className="text-xs text-white/40">
+        <div className="absolute inset-0 z-stage-msg pointer-events-none flex flex-col items-center justify-center gap-2 bg-stage-scrim backdrop-blur-sm">
+          <AlertCircle size={28} strokeWidth={1.6} className="text-stage-fg-3" />
+          <span className="text-sm text-stage-fg-2">当前系统缺少视频解码器，无法播放</span>
+          <span className="text-xs text-stage-fg-4">
             {os === "linux"
               ? "请安装 gstreamer1.0-libav、gstreamer1.0-plugins-bad 后重启应用"
               : "请检查系统或 WebView 的解码组件安装情况"}
@@ -227,11 +227,11 @@ export function VideoPlayer({
 
       {/* Error: in-place recovery exhausted */}
       {online && error && !codecUnsupported && streamUrl && (
-        <div className="absolute inset-0 z-20 pointer-events-none flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
-          <AlertCircle size={28} strokeWidth={1.6} className="text-white/60" />
-          <span className="text-sm text-white/70">{recoveryHint ?? "播放失败 · 正在尝试恢复"}</span>
+        <div className="absolute inset-0 z-stage-msg pointer-events-none flex flex-col items-center justify-center gap-2 bg-stage-scrim backdrop-blur-sm">
+          <AlertCircle size={28} strokeWidth={1.6} className="text-stage-fg-3" />
+          <span className="text-sm text-stage-fg-2">{recoveryHint ?? "播放失败 · 正在尝试恢复"}</span>
           {detectHevcSupport() === "none" && (
-            <span className="text-xs text-white/40">
+            <span className="text-xs text-stage-fg-4">
               当前系统可能缺少 HEVC 解码支持（Windows 请安装「HEVC 视频扩展」）
             </span>
           )}
@@ -281,8 +281,8 @@ function LoadingOverlay({
 
   if (!show) return null;
   return (
-    <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center bg-black/40">
-      <Loader2 size={30} className="animate-spin text-white/60" strokeWidth={1.8} />
+    <div className="absolute inset-0 z-chrome pointer-events-none flex items-center justify-center bg-media-scrim">
+      <Loader2 size={32} className="animate-spin text-stage-fg-3" strokeWidth={1.8} />
     </div>
   );
 }

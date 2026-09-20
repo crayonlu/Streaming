@@ -11,6 +11,7 @@
     "lint": "biome lint ./src",
     "format": "biome format --write ./src vite.config.ts",
     "check": "biome check --write ./src vite.config.ts",
+    "check:tokens": "node scripts/check-design-tokens.mjs",
     "test": "vitest run"
   },
   "dependencies": {

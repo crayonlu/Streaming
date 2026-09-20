@@ -26,11 +26,9 @@ import { StatusView } from "@/shared/ui/StatusView";
 
 function SectionLabel({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
   return (
-    <div className="flex items-center gap-1.5 mb-1.5">
-      <Icon size={12} strokeWidth={1.8} className="text-muted-foreground/60" />
-      <p className="text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wider">
-        {label}
-      </p>
+    <div className="flex items-center gap-2 mb-2">
+      <Icon size={12} strokeWidth={1.8} className="text-muted-foreground" />
+      <p className="text-xs font-medium text-subtle-foreground uppercase tracking-caps">{label}</p>
     </div>
   );
 }
@@ -49,14 +47,14 @@ function Row({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-6 px-4 py-3.5",
-        !last && "border-b border-border/60",
+        "flex items-center justify-between gap-6 px-4 py-4",
+        !last && "border-b border-border",
       )}
     >
       <div className="min-w-0">
         <p className="text-sm font-medium leading-none">{label}</p>
         {description && (
-          <p className="mt-1 text-[11px] text-muted-foreground leading-snug">{description}</p>
+          <p className="mt-1 text-xs text-muted-foreground leading-snug">{description}</p>
         )}
       </div>
       <div className="shrink-0">{children}</div>
@@ -73,14 +71,14 @@ function Switch({ checked, onToggle }: { checked: boolean; onToggle: () => void 
       onClick={onToggle}
       className={cn(
         "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent",
-        "transition-colors duration-200",
+        "transition-colors duration-150",
         checked ? "bg-primary" : "bg-muted",
       )}
     >
       <span
         className={cn(
-          "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm",
-          "transition-transform duration-200",
+          "pointer-events-none inline-block h-4 w-4 rounded-full bg-primary-foreground shadow-e1",
+          "transition-transform duration-150",
           checked ? "translate-x-4" : "translate-x-0",
         )}
       />
@@ -128,25 +126,25 @@ function ProxySelector({
             key={opt.value}
             onClick={() => onChange(opt.value)}
             className={cn(
-              "flex flex-col gap-1.5 rounded-md p-3 text-left transition-all duration-150 cursor-pointer",
+              "flex flex-col gap-2 rounded-sm p-3 text-left transition-all duration-150 cursor-pointer",
               "border",
               active
-                ? "border-primary/40 bg-accent/60 text-accent-foreground"
-                : "border-border/60 bg-transparent text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+                ? "border-primary-border bg-accent text-accent-foreground"
+                : "border-border bg-transparent text-muted-foreground hover:bg-secondary-hover hover:text-foreground",
             )}
           >
             <div className="flex items-center justify-between gap-1">
               <Icon
-                size={13}
+                size={14}
                 strokeWidth={1.8}
-                className={active ? "text-primary" : "text-muted-foreground/70"}
+                className={active ? "text-accent-foreground" : "text-muted-foreground"}
               />
-              {active && <Check size={11} strokeWidth={2.4} className="text-primary" />}
+              {active && <Check size={12} strokeWidth={2.4} className="text-accent-foreground" />}
             </div>
-            <p className={cn("text-[12px] font-medium leading-none", active && "text-foreground")}>
+            <p className={cn("text-xs font-medium leading-none", active && "text-foreground")}>
               {opt.label}
             </p>
-            <p className="text-[10.5px] leading-snug opacity-70">{opt.description}</p>
+            <p className="text-xs leading-snug text-subtle-foreground">{opt.description}</p>
           </button>
         );
       })}
@@ -195,19 +193,19 @@ function AppearanceSelector({
             key={opt.value}
             onClick={() => onChange(opt.value)}
             className={cn(
-              "flex flex-col items-center gap-1.5 rounded-md p-3 transition-all duration-150 cursor-pointer",
+              "flex flex-col items-center gap-2 rounded-sm p-3 transition-all duration-150 cursor-pointer",
               "border",
               active
-                ? "border-primary/40 bg-accent/60 text-accent-foreground"
-                : "border-border/60 bg-transparent text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+                ? "border-primary-border bg-accent text-accent-foreground"
+                : "border-border bg-transparent text-muted-foreground hover:bg-secondary-hover hover:text-foreground",
             )}
           >
             <Icon
               size={16}
               strokeWidth={1.8}
-              className={active ? "text-primary" : "text-muted-foreground/70"}
+              className={active ? "text-accent-foreground" : "text-muted-foreground"}
             />
-            <p className={cn("text-[11px] font-medium leading-none", active && "text-foreground")}>
+            <p className={cn("text-xs font-medium leading-none", active && "text-foreground")}>
               {opt.label}
             </p>
           </button>
@@ -227,10 +225,8 @@ export function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const danmakuOpacity = useDanmakuStore((s) => s.opacity);
-  const danmakuArea = useDanmakuStore((s) => s.area);
   const danmakuFontSize = useDanmakuStore((s) => s.fontSize);
   const setDanmakuOpacity = useDanmakuStore((s) => s.setOpacity);
-  const setDanmakuArea = useDanmakuStore((s) => s.setArea);
   const setDanmakuFontSize = useDanmakuStore((s) => s.setFontSize);
 
   // Keep the appearance field in sync with the theme store so the header
@@ -283,19 +279,19 @@ export function SettingsPage() {
 
   return (
     <div className="w-full h-full flex justify-center">
-      <section className="page-stack max-w-2xl">
+      <section className="page-stack">
         {/* ── Header ── */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Settings2 size={16} strokeWidth={1.8} className="text-muted-foreground/70" />
+            <Settings2 size={16} strokeWidth={1.8} className="text-muted-foreground" />
             <h1 className="text-base font-semibold tracking-tight">设置</h1>
           </div>
 
           {/* Save action — top right */}
           <div className="flex items-center gap-2">
             {saved && (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground animate-in fade-in-0 duration-200">
-                <Check size={11} strokeWidth={2.4} />
+              <span className="flex items-center gap-1 text-xs text-muted-foreground animate-in fade-in-0 duration-150">
+                <Check size={12} strokeWidth={2.4} />
                 已保存
               </span>
             )}
@@ -308,7 +304,7 @@ export function SettingsPage() {
 
         <div>
           <SectionLabel icon={MessageSquare} label="弹幕" />
-          <div className="rounded-lg bg-card ring-1 ring-border/40 overflow-hidden">
+          <div className="rounded-md bg-card ring-1 ring-border overflow-hidden">
             <Row label="不透明度" description={`${Math.round(danmakuOpacity * 100)}%`}>
               <input
                 type="range"
@@ -320,18 +316,6 @@ export function SettingsPage() {
                 aria-label="弹幕不透明度"
                 className="w-32"
               />
-            </Row>
-            <Row label="显示区域" description="限制弹幕占用的画面高度">
-              <ToggleGroup
-                type="single"
-                value={String(danmakuArea)}
-                onValueChange={(v) => v && setDanmakuArea(Number(v))}
-              >
-                <ToggleGroupItem value="0.25">1/4</ToggleGroupItem>
-                <ToggleGroupItem value="0.5">半屏</ToggleGroupItem>
-                <ToggleGroupItem value="0.75">3/4</ToggleGroupItem>
-                <ToggleGroupItem value="1">全屏</ToggleGroupItem>
-              </ToggleGroup>
             </Row>
             <Row label="字号" last>
               <ToggleGroup
@@ -351,7 +335,7 @@ export function SettingsPage() {
 
         <div>
           <SectionLabel icon={Tv2} label="观看偏好" />
-          <div className="rounded-lg bg-card ring-1 ring-border/40 overflow-hidden">
+          <div className="rounded-md bg-card ring-1 ring-border overflow-hidden">
             <Row label="默认平台" description="启动时默认浏览的平台">
               <ToggleGroup
                 type="single"
@@ -397,10 +381,10 @@ export function SettingsPage() {
 
         <div>
           <SectionLabel icon={Paintbrush} label="外观" />
-          <div className="rounded-lg bg-card ring-1 ring-border/40 overflow-hidden">
-            <div className="px-4 pt-3.5 pb-1">
+          <div className="rounded-md bg-card ring-1 ring-border overflow-hidden">
+            <div className="px-4 pt-4 pb-1">
               <p className="text-sm font-medium leading-none">主题模式</p>
-              <p className="mt-1 text-[11px] text-muted-foreground leading-snug">
+              <p className="mt-1 text-xs text-muted-foreground leading-snug">
                 选择亮色、暗色或跟随系统设置，立即生效。
               </p>
             </div>
@@ -417,10 +401,10 @@ export function SettingsPage() {
 
         <div>
           <SectionLabel icon={Monitor} label="网络" />
-          <div className="rounded-lg bg-card ring-1 ring-border/40 overflow-hidden">
-            <div className="px-4 pt-3.5 pb-1">
+          <div className="rounded-md bg-card ring-1 ring-border overflow-hidden">
+            <div className="px-4 pt-4 pb-1">
               <p className="text-sm font-medium leading-none">代理设置</p>
-              <p className="mt-1 text-[11px] text-muted-foreground leading-snug">
+              <p className="mt-1 text-xs text-muted-foreground leading-snug">
                 影响直播封面、搜索等所有后台请求。切换后立即生效，无需重启。
               </p>
             </div>
@@ -433,10 +417,10 @@ export function SettingsPage() {
 
         <div>
           <SectionLabel icon={Film} label="平台能力说明" />
-          <div className="rounded-lg bg-card ring-1 ring-border/40 overflow-hidden">
-            <div className="px-4 py-3.5">
+          <div className="rounded-md bg-card ring-1 ring-border overflow-hidden">
+            <div className="px-4 py-4">
               <p className="text-sm font-medium leading-none">直播回放</p>
-              <p className="mt-1.5 text-[11px] text-muted-foreground leading-snug">
+              <p className="mt-2 text-xs text-muted-foreground leading-snug">
                 斗鱼支持全量录像；Bilibili
                 官方接口不面向普通观众，暂不支持；虎牙公开视频与直播回放不同，暂不支持。
               </p>
@@ -446,12 +430,12 @@ export function SettingsPage() {
 
         <Separator />
 
-        <div className="flex items-center justify-between text-[11px] text-muted-foreground/55">
-          <div className="space-y-0.5">
+        <div className="flex items-center justify-between text-xs text-subtle-foreground">
+          <div className="space-y-1">
             <p>Streaming · v{__APP_VERSION__}</p>
             <p>支持 Bilibili · 斗鱼 · 虎牙</p>
           </div>
-          <div className="text-right space-y-0.5 text-[10px]">
+          <div className="text-right space-y-1 text-xs">
             <p>Tauri 2 · React 19</p>
             <p>MIT License</p>
           </div>

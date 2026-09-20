@@ -36,16 +36,16 @@ function PartRow({
       type="button"
       onClick={() => onPlay(part)}
       className={cn(
-        "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left transition-colors",
+        "flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left transition-colors",
         active
-          ? "bg-primary/12 text-primary"
-          : "hover:bg-accent/70 text-foreground/75 hover:text-foreground",
+          ? "bg-accent text-accent-foreground"
+          : "hover:bg-accent-hover text-foreground hover:text-foreground",
       )}
     >
       <span
         className={cn(
-          "shrink-0 w-5 text-center text-[10px] font-semibold",
-          active ? "text-primary" : "text-muted-foreground",
+          "shrink-0 w-5 text-center text-xs font-semibold",
+          active ? "text-accent-foreground" : "text-muted-foreground",
         )}
       >
         P{part.partNum}
@@ -53,12 +53,12 @@ function PartRow({
       <span className="min-w-0 flex-1">
         <span className="block truncate text-xs">{part.showRemark || part.title}</span>
         {percent > 0 && (
-          <span className="mt-1 block h-0.5 overflow-hidden rounded-full bg-muted">
-            <span className="block h-full bg-primary/70" style={{ width: `${percent}%` }} />
+          <span className="mt-1 block h-1 overflow-hidden rounded-full bg-muted">
+            <span className="block h-full bg-primary" style={{ width: `${percent}%` }} />
           </span>
         )}
       </span>
-      <span className="shrink-0 tabular-nums text-[11px] text-muted-foreground">
+      <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
         {fmtDuration(part.durationStr)}
       </span>
     </button>
@@ -99,8 +99,8 @@ function SessionRow({
         }}
         aria-expanded={hasParts ? expanded : undefined}
         className={cn(
-          "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors group",
-          !hasParts && activeId === session.id ? "bg-primary/12" : "hover:bg-accent/60",
+          "flex w-full items-center gap-3 rounded-sm px-3 py-2 text-left transition-colors group",
+          !hasParts && activeId === session.id ? "bg-accent" : "hover:bg-accent-hover",
         )}
       >
         {/* Cover */}
@@ -108,51 +108,56 @@ function SessionRow({
           <img
             src={session.coverUrl}
             alt=""
-            className="h-10 w-18 shrink-0 rounded object-cover bg-muted"
+            className="h-10 w-18 shrink-0 rounded-xs object-cover bg-muted"
             loading="lazy"
           />
         ) : (
-          <div className="h-10 w-18 shrink-0 rounded bg-muted flex items-center justify-center">
-            <Film size={14} className="text-muted-foreground/30" />
+          <div className="h-10 w-18 shrink-0 rounded-xs bg-muted flex items-center justify-center">
+            <Film size={14} className="text-disabled-foreground" />
           </div>
         )}
 
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-[12px] font-medium leading-tight">{session.title}</span>
-          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-            {session.recordedAt > 0 && <span>{fmtDate(session.recordedAt)}</span>}
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="truncate text-xs font-medium leading-tight">{session.title}</span>
+          {/* 元信息按重要性排：日期 > 时长 > 播放量。
+              前三者固定不缩，播放量作唯一可压缩项 —— 空间不够时它先截断，
+              绝不会像之前那样把日期挤成两行、又钻到右侧徽标底下。 */}
+          <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+            {session.recordedAt > 0 && (
+              <span className="shrink-0">{fmtDate(session.recordedAt)}</span>
+            )}
             {session.durationStr && (
-              <span className="flex items-center gap-0.5">
-                <Clock size={9} />
+              <span className="flex shrink-0 items-center gap-1">
+                <Clock size={12} className="shrink-0" />
                 {fmtDuration(session.durationStr)}
               </span>
             )}
             {session.viewCountText && (
-              <span className="flex items-center gap-0.5">
-                <Eye size={9} />
-                {session.viewCountText}
+              <span className="flex min-w-0 items-center gap-1">
+                <Eye size={12} className="shrink-0" />
+                <span className="truncate">{session.viewCountText}</span>
               </span>
             )}
             {progress?.completed ? (
-              <span className="text-primary/80">已看完</span>
+              <span className="shrink-0 text-accent-foreground">已看完</span>
             ) : progress && progress.duration > 0 ? (
-              <span className="text-primary/80">
+              <span className="shrink-0 text-accent-foreground">
                 继续观看 {Math.round((progress.position / progress.duration) * 100)}%
               </span>
             ) : null}
           </div>
         </div>
 
-        <div className="shrink-0 flex items-center gap-1">
+        <div className="shrink-0 flex items-center gap-2">
           {hasParts && (
-            <span className="text-[9px] tabular-nums text-muted-foreground bg-muted rounded px-1 py-0.5">
+            <span className="inline-flex h-5 shrink-0 items-center rounded-xs bg-muted px-2 text-xs tabular-nums text-muted-foreground">
               {session.totalParts}P
             </span>
           )}
           <ChevronRight
             size={12}
             className={cn(
-              "text-muted-foreground/40 transition-transform duration-150",
+              "text-disabled-foreground transition-transform duration-150",
               expanded && "rotate-90",
             )}
           />
@@ -161,9 +166,9 @@ function SessionRow({
 
       {/* Expanded parts */}
       {hasParts && expanded && (
-        <div className="ml-2 mt-0.5 mb-1 border-l border-border/40 pl-2">
+        <div className="ml-2 mt-1 mb-1 border-l border-border-faint pl-2">
           {partsLoading ? (
-            <div className="flex items-center gap-1.5 px-3 py-2 text-[11px] text-muted-foreground animate-pulse">
+            <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground animate-pulse">
               加载中…
             </div>
           ) : (
@@ -248,14 +253,14 @@ export function ReplayList({
   // Initial loading skeleton
   if (infinite.isLoading) {
     return (
-      <div className="flex flex-col gap-1.5 p-2">
+      <div className="flex flex-col gap-2 p-2">
         {Array.from({ length: 6 }, (_, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton
-          <div key={i} className="flex gap-2.5 rounded-lg px-2.5 py-2">
-            <div className="h-10 w-18  rounded bg-muted animate-pulse shrink-0" />
-            <div className="flex flex-col gap-1.5 flex-1 pt-0.5">
-              <div className="h-3 w-4/5 rounded bg-muted animate-pulse" />
-              <div className="h-2 w-2/5 rounded bg-muted animate-pulse" />
+          <div key={i} className="flex gap-3 rounded-md px-3 py-2">
+            <div className="h-10 w-18  rounded-xs bg-muted animate-pulse shrink-0" />
+            <div className="flex flex-col gap-2 flex-1 pt-1">
+              <div className="h-3 w-48 rounded-xs bg-muted animate-pulse" />
+              <div className="h-2 w-24 rounded-xs bg-muted animate-pulse" />
             </div>
           </div>
         ))}
@@ -267,13 +272,13 @@ export function ReplayList({
     const msg = infinite.error instanceof Error ? infinite.error.message : String(infinite.error);
     return (
       <div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center text-muted-foreground">
-        <PlayCircle size={32} strokeWidth={1.2} className="opacity-25" />
-        <span className="text-xs text-foreground/80">无法加载回放</span>
-        <span className="text-[11px] leading-relaxed">{msg}</span>
+        <PlayCircle size={32} strokeWidth={1.2} className="opacity-30" />
+        <span className="text-xs text-foreground">无法加载回放</span>
+        <span className="text-xs leading-relaxed">{msg}</span>
         <button
           type="button"
           onClick={() => void infinite.refetch()}
-          className="mt-1 text-[11px] text-primary hover:underline"
+          className="mt-1 text-xs text-primary hover:underline"
         >
           重试
         </button>
@@ -284,14 +289,14 @@ export function ReplayList({
   if (!sessions.length) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
-        <PlayCircle size={32} strokeWidth={1.2} className="opacity-25" />
+        <PlayCircle size={32} strokeWidth={1.2} className="opacity-30" />
         <span className="text-xs">暂无回放录像</span>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-0.5 p-2">
+    <div className="flex flex-col gap-1 p-2">
       {sessions.map((session) => {
         const isExpanded = expandedShowId === session.showId;
         return (
@@ -313,20 +318,20 @@ export function ReplayList({
       {/* Sentinel + load-more indicator */}
       <div ref={loadMoreRef} className="py-2 flex justify-center">
         {infinite.isFetchingNextPage ? (
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground animate-pulse">
-            <div className="h-3.5 w-3.5 animate-spin rounded-full border border-muted-foreground/30 border-t-muted-foreground/70" />
+          <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse">
+            <div className="h-4 w-4 animate-spin rounded-full border border-disabled-foreground border-t-muted-foreground" />
             加载更多…
           </div>
         ) : infinite.hasNextPage ? (
           <button
             type="button"
             onClick={() => void infinite.fetchNextPage()}
-            className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             加载更多
           </button>
         ) : sessions.length > PAGE_SIZE ? (
-          <span className="text-[10px] text-muted-foreground/50">
+          <span className="text-xs text-subtle-foreground">
             已加载全部 {sessions.length} 场录播
           </span>
         ) : null}

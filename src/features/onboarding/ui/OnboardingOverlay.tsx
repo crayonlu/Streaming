@@ -42,28 +42,28 @@ export function OnboardingOverlay({ onDone }: OnboardingOverlayProps) {
   return (
     // Full-screen backdrop
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
+      className="fixed inset-0 z-float flex items-center justify-center bg-overlay backdrop-blur-sm"
       aria-modal="true"
       role="dialog"
       aria-label="欢迎使用 Streaming"
     >
       {/* Card */}
-      <div className="w-full max-w-sm rounded-2xl border border-border/60 bg-card shadow-lg shadow-black/8 px-8 py-8 flex flex-col gap-6">
+      <div className="w-full max-w-96 rounded-md border border-border bg-card shadow-e3  px-8 py-8 flex flex-col gap-6">
         {/* Brand mark */}
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <div className="flex h-11 w-11 items-center justify-center rounded-md bg-accent text-accent-foreground">
             <img
               src={appIcon}
               alt=""
               aria-hidden="true"
-              className="h-full w-full rounded-xl object-cover"
+              className="h-full w-full rounded-md object-cover"
             />
           </div>
           <div>
             <h1 className="text-base font-semibold tracking-tight text-foreground">
               欢迎使用 Streaming
             </h1>
-            <p className="mt-1 text-[12.5px] text-muted-foreground leading-relaxed">
+            <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
               一个入口，同时浏览三个平台的直播。
             </p>
           </div>
@@ -71,10 +71,10 @@ export function OnboardingOverlay({ onDone }: OnboardingOverlayProps) {
 
         {/* Platform picker */}
         <div className="flex flex-col gap-2">
-          <p className="text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wider">
+          <p className="text-xs font-medium text-subtle-foreground uppercase tracking-caps">
             选择你常看的平台
           </p>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             {PLATFORMS.map((p) => (
               <button
                 key={p}
@@ -82,18 +82,18 @@ export function OnboardingOverlay({ onDone }: OnboardingOverlayProps) {
                 onClick={() => setSelected(p)}
                 aria-pressed={selected === p}
                 className={cn(
-                  "flex items-center justify-between rounded-lg border px-3.5 py-2.5 text-left",
+                  "flex items-center justify-between rounded-md border px-4 py-3 text-left",
                   "transition-all duration-150 cursor-pointer",
                   selected === p
-                    ? "border-primary/40 bg-primary/6 text-foreground"
-                    : "border-border/50 bg-transparent text-muted-foreground hover:bg-accent/50 hover:text-foreground hover:border-border",
+                    ? "border-primary-border bg-accent text-accent-foreground"
+                    : "border-border-faint bg-transparent text-muted-foreground hover:bg-accent-hover hover:text-foreground hover:border-border",
                 )}
               >
-                <span className="text-[13px] font-medium">{PLATFORM_LABEL[p]}</span>
+                <span className="text-md font-medium">{PLATFORM_LABEL[p]}</span>
                 <span
                   className={cn(
-                    "text-[11px]",
-                    selected === p ? "text-muted-foreground" : "text-muted-foreground/50",
+                    "text-xs",
+                    selected === p ? "text-muted-foreground" : "text-subtle-foreground",
                   )}
                 >
                   {PLATFORM_DESC[p]}
@@ -107,13 +107,13 @@ export function OnboardingOverlay({ onDone }: OnboardingOverlayProps) {
         <Button
           onClick={() => void handleStart()}
           disabled={saving}
-          className="w-full h-9 text-[13px]"
+          className="w-full h-9 text-md"
         >
           {saving ? "保存中…" : "开始使用"}
         </Button>
 
         {/* Fine print */}
-        <p className="text-center text-[10.5px] text-muted-foreground/50 leading-relaxed -mt-2">
+        <p className="text-center text-xs text-subtle-foreground leading-relaxed -mt-2">
           支持 Bilibili · 斗鱼 · 虎牙 · 随时可在设置中更改
         </p>
       </div>

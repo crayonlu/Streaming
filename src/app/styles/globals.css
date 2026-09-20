@@ -22,16 +22,201 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-hover: var(--destructive-hover);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-live: var(--live);
+  --color-live-foreground: var(--live-foreground);
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: var(--radius);
-  --radius-lg: calc(var(--radius) + 4px);
+  /* ─────────────────────────────────────────────
+     内容阶梯 —— 文字与图标的四级对比度
+     命名与 GitHub Primer 的 fg.default / fg.muted / fg.subtle /
+     fg.disabled 同构，只是套用 shadcn 的 *-foreground 词形。
+
+     ⚠️ 禁止对内容 token 再加 alpha 修饰符。
+        `text-muted-foreground/60` 这类写法无法保证对比度下限：
+        实测 /70 → 3.28:1、/60 → 2.74:1、/50 → 2.50:1、
+        /40 → 1.89:1、/30 → 1.58:1 —— 除 /70 外全是硬失败，
+        而 /50 /55 /60 /70 四档在视觉上根本分辨不出来。
+        需要更低对比度就往下走一级，不要调百分比。
+
+       实测值（对 --card，WCAG 2.2 相对亮度比）：
+                          light     dark
+       foreground        19.44:1   15.03:1   正文 / 标题
+       muted-foreground   6.96:1    7.30:1   次要说明、图标
+       subtle-foreground  4.94:1    4.98:1   三级：辅助文字、占位符
+       disabled-foreground 3.56:1   3.29:1   禁用 / 纯装饰图形
+                                              （SC 1.4.3 对禁用组件豁免，
+                                                ≥3:1 保证图形仍可辨识）
+     ───────────────────────────────────────────── */
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-disabled-foreground: var(--disabled-foreground);
+
+  /* ─────────────────────────────────────────────
+     状态色 —— 语义色板，取代 Tailwind 调色板硬编码。
+     原来的 emerald-500 / amber-300 / red-400 是照暗底调的，
+     在亮色主题下对 --card 只有 2.41 / 1.41 / 2.78:1，
+     是硬失败（低于 SC 1.4.3 的 4.5:1 一半还多）。
+     每色两档：文字/圆点 + 浅底（浅底只给「已登录」按钮用）。
+     ───────────────────────────────────────────── */
+  --color-success: var(--success);
+  --color-success-tint: var(--success-tint);
+  --color-success-hover: var(--success-hover);
+  --color-warning: var(--warning);
+
+  /* ─────────────────────────────────────────────
+     描边三档 —— 按「这条件是不是控件的唯一边界」分档
+       border-faint  装饰性分隔：列表分隔线、嵌套框、缩进线
+       border        默认分隔 / 卡片轮廓
+       input         控件边界。必须 ≥3:1（SC 1.4.11），
+                     所以刻意比 border 深得多（light 64% vs 91%）。
+                     觉得太重就把它改回 var(--border)，一行的事。
+     ───────────────────────────────────────────── */
+  --color-border-faint: var(--border-faint);
+
+  /* 实色悬停 —— Radix Colors step 9 → step 10 的语义：
+     悬停态是「同一个实色的下一档」，不是「同色加透明度」。
+     用 alpha 做悬停会同时降低对比度，而且每处百分比都不一样。 */
+  --color-primary-hover: var(--primary-hover);
+  --color-secondary-hover: var(--secondary-hover);
+  --color-accent-hover: var(--accent-hover);
+  --color-muted-hover: var(--muted-hover);
+  --color-destructive-hover: var(--destructive-hover);
+  --color-primary-border: var(--primary-border);
+
+  /* 表面叠层 —— Material 3 state layer 的实色等价物。
+     M3 规定叠层是固定闭集：hover 8% / focus 10% / pressed 10% /
+     dragged 16%。这里把「前景色 8% 压在表面上」的结果直接算成实色，
+     避免 alpha 在不同底色上算出不同对比度。 */
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-active: var(--surface-active);
+
+  /* 遮罩 */
+  --color-overlay: var(--overlay);
+  --color-media-scrim: var(--media-scrim);
+  --color-media-scrim-hover: var(--media-scrim-hover);
+
+  /* 窗口按钮 —— Windows 11 规范色，原为 #c42b1c / #b0261a 硬编码。
+     关闭按钮是固定红，两个主题下都用浅色字（实测 5.50:1）。 */
+  --color-close-hover: var(--close-hover);
+  --color-close-active: var(--close-active);
+  --color-close-foreground: var(--close-foreground);
+
+  /* ─────────────────────────────────────────────
+     播放器舞台 —— 两个主题共用同一套暗底色阶
+     舞台恒为暗色，所以不复用内容阶梯（那套会跟着主题翻转）。
+     取代原来的 text-stage-fg-1 /85 /75 /70 /60 /55 /50 /45 /40 /35 /20
+     共 11 档 —— 实测 /35 → 3.08:1、/20 → 1.72:1，后两档是硬失败。
+
+       实测（对 --stage-bg oklch(12%)）：
+       stage-fg-1  18.61:1  标题、主按钮文字
+       stage-fg-2  14.14:1  正文
+       stage-fg-3   9.46:1  次要：时间戳、提示
+       stage-fg-4   6.04:1  弱化图标
+       stage-danger 7.59:1  舞台上的错误文字
+       stage-warning 11.53:1 舞台上的警示文字
+     ───────────────────────────────────────────── */
+  --color-stage-surface: var(--stage-surface);
+  --color-stage-hover: var(--stage-hover);
+  --color-stage-border: var(--stage-border);
+  --color-stage-scrim: var(--stage-scrim);
+  --color-stage-fg-1: var(--stage-fg-1);
+  --color-stage-fg-2: var(--stage-fg-2);
+  --color-stage-fg-3: var(--stage-fg-3);
+  --color-stage-fg-4: var(--stage-fg-4);
+  --color-stage-danger: var(--stage-danger);
+  --color-stage-warning: var(--stage-warning);
+
+  /* ─────────────────────────────────────────────
+     字距两档
+       tight  -0.02em  标题（16px semibold）
+       caps    0.06em  全大写微标签（12px uppercase）
+     禁用 Tailwind 的 wide(0.025) / wider(0.05) / widest(0.1) ——
+     三者当时同时用在「大写微标签」这同一个角色上，
+     视觉上不可分辨，属于纯粹的噪音。
+     ───────────────────────────────────────────── */
+  --tracking-tight: -0.02em;
+  --tracking-caps: 0.06em;
+
+  /* ─────────────────────────────────────────────
+     行高三档。正文行高由 --text-*--line-height 承担，不在这里重复。
+       标题 1.25 / 紧凑说明 1.4 / 多行说明 1.6
+     禁用 tighter / loose；leading-none 作为「收起行盒」的原语保留。
+     ───────────────────────────────────────────── */
+  --leading-tight: 1.25;
+  --leading-snug: 1.4;
+  --leading-relaxed: 1.6;
+
+  /* ─────────────────────────────────────────────
+     阴影三档 —— 取代裸的 shadow-e1 / md / lg。
+     每一档对应一个明确的层级，而不是「随手挑一个」。
+       e1  抬起的小控件（开关滑块）
+       e2  浮层（下拉菜单、搜索建议）
+       e3  模态（首次启动对话框）
+     实色值按主题分叉，定义在 :root / .dark 的 --elev-*。
+     ───────────────────────────────────────────── */
+  --shadow-e1: var(--elev-1);
+  --shadow-e2: var(--elev-2);
+  --shadow-e3: var(--elev-3);
+
+  /* ─────────────────────────────────────────────
+     圆角刻度 —— 方案 B · Precision
+     硬性 4 档 + 播放器例外。按「语义角色」选档，
+     不按数值大小选。嵌套遵守：外圆角 − padding = 内圆角
+
+       xs   4px   标签 / 徽标 / 内联小元素
+       sm   6px   控件：按钮 / 输入 / 导航项 / 菜单项
+       md  12px   卡片 / 容器 / 模态 / 浮层
+       lg  16px   播放器容器（唯一例外，依 Atlassian radius.xxlarge）
+       full       分类标签 / 头像 / pill
+     ───────────────────────────────────────────── */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  /* 显式定义 full：Tailwind 默认的 rounded-full 是 calc(infinity * 1px)，
+     无法在 CSS 里被 var() 引用。999px 在 999px 以内的元素上完全等价。 */
+  --radius-full: 999px;
+  /* 安全网：遗留的 xl / 2xl 归到卡片档，杜绝静默回落 Tailwind 默认值 */
+  --radius-xl: 12px;
+  --radius-2xl: 12px;
+
+  /* ─────────────────────────────────────────────
+     字号刻度 —— 6 档，12px 为硬下限
+     （Twitch 生产环境规则：界面最小字号 12px）
+     图标刻度不在 CSS 里（lucide 的 size 是数字 prop）：
+       12 / 14 / 16 / 20 / 24 / 28 / 32 / 40 / 48
+     由 scripts/check-design-tokens.mjs 的 ICON_SCALE 强制。
+     ───────────────────────────────────────────── */
+  --text-xs: 12px;
+  --text-xs--line-height: 1.5;
+  --text-md: 13px;
+  --text-md--line-height: 1.5;
+  --text-sm: 14px;
+  --text-sm--line-height: 1.5;
+  --text-base: 16px;
+  --text-base--line-height: 1.4;
+  --text-lg: 20px;
+  --text-lg--line-height: 1.3;
+  --text-xl: 24px;
+  --text-xl--line-height: 1.25;
+
+  /* ─────────────────────────────────────────────
+     内容最大宽度 —— 居中由 AppShell 的 <main> 统一承担
+     每档都必须有真实消费者，否则就是死 token。
+       narrow   720  单列表单：设置
+       grid    1440  卡片网格：发现 / 搜索 / 关注
+       stage   1800  播放 / 回放：视频优先，放宽但仍设上限
+                     （依 Twitch 实测的「建议最大内容宽 ~1800px」；
+                      不设上限时 16:9 视频在宽屏上会高过视口）
+     ───────────────────────────────────────────── */
+  --container-narrow: 720px;
+  --container-grid: 1440px;
+  --container-stage: 1800px;
 
   --font-sans: var(--font-base);
 }
@@ -42,8 +227,23 @@
    no warm/cool mixing. Player stage纳入 token,不再硬编码暖黑。
    ───────────────────────────────────────────── */
 :root {
-  /* ── geometry ── */
-  --radius: 0.5rem;
+  /* ── 间距刻度（方案 B · 4pt 基数，硬性 7 档 + 两个布局档）──
+     Tailwind 的间距单位是 4px，所以整数档位天然对齐网格；
+     唯一的越界来源是「半档」写法（0.5 / 1.5 / 2.5 / 3.5 → 2/6/10/14px），
+     一律禁用。`pnpm check:tokens` 会扫描并拦截。
+
+       4px  gap-1 / p-1   图标与文字之间的最小间隙
+       8px  gap-2 / p-2   组内间距、控件内边距（Twitch 可点元素最小间距）
+      12px  gap-3 / p-3   控件横向内边距
+      16px  gap-4 / p-4   卡片内边距、网格 gutter、区块内间距
+      20px  gap-5 / p-5   中档
+      24px  gap-6 / p-6   区块内边距、组间间距
+      32px  gap-8 / p-8   大区块分隔
+     ── 布局档（页面级，不参与组件刻度）──
+      48px  p-12   页面纵向留白
+      64px  p-16   空状态纵向留白
+
+     分组靠「间距差」表达：组内 8px，组间 24px。 */
 
   /* ── typography ── */
   --font-base:
@@ -63,35 +263,126 @@
   --primary: oklch(55% 0.05 248);
   --primary-foreground: oklch(99% 0.002 250);
 
-  --secondary: oklch(94.5% 0.005 250);
+  --secondary: oklch(94% 0.005 250);
   --secondary-foreground: oklch(28% 0.009 250);
 
-  --muted: oklch(94% 0.005 250);
+  --muted: oklch(93% 0.005 250);
   --muted-foreground: oklch(46% 0.012 250);
 
-  --accent: oklch(93% 0.018 248);
+  /* 93% → 90%：原来 accent 与 card(99.2%) 只差 1.15:1，
+     设置页的「选中项」和回放列表的「当前行」几乎是不可见的。
+     亮色主题的表面阶梯整体压开，让每一档都有可测的亮度差。 */
+  --accent: oklch(90% 0.018 248);
   --accent-foreground: oklch(34% 0.046 248);
 
   --destructive: oklch(53% 0.19 24);
 
+  /* ── 实色填充上的文字 ──
+     规律是「亮主题用浅字、暗主题用深字」—— 因为实色本身在两个主题里
+     亮度相反（primary 55% → 70%）。原来硬写 text-white，
+     在暗色主题下对 primary/destructive/live 只有 2.66 / 3.40 / 3.97:1。
+     实测（与 --primary-foreground 同值）：
+       light 99% → primary 4.83 / destructive 5.83 / live 5.29
+       dark  16% → primary 7.31 / destructive 5.70 / live 4.88
+     ── */
+  --destructive-foreground: oklch(99% 0.002 250);
+
+  /* ── 内容阶梯补全（见 @theme 里的说明）──
+     原方案只有 foreground / muted-foreground 两档，
+     多出来的层级全靠 alpha 硬凑，于是出现 7 种 muted-foreground 透明度。 */
+  --subtle-foreground: oklch(54% 0.012 250);
+  --disabled-foreground: oklch(62% 0.011 250);
+
+  /* ── 状态色（替代 emerald-500 / amber-300 / red-400 硬编码）── */
+  --success: oklch(50% 0.15 155);
+  --success-tint: oklch(96% 0.03 155);
+  --success-hover: oklch(90% 0.055 155);
+  --warning: oklch(50% 0.13 65);
+
   --border: oklch(91% 0.006 250);
-  --input: oklch(91.5% 0.006 250);
+  /* 装饰性分隔：比 border 再淡一档，取代 border-border-faint 与 /50 */
+  --border-faint: oklch(94.5% 0.006 250);
+  /* 控件边界必须 ≥3:1（SC 1.4.11）—— 实测对 card 3.28:1。
+     原来的 91.5% 只有 1.28:1，输入框的唯一边界是不可辨识的。 */
+  --input: oklch(64% 0.012 250);
   --ring: oklch(55% 0.05 248);
 
   --sidebar: var(--card);
-  --sidebar-foreground: oklch(46% 0.01 250);
+  /* 原为 oklch(46% 0.01 250)，与 muted-foreground 只差 0.002 chroma，
+     属于同一角色的两个近乎相同的值 —— 合并。 */
+  --sidebar-foreground: var(--muted-foreground);
 
   --live: oklch(55% 0.168 24);
+  --live-foreground: oklch(99% 0.002 250);
 
-  /* ── player: dark stage shared by both modes ── */
-  --player-stage-bg: oklch(12% 0.008 250);
-  --player-ctrl-fg: oklch(92% 0.004 250 / 0.85);
-  --player-ctrl-fg-active: oklch(98% 0.002 250);
-  --player-ctrl-bg-hover: oklch(96% 0.004 250 / 0.12);
-  --player-ctrl-bg-active: oklch(96% 0.004 250 / 0.18);
-  --player-scrim: oklch(8% 0.006 250 / 0.88);
-  --player-accent: var(--primary);
-  --player-ring: oklch(96% 0.004 250 / 0.55);
+  /* ── 实色悬停（Radix step 9 → 10）── */
+  --primary-hover: oklch(48% 0.055 248);
+  --secondary-hover: oklch(89% 0.006 250);
+  --accent-hover: oklch(86% 0.024 248);
+  --destructive-hover: oklch(47% 0.19 24);
+  /* 选中态描边。原来是 border-primary-border。
+     78% 只有 1.83:1（暗色对应档 48% 是 3.02:1）—— 两个主题不对称，
+     亮色下选中态的描边几乎看不见。64% 实测 3.07:1，与暗色对齐。
+     注意：这是「状态指示」而不是装饰，所以按 SC 1.4.11 取 3:1。 */
+  --primary-border: oklch(64% 0.05 248);
+  /* muted 表面的悬停档。--muted(93%) 与 --secondary(94%) 几乎同色，
+     但两者语义不同（surface vs 按钮实色），所以各自持有悬停档。 */
+  --muted-hover: oklch(88% 0.006 250);
+
+  /* ── 表面叠层（M3 state layer 8% / 10% 的实色等价物）──
+     侧栏底色是 97%，悬停必须压到 ~88% 才看得见（1.24:1）。
+     机械照搬 M3 的 8% 白/黑叠层在亮色下只有 1.05:1，等于没有。 */
+  --surface-hover: oklch(88% 0.005 250);
+  --surface-active: oklch(84% 0.006 250);
+
+  /* ── 遮罩 ── */
+  /* 模态背景。原来是 bg-overlay —— 亮色下是一层白纱，
+     把内容盖住了却又不构成「模态」的视觉语言。改为压暗。 */
+  --overlay: oklch(20% 0.014 250 / 0.4);
+  /* 压在封面图 / 视频画面上的遮罩（不是舞台色，是媒体上的） */
+  --media-scrim: oklch(0% 0 0 / 0.42);
+  --media-scrim-hover: oklch(0% 0 0 / 0.6);
+
+  /* ── Windows 11 关闭按钮规范色（原 #c42b1c / #b0261a 硬编码）── */
+  --close-hover: oklch(53.61% 0.1912 30.1);
+  --close-active: oklch(49.54% 0.1759 29.7);
+  /* 固定红在两个主题下都用浅字（实测 5.50:1），不跟随主题翻转 */
+  --close-foreground: oklch(99% 0.002 250);
+
+  /* ── 滚动条（自成一族，不参与内容阶梯）── */
+  --scrollbar-thumb: oklch(86% 0.006 250);
+  --scrollbar-thumb-hover: oklch(74% 0.008 250);
+
+  /* ── 阴影实色（按主题分叉）── */
+  --elev-1: 0 1px 2px oklch(20% 0.02 250 / 0.1);
+  --elev-2: 0 4px 12px oklch(20% 0.02 250 / 0.12), 0 1px 3px oklch(20% 0.02 250 / 0.08);
+  --elev-3: 0 16px 48px oklch(20% 0.02 250 / 0.18), 0 2px 8px oklch(20% 0.02 250 / 0.1);
+
+  /* ── 播放器舞台：两种主题共用一套暗底色阶 ──
+     舞台恒为暗色，所以这一族刻意不跟主题翻转。
+     原来分了两套（--player-* 给 player.css、text-white/NN 给 TSX），
+     现在合并成一套 --stage-*，TSX 与 CSS 共用。
+       实测对比度（对 --stage-bg）
+         fg-1 18.61:1 / fg-2 14.14:1 / fg-3 9.46:1 / fg-4 6.04:1
+         danger 7.59:1 / warning 11.53:1 / accent 9.9:1
+       叠层（白色叠在舞台上）
+         surface 12% → 1.30:1（静态容器底、进度槽）
+         hover   20% → 1.72:1（悬停 / 选中 / 描边）
+         scrim   82% → 错误遮罩
+     ── */
+  --stage-bg: oklch(12% 0.008 250);
+  --stage-fg-1: oklch(97% 0.002 250);
+  --stage-fg-2: oklch(88% 0.004 250);
+  --stage-fg-3: oklch(76% 0.004 250);
+  --stage-fg-4: oklch(64% 0.004 250);
+  --stage-surface: oklch(100% 0 0 / 0.12);
+  --stage-hover: oklch(100% 0 0 / 0.2);
+  --stage-border: oklch(100% 0 0 / 0.2);
+  --stage-scrim: oklch(8% 0.006 250 / 0.82);
+  --stage-accent: oklch(78% 0.06 248);
+  --stage-ring: oklch(97% 0.002 250);
+  --stage-danger: oklch(72% 0.17 22);
+  --stage-warning: oklch(82% 0.14 85);
 }
 
 /* ─────────────────────────────────────────────
@@ -117,21 +408,69 @@
   --secondary-foreground: oklch(84% 0.007 250);
 
   --muted: oklch(25% 0.014 250);
-  --muted-foreground: oklch(64% 0.014 250);
+  /* 64% → 70%：内容阶梯需要档间距。64% 时 muted(5.39:1) 与
+     subtle(4.98:1) 只差 0.4 个比值，肉眼分不出来，阶梯形同虚设。
+     70% 对 card 是 6.78:1，与 subtle 的 4.98:1 拉开一档。 */
+  --muted-foreground: oklch(70% 0.014 250);
 
   --accent: oklch(31% 0.03 248);
   --accent-foreground: oklch(80% 0.04 248);
 
-  --destructive: oklch(60% 0.19 24);
+  /* 60% → 66%：原来对 card 只有 4.17:1，作为正文色是硬失败 */
+  --destructive: oklch(66% 0.19 24);
+  --destructive-foreground: oklch(16% 0.012 250);
+
+  /* ── 内容阶梯补全 ── */
+  --subtle-foreground: oklch(62% 0.013 250);
+  --disabled-foreground: oklch(52% 0.012 250);
+
+  /* ── 状态色 ── */
+  --success: oklch(72% 0.15 155);
+  --success-tint: oklch(26% 0.04 155);
+  --success-hover: oklch(31% 0.05 155);
+  --warning: oklch(80% 0.14 85);
 
   --border: oklch(33% 0.014 250);
-  --input: oklch(33% 0.014 250);
+  --border-faint: oklch(27% 0.014 250);
+  /* 控件边界 ≥3:1（SC 1.4.11）—— 实测对 card 3.29:1，原 33% 只有 1.48:1 */
+  --input: oklch(52% 0.014 250);
   --ring: oklch(58% 0.048 248);
 
   --sidebar: var(--card);
-  --sidebar-foreground: oklch(64% 0.012 250);
+  --sidebar-foreground: var(--muted-foreground);
 
   --live: oklch(62% 0.18 24);
+  --live-foreground: oklch(16% 0.012 250);
+
+  /* ── 实色悬停 ── */
+  --primary-hover: oklch(78% 0.06 248);
+  --secondary-hover: oklch(32% 0.016 250);
+  --accent-hover: oklch(37% 0.032 248);
+  --destructive-hover: oklch(72% 0.19 24);
+  /* 48% 对 background 是 3.02:1，但对 card 只有 2.78:1 —— 引导页的选项 chip 就落在
+     card 面板上。50% 同时过线（card 3.03:1 / background 3.30:1），取最小值。 */
+  --primary-border: oklch(50% 0.055 248);
+  --muted-hover: oklch(31% 0.016 250);
+
+  /* ── 表面叠层 ──
+     暗色下 8% 白叠层只有 1.14:1 的可见度（几乎看不出悬停），
+     所以这两档按「实色」定，而不是机械照搬 M3 的百分比。 */
+  --surface-hover: oklch(23% 0.014 250);
+  --surface-active: oklch(26% 0.014 250);
+
+  /* ── 遮罩 ── */
+  --overlay: oklch(0% 0 0 / 0.6);
+  --media-scrim: oklch(0% 0 0 / 0.42);
+  --media-scrim-hover: oklch(0% 0 0 / 0.6);
+
+  /* ── 阴影实色：暗色下需要更重才看得出层级 ── */
+  --elev-1: 0 1px 2px oklch(0% 0 0 / 0.35);
+  --elev-2: 0 6px 16px oklch(0% 0 0 / 0.45), 0 1px 3px oklch(0% 0 0 / 0.3);
+  --elev-3: 0 20px 56px oklch(0% 0 0 / 0.6), 0 2px 10px oklch(0% 0 0 / 0.4);
+
+  /* ── 滚动条：暗色下用中性灰，不跟内容阶梯抢注意力 ── */
+  --scrollbar-thumb: oklch(44% 0.014 250);
+  --scrollbar-thumb-hover: oklch(56% 0.014 250);
 }
 
 /* ─────────────────────────────────────────────
@@ -152,19 +491,22 @@
 html[data-theme-transitioning] *,
 html[data-theme-transitioning] *::before,
 html[data-theme-transitioning] *::after {
+  /* 主题切换是整棵树一起过渡，用最慢一档；
+     原来 240/200ms 交错是为了「颜色比背景早一点到位」，
+     但 40ms 的错峰肉眼不可辨，换来的是刻度外的两个魔法数字。 */
   transition:
-    background-color 240ms cubic-bezier(0.4, 0, 0.2, 1),
-    color 200ms cubic-bezier(0.4, 0, 0.2, 1),
-    border-color 240ms cubic-bezier(0.4, 0, 0.2, 1),
-    fill 200ms cubic-bezier(0.4, 0, 0.2, 1),
-    box-shadow 240ms cubic-bezier(0.4, 0, 0.2, 1);
+    background-color var(--t-slow) var(--ease-smooth),
+    color var(--t-slow) var(--ease-smooth),
+    border-color var(--t-slow) var(--ease-smooth),
+    fill var(--t-slow) var(--ease-smooth),
+    box-shadow var(--t-slow) var(--ease-smooth);
 }
 
 /* View Transition crossfade (Tauri WebView2 supports Chrome 111+) */
 @supports (view-transition-name: none) {
   ::view-transition-old(root),
   ::view-transition-new(root) {
-    animation-duration: 280ms;
+    animation-duration: var(--t-slow);
     animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   }
   ::view-transition-old(root) {
@@ -204,6 +546,7 @@ body,
 :root:not(.is-mac) html,
 :root:not(.is-mac) body,
 :root:not(.is-mac) #root {
+  /* @tokens-ignore 窗口外框圆角，由 OS 合成器绘制，不是组件层级的一部分 */
   border-radius: 10px;
   overflow: hidden;
 }
@@ -222,16 +565,23 @@ a {
   color: inherit;
   text-decoration: none;
 }
-button,
-input {
-  font: inherit;
-}
+/* ⚠️ 这里曾经有一条 `button, input { font: inherit }`，已删除，不要再加回来。
+   它是**未分层**样式，而 Tailwind 的 text-* 在 @layer utilities 里。按 CSS
+   Cascade Layers，未分层声明永远压过分层声明 —— 与选择器权重无关。后果是
+   所有 <button> / <input> 上的 text-xs / text-sm / text-2xl 全部**静默失效**：
+   类名在 DOM 上、样式表里也生成了，算出来却还是继承来的 14px/21px。
+   实测代价：播放器的 Live 徽章高 29px 而不是设计的 20px，比同一套配方的
+   <span> 版本（发现页封面上的 Live）高出 3px。
+   Tailwind preflight 已经在 @layer base 里对 button/input/select/textarea 做了
+   同样的事，这里重复一遍只有坏处。check:tokens 的 UNLAYERED_FORM_FONT 守着。 */
 img {
   display: block;
 }
 
+
 /* ─────────────────────────────────────────────
    Scrollbar — minimal, cool-toned
+   滚动条自成一族刻度（不在内容阶梯里：它是 OS 层装饰，不承载信息）
    ───────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 4px;
@@ -241,31 +591,57 @@ img {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: oklch(86% 0.006 250);
-  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-full);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(74% 0.008 250);
+  background: var(--scrollbar-thumb-hover);
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: oklch(44% 0.014 250);
+  background: var(--scrollbar-thumb);
 }
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: oklch(56% 0.014 250);
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* ─────────────────────────────────────────────
-   Transition defaults — applied to key
-   interactive targets via Tailwind utilities.
-   All transitions use ease cubic bezier.
+   Transition defaults —— 方案 B · 统一为 3 档时长
+     fast  100ms  悬停 / 按下的颜色反馈
+     base  150ms  默认过渡（绝大多数交互）
+     slow  250ms  进出场、位移较大的动效
+   过渡一律走 ease 曲线；按下态统一 scale(0.97)。
    ───────────────────────────────────────────── */
 :root {
   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-out: cubic-bezier(0, 0, 0.2, 1);
-  --t-fast: 120ms;
-  --t-base: 160ms;
-  --t-slow: 240ms;
+  --t-fast: 100ms;
+  --t-base: 150ms;
+  --t-slow: 250ms;
+}
+
+/* ─────────────────────────────────────────────
+   层级刻度 —— 4 档，每档一个明确角色。
+   原来散落 z-chrome / z-stage-msg / z-40（player.css）/ z-float，
+   其中 z-40 只出现在一处、没有任何文档说明，
+   属于「随手挑的数」。命名后调用点能自解释，
+   守卫脚本也会拦下裸的 z-<数字>。
+   ───────────────────────────────────────────── */
+:root {
+  --z-chrome: 10; /* 播放器控制层（进度条、按钮条） */
+  --z-stage-msg: 20; /* 播放器内的消息遮罩（加载 / 错误 / 已播完） */
+  --z-stage-popup: 30; /* 播放器内的弹出菜单（清晰度选择）—— 由 player.css 直接 var() 消费 */
+  --z-float: 50; /* 全局浮层：下拉 / 提示 / 模态 / 全屏 */
+}
+
+@utility z-chrome {
+  z-index: var(--z-chrome);
+}
+@utility z-stage-msg {
+  z-index: var(--z-stage-msg);
+}
+@utility z-float {
+  z-index: var(--z-float);
 }
 
 /* ─────────────────────────────────────────────
@@ -280,7 +656,7 @@ img {
 
 .cards-grid {
   display: grid;
-  gap: 0.875rem;
+  gap: 1rem;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
 
@@ -308,13 +684,16 @@ img {
 
 /* ─────────────────────────────────────────────
    Player stage — dark, full-bleed (token-driven)
+   圆角走最大一档 16px：播放器是全局层级最高的容器
+   （Atlassian 把 video player 容器单列在 radius.xxlarge）
+   全屏时由 player.css 覆写为 0。
    ───────────────────────────────────────────── */
 .player-stage {
   width: 100%;
   min-height: min(60vh, 520px);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  background: var(--player-stage-bg);
+  background: var(--stage-bg);
 }
 
 /* ─────────────────────────────────────────────
@@ -350,47 +729,47 @@ img {
   user-select: none;
   -webkit-tap-highlight-color: transparent;
   transition:
-    background-color 200ms var(--ease-smooth),
-    color 200ms var(--ease-smooth),
-    box-shadow 200ms var(--ease-smooth),
-    transform 150ms var(--ease-out);
+    background-color var(--t-base) var(--ease-smooth),
+    color var(--t-base) var(--ease-smooth),
+    box-shadow var(--t-base) var(--ease-smooth),
+    transform var(--t-fast) var(--ease-out);
 }
 
 /* ── Parent chip: bold, prominent ── */
 .cat-chip--parent {
-  padding: 5px 14px;
+  padding: 4px 12px;
   font-size: 13px;
   font-weight: 500;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background-color: var(--muted);
   color: var(--muted-foreground);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--tracking-caps);
 }
 .cat-chip--parent:hover {
-  background-color: color-mix(in oklch, var(--muted) 85%, var(--accent));
+  background-color: var(--muted-hover);
   color: var(--foreground);
 }
 /* Active parent: filled primary with subtle glow */
 .cat-chip--parent.cat-chip--active {
   background-color: var(--primary);
   color: var(--primary-foreground);
-  box-shadow: 0 1px 6px oklch(46% 0.05 218 / 0.25);
+  box-shadow: var(--elev-1);
 }
 .dark .cat-chip--parent.cat-chip--active {
-  box-shadow: 0 1px 8px oklch(62% 0.05 218 / 0.3);
+  box-shadow: var(--elev-1);
 }
 
 /* ── Sub chip: lighter, smaller ── */
 .cat-chip--sub {
-  padding: 3px 10px;
-  font-size: 11.5px;
+  padding: 4px 8px;
+  font-size: 12px;
   font-weight: 400;
-  border-radius: 999px;
-  background-color: color-mix(in oklch, var(--muted) 70%, transparent);
+  border-radius: var(--radius-full);
+  background-color: var(--muted);
   color: var(--muted-foreground);
 }
 .cat-chip--sub:hover {
-  background-color: var(--muted);
+  background-color: var(--muted-hover);
   color: var(--foreground);
 }
 /* Active sub: accent-tinted with left accent bar feel */
@@ -398,28 +777,28 @@ img {
   background-color: var(--accent);
   color: var(--accent-foreground);
   font-weight: 500;
-  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--primary) 30%, transparent);
+  box-shadow: inset 0 0 0 1px var(--primary-border);
 }
 
 /* ── Expand/collapse button ── */
 .cat-chip--expand {
-  padding: 3px 8px;
-  font-size: 11px;
+  padding: 4px 8px;
+  font-size: 12px;
   font-weight: 400;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: transparent;
   color: var(--muted-foreground);
 }
 .cat-chip--expand:hover {
   color: var(--foreground);
-  background-color: color-mix(in oklch, var(--muted) 50%, transparent);
+  background-color: var(--muted);
 }
 
 /* ── Sub-categories container with smooth height ── */
 .cat-subs-container {
   display: grid;
   grid-template-rows: 1fr;
-  transition: grid-template-rows 250ms var(--ease-smooth);
+  transition: grid-template-rows var(--t-slow) var(--ease-smooth);
   overflow: hidden;
 }
 .cat-subs-container > div {

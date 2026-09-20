@@ -2,8 +2,9 @@
    Player stage + React controls overlay styles
    Scope: .player-stage
 
-   All colors driven by --player-* tokens (defined in globals.css),
-   so the player follows theme switches instead of being hard-coded.
+   All colors driven by the --stage-* scale (defined in globals.css).
+   The stage is dark in BOTH themes, so this family deliberately does not
+   flip with the theme — unlike the --content-* ladder.
    ══════════════════════════════════════════════════════════════ */
 
 /* ── 1. Stage container ─────────────────────────────────────── */
@@ -14,13 +15,21 @@
   min-height: min(60vh, 520px);
   height: 100%;
   overflow: hidden;
-  background: var(--player-stage-bg);
-  border-radius: 0;
+  background: var(--stage-bg);
+  /* 方案 B：播放器容器用最大一档 16px（全屏时由下方规则覆写为 0）*/
+  border-radius: var(--radius-lg);
 }
 
 .player-stage video {
   object-fit: contain;
-  background: var(--player-stage-bg);
+  background: var(--stage-bg);
+}
+
+/* 直角变体 —— 全出血分栏布局（ReplayPage 视频区）用。
+   必须显式声明：player.css 是未分层样式，优先级高于 Tailwind 的
+   @layer utilities，所以 .rounded-none 压不过 .player-stage。 */
+.player-stage--flush {
+  border-radius: 0;
 }
 
 /* ── 2. Fullscreen overlay ────────────────────────────────────
@@ -35,7 +44,7 @@
   right: env(safe-area-inset-right, 0);
   bottom: env(safe-area-inset-bottom, 0);
   left: env(safe-area-inset-left, 0);
-  z-index: 50;
+  z-index: var(--z-float);
   width: auto;
   height: auto;
   border-radius: 0 !important;
@@ -50,48 +59,53 @@
    ═══════════════════════════════════════════════════════════════ */
 
 /* ── Control button base ──────────────────────────────────────
-   .ctrl-btn       → icon-only square button (30 × 30)
-   .ctrl-btn-label → text/label button — auto width, no squeezing
-   ────────────────────────────────────────────────────────────── */
+   .ctrl-btn       → icon-only square button
+   .ctrl-btn-label → text/label button — auto width, same height
+   ──────────────────────────────────────────────────────────────
+   高度只由 --ctrl-btn-size 一处定义。文本按钮曾是 26px，与图标按钮的 36px
+   hover 背景并排时高度差 10px，一行里出现两种规格的圆角块 —— 共用同一个
+   变量后两者不可能再漂移。 */
 .ctrl-btn {
+  --ctrl-btn-size: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: var(--ctrl-btn-size);
+  height: var(--ctrl-btn-size);
   flex-shrink: 0;
   border-radius: var(--radius-sm);
   border: none;
   background: transparent;
-  color: var(--player-ctrl-fg);
+  color: var(--stage-fg-3);
   cursor: pointer;
   transition:
-    color 0.12s ease,
-    background 0.12s ease;
+    color var(--t-fast) var(--ease-smooth),
+    background var(--t-fast) var(--ease-smooth);
 }
 
-/* Text/label variant — overrides the fixed 30 × 30 square */
+/* Text/label variant — 宽度自适应，高度与图标按钮一致。
+   否则 hover 背景会比旁边的全屏按钮矮一截。 */
 .ctrl-btn.ctrl-btn-label {
-  width: auto !important;
-  height: 26px !important;
-  padding: 0 8px !important;
+  width: auto;
+  height: var(--ctrl-btn-size);
+  padding: 0 10px;
   gap: 4px;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0.025em;
+  letter-spacing: var(--tracking-caps);
   font-family:
     "MiSans", "HarmonyOS Sans SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
 }
 
 .ctrl-btn:hover {
-  color: var(--player-ctrl-fg-active);
-  background: var(--player-ctrl-bg-hover);
+  color: var(--stage-fg-1);
+  background: var(--stage-surface);
 }
 
 .ctrl-btn:active {
-  background: var(--player-ctrl-bg-active);
-  transform: scale(0.96);
+  background: var(--stage-hover);
+  transform: scale(0.97);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -110,7 +124,7 @@
   appearance: none;
   width: 72px;
   height: 3px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   outline: none;
   cursor: pointer;
   /* background set inline based on volume value */
@@ -120,11 +134,11 @@
   -webkit-appearance: none;
   width: 11px;
   height: 11px;
-  border-radius: 50%;
-  background: var(--player-ctrl-fg-active);
-  box-shadow: 0 0 4px oklch(8% 0.006 250 / 0.4);
+  border-radius: var(--radius-full);
+  background: var(--stage-fg-1);
+  box-shadow: var(--elev-1);
   cursor: pointer;
-  transition: transform 0.12s ease;
+  transition: transform var(--t-fast) var(--ease-smooth);
 }
 
 .vol-slider::-webkit-slider-thumb:hover {
@@ -134,122 +148,11 @@
 .vol-slider::-moz-range-thumb {
   width: 11px;
   height: 11px;
-  border-radius: 50%;
-  background: var(--player-ctrl-fg-active);
+  border-radius: var(--radius-full);
+  background: var(--stage-fg-1);
   border: none;
-  box-shadow: 0 0 4px oklch(8% 0.006 250 / 0.4);
+  box-shadow: var(--elev-1);
   cursor: pointer;
-}
-
-/* ── Quality select ─────────────────────────────────────────── */
-.quality-select {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 24px;
-  padding: 0 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid oklch(96% 0.004 250 / 0.16);
-  background: oklch(8% 0.006 250 / 0.7);
-  color: oklch(92% 0.004 250 / 0.82);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  outline: none;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  font-family:
-    "MiSans", "HarmonyOS Sans SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
-  transition:
-    border-color 0.12s ease,
-    color 0.12s ease;
-}
-
-.quality-select:hover {
-  border-color: oklch(96% 0.004 250 / 0.28);
-  color: var(--player-ctrl-fg-active);
-}
-
-.quality-select option {
-  background: var(--popover);
-  color: var(--foreground);
-}
-
-/* ══════════════════════════════════════════════════════════════
-   Quality selector popup — same dark-glass language as the bar
-   ══════════════════════════════════════════════════════════════ */
-.player-quality-popup {
-  position: absolute;
-  bottom: calc(100% + 7px);
-  right: 0;
-  min-width: 108px;
-  padding: 4px;
-  border-radius: var(--radius-md);
-  /* Glass recipe keyed to the player scrim */
-  background: var(--player-scrim);
-  border: 1px solid oklch(96% 0.004 250 / 0.09);
-  backdrop-filter: blur(20px) saturate(1.3);
-  -webkit-backdrop-filter: blur(20px) saturate(1.3);
-  /* Tinted shadow carries the background hue */
-  box-shadow:
-    0 10px 30px oklch(8% 0.006 250 / 0.55),
-    0 0 0 0.5px oklch(96% 0.004 250 / 0.04) inset;
-  z-index: 40;
-  animation: popup-in 0.12s ease-out;
-}
-
-@keyframes popup-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.player-quality-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 5px 10px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: oklch(92% 0.004 250 / 0.7);
-  font-size: 11.5px;
-  font-weight: 400;
-  font-family:
-    "MiSans", "HarmonyOS Sans SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
-  text-align: left;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    background 0.1s ease,
-    color 0.1s ease;
-}
-
-.player-quality-item:hover:not(:disabled) {
-  background: var(--player-ctrl-bg-hover);
-  color: var(--player-ctrl-fg-active);
-}
-
-.player-quality-item:active:not(:disabled) {
-  background: var(--player-ctrl-bg-active);
-}
-
-/* Active (currently playing) quality */
-.player-quality-item.is-active {
-  color: var(--player-accent);
-  font-weight: 500;
-}
-
-.player-quality-item.is-failed {
-  text-decoration: line-through;
-  opacity: 0.28;
-  cursor: not-allowed;
 }
 
 /* ── Keyboard focus rings ───────────────────────────────────── */
@@ -258,15 +161,5 @@
 }
 .ctrl-btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--player-ring);
-}
-
-.player-quality-item:focus {
-  outline: none;
-}
-.player-quality-item:focus-visible {
-  outline: none;
-  background: var(--player-ctrl-bg-hover);
-  color: var(--player-ctrl-fg-active);
-  box-shadow: inset 0 0 0 1.5px oklch(96% 0.004 250 / 0.32);
+  box-shadow: 0 0 0 2px var(--stage-ring);
 }

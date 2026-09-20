@@ -25,25 +25,25 @@ function ResumeBanner({
 }) {
   if (lastVisited.type !== "room" || !lastVisited.platform || !lastVisited.roomId) return null;
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-accent/30 px-3.5 py-2">
+    <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-accent px-4 py-2">
       <div className="flex items-center gap-2 min-w-0">
-        <Play size={12} className="shrink-0 text-primary" strokeWidth={2.2} />
+        <Play size={12} className="shrink-0 text-accent-foreground" strokeWidth={2.2} />
         <p className="text-xs text-foreground truncate">上次观看</p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <Link
           to={`/player/${lastVisited.platform}/${lastVisited.roomId}`}
-          className="text-xs font-medium text-primary hover:underline underline-offset-2"
+          className="text-xs font-medium text-accent-foreground hover:underline underline-offset-2"
         >
           继续
         </Link>
         <button
           type="button"
           onClick={onDismiss}
-          className="flex h-4 w-4 items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+          className="flex h-4 w-4 items-center justify-center rounded-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
           aria-label="关闭"
         >
-          <X size={11} />
+          <X size={12} />
         </button>
       </div>
     </div>
@@ -109,7 +109,7 @@ export function DiscoverPage() {
     <section ref={sectionRef} className="page-stack">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Flame size={16} strokeWidth={1.8} className="text-muted-foreground/70" />
+          <Flame size={16} strokeWidth={1.8} className="text-muted-foreground" />
           <h1 className="text-base font-semibold tracking-tight">发现</h1>
         </div>
         <PlatformSwitch />

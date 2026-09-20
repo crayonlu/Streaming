@@ -44,13 +44,13 @@ export function FollowButton({ room, compact = false }: FollowButtonProps) {
         aria-label={room.followed ? "取消关注" : "关注"}
         className={cn(
           "absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded-full cursor-pointer",
-          "transition-all duration-120",
+          "transition-all duration-100",
           room.followed
-            ? "bg-live text-white"
-            : "bg-black/35 text-white/75 hover:bg-black/55 hover:text-white",
+            ? "bg-live text-live-foreground"
+            : "bg-media-scrim text-stage-fg-2 hover:bg-media-scrim-hover hover:text-stage-fg-1",
         )}
       >
-        <Heart size={11} strokeWidth={2} className={room.followed ? "fill-white" : "fill-none"} />
+        <Heart size={12} strokeWidth={2} className={room.followed ? "fill-live-foreground" : "fill-none"} />
       </button>
     );
   }
@@ -61,10 +61,10 @@ export function FollowButton({ room, compact = false }: FollowButtonProps) {
       size="sm"
       onClick={() => mutation.mutate(!room.followed)}
       disabled={mutation.isPending}
-      className="gap-1.5 text-xs"
+      className="gap-2 text-xs"
     >
       <Heart
-        size={11}
+        size={12}
         strokeWidth={2}
         className={room.followed ? "fill-accent-foreground" : "fill-none"}
       />

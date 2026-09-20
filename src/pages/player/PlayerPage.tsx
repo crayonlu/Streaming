@@ -10,11 +10,17 @@ import { DanmakuControls } from "@/features/danmaku/ui/DanmakuControls";
 import { DanmakuOverlay } from "@/features/danmaku/ui/DanmakuOverlay";
 import { FollowButton } from "@/features/follow-button/ui/FollowButton";
 import {
+  createLiveRecoveryState,
+  type LiveRecoveryState,
   liveRecoveryDelayMs,
-  MAX_LIVE_RECOVERY_ATTEMPTS,
+  planLiveRecovery,
+  resetStallBudget,
+  reviveSources,
+  STALL_WATCHDOG_MS,
 } from "@/features/player/model/liveRecovery";
 import { useBilibiliAuth } from "@/features/player/model/useBilibiliAuth";
 import { useOnlineStatus } from "@/features/player/model/useOnlineStatus";
+import type { PlayerController } from "@/features/player/model/usePlayerEngine";
 import { useStreamLifecycle } from "@/features/player/model/useStreamLifecycle";
 import type { PlayerQualityItem } from "@/features/player/ui/VideoPlayer";
 import { VideoPlayer } from "@/features/player/ui/VideoPlayer";
@@ -45,10 +51,11 @@ export function PlayerPage() {
   const roomId = params.roomId;
 
   const [manualSelection, setManualSelection] = useState<ManualSelection | null>(null);
-  const [failedSourceIds, setFailedSourceIds] = useState<Set<string>>(new Set());
-  const [stallCount, setStallCount] = useState(0);
+  const [recovery, setRecovery] = useState<LiveRecoveryState>(createLiveRecoveryState);
   const [retryKey, setRetryKey] = useState(0);
+  const recoveryRef = useRef(recovery);
   const recoveryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const controllerRef = useRef<PlayerController | null>(null);
   const { loginState: bilibiliLoginState, login: handleBilibiliLogin } = useBilibiliAuth(platform);
   const streamLifecycle = useStreamLifecycle();
   const onlineCount = useDanmakuStore((s) => s.onlineCount);
@@ -76,7 +83,12 @@ export function PlayerPage() {
 
   const room = detailQuery.data;
   const sources = streamQuery.data ?? [];
-  const allFailed = sources.length > 0 && failedSourceIds.size >= sources.length;
+  const failedSourceIds = recovery.failed;
+  const availableSourceCount = sources.reduce(
+    (count, source) => (failedSourceIds.has(source.id) ? count : count + 1),
+    0,
+  );
+  const allFailed = sources.length > 0 && availableSourceCount === 0;
 
   // Record visit
   useEffect(() => {
@@ -91,15 +103,29 @@ export function PlayerPage() {
     [sources, manualSelection, failedSourceIds],
   );
 
-  const handleSourceError = useCallback((source: StreamSource) => {
-    setFailedSourceIds((prev) => new Set([...prev, source.id]));
+  // Latest-value refs: the recovery handlers read these instead of closing over
+  // state, so their identity stays stable across the frequent re-renders that
+  // the danmaku store triggers (VideoPlayer re-binds <video> listeners when
+  // these callbacks change).
+  const sourcesRef = useRef(sources);
+  sourcesRef.current = sources;
+  const selectedSourceRef = useRef(selectedSource);
+  selectedSourceRef.current = selectedSource;
+  const streamQueryRef = useRef(streamQuery);
+  streamQueryRef.current = streamQuery;
+
+  const applyRecovery = useCallback((next: LiveRecoveryState) => {
+    recoveryRef.current = next;
+    setRecovery(next);
   }, []);
 
   const handleRetryAll = () => {
-    if (recoveryTimerRef.current) clearTimeout(recoveryTimerRef.current);
-    setFailedSourceIds(new Set());
+    if (recoveryTimerRef.current) {
+      clearTimeout(recoveryTimerRef.current);
+      recoveryTimerRef.current = null;
+    }
+    applyRecovery(createLiveRecoveryState());
     setManualSelection(null);
-    setStallCount(0);
     setRetryKey((k) => k + 1);
   };
 
@@ -111,60 +137,118 @@ export function PlayerPage() {
   );
 
   const handleUserPlay = useCallback(() => {
-    if (streamQuery.isFetching) return;
+    const query = streamQueryRef.current;
+    if (query.isFetching) return;
+    // A recovery (nudge watchdog or backoff refetch) owns the ladder — a user
+    // play must not race it with a second request.
+    if (recoveryTimerRef.current) return;
     if (streamLifecycle.shouldRefresh()) {
-      void streamQuery.refetch();
+      void query.refetch().then((result) => {
+        // Fresh URLs: the user asked to play, so retired sources get a retry.
+        if (result.isSuccess) applyRecovery(createLiveRecoveryState());
+      });
     }
-  }, [streamLifecycle, streamQuery]);
+  }, [applyRecovery, streamLifecycle]);
 
-  // Auto-recover on network reconnect: refresh the stream source if it has
-  // gone stale while offline, so playback resumes at the live edge.
+  // Auto-recover on network reconnect: refresh the stream source if it has gone
+  // stale while offline, so playback resumes at the live edge. Deliberately
+  // driven by the offline→online transition only: `streamQuery` is a new object
+  // on every render, and depending on it made unrelated re-renders (the danmaku
+  // store pushes the online count continuously) refetch the catalogue every
+  // time the 12s staleness threshold had passed — the periodic stutter.
   const online = useOnlineStatus();
+  const wasOnlineRef = useRef(online);
   useEffect(() => {
-    if (online && streamLifecycle.shouldRefresh() && !streamQuery.isFetching) {
-      void streamQuery.refetch();
+    const wasOnline = wasOnlineRef.current;
+    wasOnlineRef.current = online;
+    if (!online || wasOnline) return;
+    if (streamLifecycle.shouldRefresh() && !streamQueryRef.current.isFetching) {
+      void streamQueryRef.current.refetch();
     }
-  }, [online, streamLifecycle, streamQuery]);
+  }, [online, streamLifecycle]);
+
+  const scheduleRecoveryRefetch = useCallback(
+    (attempt: number) => {
+      if (recoveryTimerRef.current) return;
+      recoveryTimerRef.current = setTimeout(() => {
+        recoveryTimerRef.current = null;
+        void streamQueryRef.current.refetch().then((result) => {
+          if (result.isSuccess) applyRecovery(createLiveRecoveryState());
+        });
+      }, liveRecoveryDelayMs(attempt));
+    },
+    [applyRecovery],
+  );
+
+  // Stable self-reference: the nudge watchdog re-enters the stall path.
+  const stallHandlerRef = useRef<(reason: "error" | "waiting-timeout") => void>(() => undefined);
 
   const handlePlaybackStall = useCallback(
     (reason: "error" | "waiting-timeout") => {
-      if (streamQuery.isFetching || recoveryTimerRef.current) return;
-      const nextAttempt = stallCount + 1;
-      if (nextAttempt > MAX_LIVE_RECOVERY_ATTEMPTS) return;
-      setStallCount(nextAttempt);
-      const nextFailed = new Set(failedSourceIds);
-      if (selectedSource) nextFailed.add(selectedSource.id);
-      setFailedSourceIds(nextFailed);
-      if (
-        sources.length > 0 &&
-        nextFailed.size >= sources.length &&
-        nextAttempt < MAX_LIVE_RECOVERY_ATTEMPTS
-      ) {
-        const delay = liveRecoveryDelayMs(nextAttempt);
-        recoveryTimerRef.current = setTimeout(() => {
-          recoveryTimerRef.current = null;
-          void streamQuery.refetch().then((result) => {
-            if (result.isSuccess) setFailedSourceIds(new Set());
-          });
-        }, delay);
+      if (streamQueryRef.current.isFetching) return;
+      if (reason === "waiting-timeout") {
+        // A nudge or refetch is already in flight for this incident.
+        if (recoveryTimerRef.current) return;
+      } else if (recoveryTimerRef.current) {
+        // Hard error: the source is gone, no point waiting for the watchdog.
+        clearTimeout(recoveryTimerRef.current);
+        recoveryTimerRef.current = null;
       }
+
+      const source = selectedSourceRef.current;
+      const available = sourcesRef.current.reduce(
+        (count, candidate) => (recoveryRef.current.failed.has(candidate.id) ? count : count + 1),
+        0,
+      );
+      const { action, next } = planLiveRecovery(
+        { kind: reason === "error" ? "hard-error" : "stall" },
+        recoveryRef.current,
+        { sourceId: source?.id ?? null, availableCount: available },
+        Date.now(),
+      );
+      applyRecovery(next);
+
+      switch (action.kind) {
+        case "nudge":
+          // Same source, no reload: jump back to the live edge, then give it
+          // one stall window to resume before the next stall retires it.
+          controllerRef.current?.seekToLiveEdge();
+          recoveryTimerRef.current = setTimeout(() => {
+            recoveryTimerRef.current = null;
+            stallHandlerRef.current("waiting-timeout");
+          }, STALL_WATCHDOG_MS);
+          break;
+        case "refetch":
+          scheduleRecoveryRefetch(next.attempts);
+          break;
+        case "retire":
+        case "none":
+          break;
+      }
+
       // biome-ignore lint/suspicious/noConsole: debug
-      console.log("[PlayerPage] playback stall, advancing recovery route", {
+      console.log("[PlayerPage] live recovery", {
         reason,
-        attempt: nextAttempt,
+        action: action.kind,
+        attempt: next.attempts,
+        source: source?.id ?? null,
+        available,
       });
     },
-    [failedSourceIds, stallCount, streamQuery, selectedSource, sources],
+    [applyRecovery, scheduleRecoveryRefetch],
   );
+  stallHandlerRef.current = handlePlaybackStall;
 
   const handlePlaybackRecovered = useCallback(() => {
     if (recoveryTimerRef.current) {
       clearTimeout(recoveryTimerRef.current);
       recoveryTimerRef.current = null;
     }
-    setStallCount(0);
-    setFailedSourceIds(new Set());
-  }, []);
+    // Playback resumed, so the last stall was transient. Retired sources stay
+    // retired — clearing them here is what sent selection back to the source
+    // that had just failed, and produced the switch/fail/switch loop.
+    applyRecovery(resetStallBudget(recoveryRef.current));
+  }, [applyRecovery]);
 
   // ── Early return after all hooks ──────────────────────────────────────────
   if (!validRoute) {
@@ -215,10 +299,10 @@ export function PlayerPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-3.5 h-full">
+    <div className="flex flex-col gap-4 h-full">
       {/* ── Room info bar ── */}
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center gap-3 min-w-0">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -227,49 +311,49 @@ export function PlayerPage() {
             aria-label="返回"
             title="返回"
           >
-            <ArrowLeft size={15} />
+            <ArrowLeft size={16} />
           </Button>
 
           {isLoading ? (
-            <div className="flex flex-col gap-1.5">
-              <div className="h-4 w-44 animate-pulse rounded bg-muted" />
-              <div className="h-3 w-24 animate-pulse rounded bg-muted" />
+            <div className="flex flex-col gap-2">
+              <div className="h-4 w-44 animate-pulse rounded-xs bg-muted" />
+              <div className="h-3 w-24 animate-pulse rounded-xs bg-muted" />
             </div>
           ) : room ? (
             <div className="min-w-0">
               <h1 className="clamp-1 text-sm font-semibold leading-snug">{room.title}</h1>
-              <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-                <span className="clamp-1 max-w-30">{room.streamerName}</span>
-                <span className="text-border shrink-0">·</span>
+              <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                <span className="clamp-1 max-w-32">{room.streamerName}</span>
+                <span className="text-disabled-foreground shrink-0">·</span>
                 <Badge
                   variant="outline"
-                  className="text-[9px] px-1 py-0 h-3.5 rounded-full shrink-0 font-normal"
+                  className="text-xs px-2 py-0 h-4 rounded-xs shrink-0 font-normal"
                 >
                   {PLATFORM_LABEL[room.platform] ?? room.platform}
                 </Badge>
                 {room.areaName && (
                   <>
-                    <span className="text-border shrink-0">·</span>
-                    <span className="clamp-1 max-w-25 shrink-0">{room.areaName}</span>
+                    <span className="text-disabled-foreground shrink-0">·</span>
+                    <span className="clamp-1 max-w-24 shrink-0">{room.areaName}</span>
                   </>
                 )}
                 {room.isLoop ? (
                   <>
-                    <span className="text-border shrink-0">·</span>
-                    <span className="shrink-0 text-amber-500/90">轮播回放</span>
+                    <span className="text-disabled-foreground shrink-0">·</span>
+                    <span className="shrink-0 text-warning">轮播回放</span>
                   </>
                 ) : room.isLive ? (
                   <>
-                    <span className="text-border shrink-0">·</span>
-                    <span className="shrink-0 inline-flex items-center gap-1 text-red-400">
-                      <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                    <span className="text-disabled-foreground shrink-0">·</span>
+                    <span className="shrink-0 inline-flex items-center gap-1 text-live">
+                      <span className="h-2 w-2 rounded-full bg-live animate-pulse" />
                       直播中
                     </span>
                   </>
                 ) : null}
                 {room.isLive && onlineCount != null && (
                   <>
-                    <span className="text-border shrink-0">·</span>
+                    <span className="text-disabled-foreground shrink-0">·</span>
                     <span className="shrink-0">{formatOnline(onlineCount)} 人在看</span>
                   </>
                 )}
@@ -279,17 +363,17 @@ export function PlayerPage() {
         </div>
 
         {room && (
-          <div className="shrink-0 flex items-center gap-1.5">
+          <div className="shrink-0 flex items-center gap-2">
             {platform === "bilibili" && (
               <button
                 type="button"
                 disabled={bilibiliLoginState === "logging-in"}
                 onClick={() => void handleBilibiliLogin()}
                 className={cn(
-                  "flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition-colors",
+                  "flex items-center gap-1 rounded-xs px-2 py-1 text-xs font-medium transition-colors",
                   bilibiliLoginState === "logged-in"
-                    ? "border border-emerald-500/40 bg-emerald-500/10 text-emerald-500/80 hover:bg-emerald-500/15"
-                    : "border border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
+                    ? "border border-success bg-success-tint text-success hover:bg-success-hover"
+                    : "border border-border bg-muted text-muted-foreground hover:bg-muted-hover hover:text-foreground",
                   bilibiliLoginState === "logging-in" && "opacity-60 cursor-not-allowed",
                 )}
               >
@@ -350,7 +434,7 @@ export function PlayerPage() {
       {/* ── Video stage ── */}
       <div className="flex-1 min-h-0 flex flex-col gap-3">
         {isError ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 border border-border/60 bg-muted/30 p-4">
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 border border-border bg-muted p-4">
             <StatusView
               title={playbackStatus.title}
               tone={playbackStatus.tone}
@@ -361,12 +445,12 @@ export function PlayerPage() {
                 variant="outline"
                 size="sm"
                 onClick={handleRetryAll}
-                className="gap-1.5 text-xs"
+                className="gap-2 text-xs"
               >
                 <RefreshCw size={12} />
                 重试
               </Button>
-              <Button variant="ghost" size="sm" onClick={openExternal} className="gap-1.5 text-xs">
+              <Button variant="ghost" size="sm" onClick={openExternal} className="gap-2 text-xs">
                 <ExternalLink size={12} />
                 外部打开
               </Button>
@@ -388,21 +472,26 @@ export function PlayerPage() {
                     (s) => s.qualityKey === qualityKey && !failedSourceIds.has(s.id),
                   );
                   if (picked) setManualSelection(selectionOf(picked));
-                  setFailedSourceIds((prev) => {
-                    const next = new Set(prev);
-                    for (const source of sources) {
-                      if (source.qualityKey === qualityKey) next.delete(source.id);
-                    }
-                    return next;
-                  });
+                  // Explicit user choice: revive that quality's routes and
+                  // restart the recovery budget for them.
+                  applyRecovery(
+                    resetStallBudget(
+                      reviveSources(
+                        recoveryRef.current,
+                        sources.filter((s) => s.qualityKey === qualityKey).map((s) => s.id),
+                      ),
+                    ),
+                  );
                 }}
-                onError={() => handleSourceError(selectedSource)}
                 onPlaybackStall={handlePlaybackStall}
                 onPlaybackRecovered={handlePlaybackRecovered}
                 onUserPlay={handleUserPlay}
+                instanceRef={controllerRef}
                 nowPlaying={room ? { title: room.title, streamer: room.streamerName } : null}
                 recoveryHint={
-                  stallCount > 0 ? `播放失败 · 正在重新拉流（第 ${stallCount} 次）` : undefined
+                  recovery.attempts > 0
+                    ? `播放失败 · 正在重新拉流（第 ${recovery.attempts} 次）`
+                    : undefined
                 }
                 overlaySlot={
                   room?.isLive && isPlatform(platform) ? (
@@ -418,13 +507,13 @@ export function PlayerPage() {
             ) : (
               /* ── No-source overlay ── */
               <div
-                className="player-stage flex flex-col items-center justify-center gap-3.5"
-                style={{ background: "var(--player-scrim)" }}
+                className="player-stage flex flex-col items-center justify-center gap-4"
+                style={{ background: "var(--stage-scrim)" }}
               >
                 <p
                   className={cn(
                     "text-sm font-medium",
-                    allFailed ? "text-red-400" : "text-white/55",
+                    allFailed ? "text-stage-danger" : "text-stage-fg-3",
                   )}
                 >
                   {allFailed
@@ -439,18 +528,18 @@ export function PlayerPage() {
                       variant="ghost"
                       size="sm"
                       onClick={handleRetryAll}
-                      className="gap-1.5 text-xs text-white/70 hover:text-white hover:bg-white/10 border-white/15 border"
+                      className="gap-2 text-xs text-stage-fg-2 hover:text-stage-fg-1 hover:bg-stage-surface border-stage-border border"
                     >
-                      <RefreshCw size={11} />
+                      <RefreshCw size={12} />
                       重试
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={openExternal}
-                      className="gap-1.5 text-xs text-white/45 hover:text-white/70 hover:bg-white/8"
+                      className="gap-2 text-xs text-stage-fg-3 hover:text-stage-fg-2 hover:bg-stage-surface"
                     >
-                      <ExternalLink size={11} />
+                      <ExternalLink size={12} />
                       外部打开
                     </Button>
                   </div>
@@ -462,18 +551,18 @@ export function PlayerPage() {
 
         {/* ── Offline nudge: suggest replay ── */}
         {isRoomOffline && supportsReplay && (
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card px-4 py-3">
-            <div className="flex items-center gap-2.5 text-muted-foreground">
-              <Film size={15} strokeWidth={1.6} className="shrink-0" />
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-4 py-3">
+            <div className="flex items-center gap-3 text-muted-foreground">
+              <Film size={16} strokeWidth={1.6} className="shrink-0" />
               <span className="text-xs">主播当前未开播，可查看历史录播</span>
             </div>
             <Button
               variant="outline"
               size="sm"
-              className="shrink-0 gap-1.5 text-xs"
+              className="shrink-0 gap-2 text-xs"
               onClick={() => navigate(`/replay/${platform}/${roomId}`)}
             >
-              <Film size={11} />
+              <Film size={12} />
               查看录播
             </Button>
           </div>

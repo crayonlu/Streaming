@@ -195,7 +195,7 @@ export function ReplayPage() {
   return (
     <div className="flex h-full flex-col gap-0 overflow-hidden">
       {/* ── Top bar ── */}
-      <div className="flex shrink-0 items-center gap-2.5 border-b border-border/60 bg-card px-3 py-2.5">
+      <div className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-3 py-3">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -204,25 +204,25 @@ export function ReplayPage() {
           aria-label="返回"
           title="返回"
         >
-          <ArrowLeft size={15} />
+          <ArrowLeft size={16} />
         </Button>
 
-        <Film size={13} className="text-muted-foreground shrink-0" />
+        <Film size={14} className="text-muted-foreground shrink-0" />
 
         <div className="min-w-0 flex-1">
           {roomQuery.isLoading ? (
-            <div className="h-3.5 w-40 animate-pulse rounded bg-muted" />
+            <div className="h-4 w-40 animate-pulse rounded-xs bg-muted" />
           ) : (
             <span className="truncate text-sm font-medium">
               {room?.streamerName ?? roomId}
-              <span className="ml-1.5 text-xs font-normal text-muted-foreground">的直播录像</span>
+              <span className="ml-2 text-xs font-normal text-muted-foreground">的直播录像</span>
             </span>
           )}
         </div>
 
         {/* Currently playing */}
         {activeItem && (
-          <span className="hidden sm:block truncate max-w-55 text-[11px] text-muted-foreground">
+          <span className="hidden sm:block truncate max-w-56 text-xs text-muted-foreground">
             {activeItem.showRemark || activeItem.title}
           </span>
         )}
@@ -241,13 +241,13 @@ export function ReplayPage() {
       {/* ── Main area ── */}
       <div className="flex min-h-0 flex-1">
         {/* ── Video player (left / center) ── */}
-        <div className="flex flex-1 min-w-0 flex-col bg-black">
+        <div className="flex flex-1 min-w-0 flex-col bg-stage-bg">
           {/*
            * Player area: always rendered as a "player-stage" block so the
            * height is consistent whether a stream is playing or not.
            * The placeholder states use the same min-height via the CSS class.
            */}
-          <div className="relative flex-1 min-h-0 player-stage rounded-none">
+          <div className="relative flex-1 min-h-0 player-stage player-stage--flush">
             {streamUrl ? (
               <VideoPlayer
                 streamUrl={streamUrl}
@@ -265,20 +265,20 @@ export function ReplayPage() {
               />
             ) : (
               /* Empty / loading / error — same container, no height jump */
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 transition-opacity duration-200">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 transition-opacity duration-150">
                 {urlLoading ? (
                   <>
-                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-white/70" />
-                    <span className="text-xs text-white/50">加载回放地址…</span>
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-stage-border border-t-stage-fg-2" />
+                    <span className="text-xs text-stage-fg-3">加载回放地址…</span>
                   </>
                 ) : urlError ? (
                   <>
-                    <span className="text-sm text-red-400">{urlError}</span>
+                    <span className="text-sm text-stage-danger">{urlError}</span>
                     {activeItem && (
                       <button
                         type="button"
                         onClick={() => handlePlay(activeItem)}
-                        className="rounded border border-white/20 px-3 py-1.5 text-xs text-white/60 hover:text-white transition-colors"
+                        className="rounded-xs border border-stage-border px-3 py-2 text-xs text-stage-fg-3 hover:text-stage-fg-1 transition-colors"
                       >
                         重试
                       </button>
@@ -286,23 +286,23 @@ export function ReplayPage() {
                   </>
                 ) : (
                   <>
-                    <Film size={48} strokeWidth={1.2} className="text-white/20" />
-                    <p className="text-sm text-white/35">从右侧选择一段录播开始播放</p>
+                    <Film size={48} strokeWidth={1.2} className="text-stage-fg-4" />
+                    <p className="text-sm text-stage-fg-4">从右侧选择一段录播开始播放</p>
                   </>
                 )}
               </div>
             )}
             {ended && streamUrl && (
-              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/70 backdrop-blur-sm">
-                <span className="text-[11px] uppercase tracking-widest text-white/45">已播完</span>
-                <span className="text-base font-medium text-white/85">
+              <div className="absolute inset-0 z-stage-msg flex flex-col items-center justify-center gap-3 bg-stage-scrim backdrop-blur-sm">
+                <span className="text-xs uppercase tracking-caps text-stage-fg-3">已播完</span>
+                <span className="text-base font-medium text-stage-fg-1">
                   {nextPart ? "已暂停自动连播" : "最后一段"}
                 </span>
                 {activeItem && (
                   <button
                     type="button"
                     onClick={() => handlePlay(activeItem)}
-                    className="flex items-center gap-1.5 rounded-full border border-white/16 bg-white/10 px-4 py-1.5 text-xs font-medium text-white/85 transition-colors hover:bg-white/20"
+                    className="flex items-center gap-2 rounded-full border border-stage-border bg-stage-surface px-4 py-2 text-xs font-medium text-stage-fg-1 transition-colors hover:bg-stage-hover"
                   >
                     <RotateCcw size={12} strokeWidth={2} />
                     重播
@@ -315,16 +315,16 @@ export function ReplayPage() {
           {/* Now-playing info bar */}
           {activeItem && (
             <div
-              className="shrink-0 border-t border-white/8 px-4 py-2 flex items-center gap-3"
-              style={{ background: "var(--player-stage-bg)" }}
+              className="shrink-0 border-t border-stage-surface px-4 py-2 flex items-center gap-3"
+              style={{ background: "var(--stage-bg)" }}
             >
-              <span className="shrink-0 rounded bg-white/8 px-1.5 py-0.5 text-[10px] font-semibold text-white/55 tabular-nums">
+              <span className="shrink-0 rounded-xs bg-stage-surface px-2 py-1 text-xs font-semibold text-stage-fg-3 tabular-nums">
                 P{activeItem.partNum}
                 {activeItem.totalParts > 1 && `/${activeItem.totalParts}`}
               </span>
-              <span className="flex-1 truncate text-xs text-white/70">{activeItem.title}</span>
+              <span className="flex-1 truncate text-xs text-stage-fg-2">{activeItem.title}</span>
               {activeItem.durationStr && (
-                <span className="shrink-0 text-[11px] tabular-nums text-white/40">
+                <span className="shrink-0 text-xs tabular-nums text-stage-fg-4">
                   {fmtDuration(activeItem.durationStr)}
                 </span>
               )}
@@ -334,12 +334,12 @@ export function ReplayPage() {
 
         {/* ── Replay list (right sidebar) ── */}
         {listOpen && (
-          <aside className="flex w-[min(18rem,42vw)] shrink-0 flex-col border-l border-border/60 bg-card">
+          <aside className="flex w-[min(24rem,40vw)] shrink-0 flex-col border-l border-border bg-card">
             {/* Sidebar header */}
-            <div className="shrink-0 border-b border-border/50 px-3 py-2.5 flex items-center justify-between">
+            <div className="shrink-0 border-b border-border-faint px-3 py-3 flex items-center justify-between">
               <span className="text-xs font-semibold">直播录像</span>
               {roomQuery.data && (
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   {roomQuery.data.streamerName}
                 </span>
               )}

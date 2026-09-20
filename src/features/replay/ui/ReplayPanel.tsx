@@ -28,23 +28,23 @@ function PartRow({ part, active, onPlay }: PartRowProps) {
       type="button"
       onClick={() => onPlay(part)}
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left",
+        "flex w-full items-center gap-3 rounded-sm px-3 py-2 text-left",
         "transition-colors duration-100",
         active
-          ? "bg-primary/12 text-primary"
-          : "hover:bg-accent/60 text-foreground/80 hover:text-foreground",
+          ? "bg-accent text-accent-foreground"
+          : "hover:bg-accent-hover text-foreground hover:text-foreground",
       )}
     >
       <span
         className={cn(
-          "shrink-0 text-[10px] font-semibold w-5 text-center",
-          active ? "text-primary" : "text-muted-foreground",
+          "shrink-0 text-xs font-semibold min-w-6 text-center",
+          active ? "text-accent-foreground" : "text-muted-foreground",
         )}
       >
         P{part.partNum}
       </span>
       <span className="flex-1 truncate text-xs">{part.showRemark || part.title}</span>
-      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
         {fmtDuration(part.durationStr)}
       </span>
     </button>
@@ -80,11 +80,11 @@ function SessionRow({
         type="button"
         onClick={hasParts ? onToggle : () => onPlay(session)}
         className={cn(
-          "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left",
+          "flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left",
           "transition-colors duration-100 group",
           !hasParts && activeId === session.id
-            ? "bg-primary/12 text-primary"
-            : "hover:bg-accent/60",
+            ? "bg-accent text-accent-foreground"
+            : "hover:bg-accent-hover",
         )}
       >
         {/* Cover thumbnail */}
@@ -92,45 +92,45 @@ function SessionRow({
           <img
             src={session.coverUrl}
             alt=""
-            className="h-9 w-16 shrink-0 rounded object-cover bg-muted"
+            className="h-9 w-16 shrink-0 rounded-xs object-cover bg-muted"
             loading="lazy"
           />
         ) : (
-          <div className="h-9 w-16 shrink-0 rounded bg-muted flex items-center justify-center">
-            <Film size={14} className="text-muted-foreground/40" />
+          <div className="h-9 w-16 shrink-0 rounded-xs bg-muted flex items-center justify-center">
+            <Film size={14} className="text-disabled-foreground" />
           </div>
         )}
 
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="truncate text-xs font-medium leading-tight">{session.title}</span>
-          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-            {date && <span>{date}</span>}
+          <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+            {date && <span className="shrink-0">{date}</span>}
             {session.durationStr && (
-              <span className="flex items-center gap-0.5">
-                <Clock size={9} />
+              <span className="flex shrink-0 items-center gap-1">
+                <Clock size={12} className="shrink-0" />
                 {fmtDuration(session.durationStr)}
               </span>
             )}
             {session.viewCountText && (
-              <span className="flex items-center gap-0.5">
-                <Eye size={9} />
-                {session.viewCountText}
+              <span className="flex min-w-0 items-center gap-1">
+                <Eye size={12} className="shrink-0" />
+                <span className="truncate">{session.viewCountText}</span>
               </span>
             )}
           </div>
         </div>
 
         {/* Right side */}
-        <div className="shrink-0 flex items-center gap-1.5">
+        <div className="shrink-0 flex items-center gap-2">
           {hasParts && (
-            <span className="text-[9px] tabular-nums text-muted-foreground bg-muted rounded px-1 py-0.5">
+            <span className="inline-flex h-5 shrink-0 items-center rounded-xs bg-muted px-2 text-xs tabular-nums text-muted-foreground">
               {session.totalParts}P
             </span>
           )}
           <ChevronRight
             size={12}
             className={cn(
-              "text-muted-foreground/50 transition-transform duration-150",
+              "text-subtle-foreground transition-transform duration-150",
               expanded ? "rotate-90" : "",
             )}
           />
@@ -139,10 +139,10 @@ function SessionRow({
 
       {/* Expanded parts */}
       {hasParts && expanded && (
-        <div className="ml-2 mt-0.5 mb-1 border-l border-border/50 pl-2">
+        <div className="ml-2 mt-1 mb-1 border-l border-border-faint pl-2">
           {partsLoading ? (
-            <div className="flex items-center gap-1.5 px-3 py-2 text-[11px] text-muted-foreground animate-pulse">
-              <Film size={11} />
+            <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground animate-pulse">
+              <Film size={12} />
               加载中…
             </div>
           ) : (
@@ -196,14 +196,14 @@ export function ReplayPanel({ platform, roomId, onPlay, activeReplayId }: Replay
 
   if (listQuery.isLoading) {
     return (
-      <div className="flex flex-col gap-1.5 p-2">
+      <div className="flex flex-col gap-2 p-2">
         {Array.from({ length: 4 }, (_, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton
-          <div key={i} className="flex gap-2 rounded-md px-2.5 py-2">
-            <div className="h-9 w-16 rounded bg-muted animate-pulse shrink-0" />
-            <div className="flex flex-col gap-1.5 flex-1">
-              <div className="h-3 w-4/5 rounded bg-muted animate-pulse" />
-              <div className="h-2 w-2/5 rounded bg-muted animate-pulse" />
+          <div key={i} className="flex gap-2 rounded-sm px-3 py-2">
+            <div className="h-9 w-16 rounded-xs bg-muted animate-pulse shrink-0" />
+            <div className="flex flex-col gap-2 flex-1">
+              <div className="h-3 w-48 rounded-xs bg-muted animate-pulse" />
+              <div className="h-2 w-24 rounded-xs bg-muted animate-pulse" />
             </div>
           </div>
         ))}
@@ -221,7 +221,7 @@ export function ReplayPanel({ platform, roomId, onPlay, activeReplayId }: Replay
   }
 
   return (
-    <div className="flex flex-col gap-0.5 p-1.5">
+    <div className="flex flex-col gap-1 p-2">
       {sessions.map((session) => {
         const isExpanded = expandedShowId === session.showId;
         return (

@@ -81,10 +81,12 @@ export function PlayerProgress({ playerRef, isLive, playerReady }: PlayerProgres
   );
 
   if (isLive) {
-    // 落后直播 3 秒以上才算「不在直播边缘」。
-    // 这个阈值不只是文案开关 —— seekToLiveEdge() 会把 currentTime 设到
-    // buffered.end(last)，也就是缓冲区最末端。只落后半秒时跳过去等于贴着
-    // 缓冲边缘播，会立刻重新缓冲。所以只有真的落后了才允许点。
+    // Only count as "off the live edge" once we are >3s behind. The threshold
+    // is more than a copy switch: seekToLiveEdge() sets currentTime to
+    // buffered.end(last), i.e. the very end of the buffer. Jumping there when
+    // we are only half a second behind means playing flush against the buffer
+    // edge, which rebuffers immediately. So the click is only enabled when we
+    // are genuinely behind.
     const behindLive = liveLatency > 3;
     return (
       <div className="flex items-center gap-2">
@@ -92,21 +94,26 @@ export function PlayerProgress({ playerRef, isLive, playerReady }: PlayerProgres
           type="button"
           onClick={() => playerRef.current?.seekToLiveEdge?.()}
           disabled={!behindLive}
-          // 文案恒定 "Live"：落后时不再换成「回到直播」。理由是这个芯片的角色
-          // 是「状态指示」，一旦会变长变短，旁边的进度条就跟着跳。
-          // 落后与否改由三个不改变布局的通道表达：禁用态、光标、以及
-          // aria-label / title（屏幕阅读器与悬停仍能读到「落后约 N 秒」）。
+          // The label stays "Live" — it does not swap to "back to live" when
+          // behind. This chip is a status indicator, and a label that grows and
+          // shrinks would shove the adjacent progress bar around. Being behind
+          // is conveyed through three channels that do not affect layout: the
+          // disabled state, the cursor, and aria-label / title (screen readers
+          // and hover still announce "behind by Ns").
           //
-          // ⚠️ cursor-pointer 不是装饰：Tailwind v4 的 preflight 把 button 定为
-          // cursor: default，所以下面那个 disabled:cursor-default 原本是空操作。
-          // 补上 cursor-pointer 之后，「可点 / 不可点」才真的有区别。
+          // ⚠️ cursor-pointer is not decoration: Tailwind v4's preflight sets
+          // `cursor: default` on button, so the disabled:cursor-default below
+          // would otherwise be a no-op. With cursor-pointer added, "clickable
+          // or not" finally reads as different.
           //
-          // 固定 20px 高：这是状态芯片，不是控件 —— 对齐进度行的字号节奏即可，
-          // 别跟着控件行的 36px 走。leading-none 让盒高只由 h-5 决定，不再受
-          // text-xs 的 18px 行盒影响。
-          // ⚠️ 这里必须显式写 h-5：globals.css 曾有一条未分层的
-          // `button, input { font: inherit }`，把 text-xs 压成了继承的 14px，
-          // 徽章于是长到 29px。已删，并由 check:tokens 的 UNLAYERED_FORM_FONT 守着。
+          // Fixed 20px height: this is a status chip, not a control — it
+          // follows the progress row's type scale rather than the 36px control
+          // row. leading-none keeps the box height driven by h-5 alone instead
+          // of text-xs's 18px line box.
+          // ⚠️ h-5 must be explicit: globals.css once carried an unlayered
+          // `button, input { font: inherit }` that collapsed text-xs to the
+          // inherited 14px, growing the badge to 29px. Removed since, and
+          // guarded by check:tokens' UNLAYERED_FORM_FONT.
           className="shrink-0 inline-flex h-5 items-center gap-1 rounded-xs bg-live px-2 text-xs leading-none font-semibold tracking-caps text-live-foreground uppercase cursor-pointer disabled:cursor-default"
           aria-label={
             behindLive ? `落后直播约 ${Math.round(liveLatency)} 秒，点击回到直播` : "直播中"
@@ -130,9 +137,7 @@ export function PlayerProgress({ playerRef, isLive, playerReady }: PlayerProgres
 
   return (
     <div className="flex items-center gap-2">
-      <span className="shrink-0 tabular-nums text-xs text-stage-fg-3">
-        {fmtTime(currentTime)}
-      </span>
+      <span className="shrink-0 tabular-nums text-xs text-stage-fg-3">{fmtTime(currentTime)}</span>
       <input
         type="range"
         min={0}

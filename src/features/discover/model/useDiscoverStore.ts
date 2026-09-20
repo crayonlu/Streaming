@@ -126,7 +126,7 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
         : await getFeatured(platform, nextPage);
       if (get().requestEpoch !== requestEpoch) return;
       set((state) => {
-        // De-duplicate across pages: B站 may return the same room_id on
+        // De-duplicate across pages: Bilibili may return the same room_id on
         // consecutive pages (page boundary overlap or cross-section repeats).
         const existingIds = new Set(state.rooms.map((r) => r.id));
         const fresh = data.filter((r) => !existingIds.has(r.id));

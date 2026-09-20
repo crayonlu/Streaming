@@ -15,9 +15,11 @@ export function fmtDate(unix: number): string {
   const d = new Date(unix * 1000);
   const pad = (n: number) => String(n).padStart(2, "0");
   const md = `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  // 当年不写年份：直播录像绝大多数是近期的，年份在窄侧栏里是纯噪音，
-  // 而且要占掉约 35px —— 回放列表每行只有 ~190px 的元信息空间。
-  // 跨年的旧录像仍然带上年份，避免歧义。
+  // No year for the current one: most live recordings are recent, so the year
+  // is pure noise in a narrow sidebar, and it costs ~35px — each replay row
+  // only has ~190px of metadata space.
+  // Older recordings crossing a year boundary still carry the year, to avoid
+  // ambiguity.
   return d.getFullYear() === new Date().getFullYear() ? md : `${d.getFullYear()}-${md}`;
 }
 

@@ -54,9 +54,7 @@ describe("useDiscoverStore", () => {
   it("keeps the latest platform data when an older request resolves later", async () => {
     const bilibili = deferred<RoomCard[]>();
     const douyu = deferred<RoomCard[]>();
-    mockedGetFeatured
-      .mockReturnValueOnce(bilibili.promise)
-      .mockReturnValueOnce(douyu.promise);
+    mockedGetFeatured.mockReturnValueOnce(bilibili.promise).mockReturnValueOnce(douyu.promise);
 
     const first = useDiscoverStore.getState().fetchFirstPage("bilibili");
     const second = useDiscoverStore.getState().fetchFirstPage("douyu");

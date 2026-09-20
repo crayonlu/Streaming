@@ -118,9 +118,11 @@ export function GlobalSearch() {
         onSubmit={onSubmit}
         className={cn(
           "flex items-center gap-2 rounded-xs border px-3 py-2 transition-all duration-150",
-          // 未聚焦也要用 border-input（≥3:1），不能用 border-border（1.2:1）——
-          // 这个框没有填充，描边是「这里能打字」的唯一视觉线索，SC 1.4.11。
-          // 这是全项目唯一真实存在的文本输入；`components/ui/input.tsx` 目前无人引用。
+          // border-input (≥3:1) even when unfocused, not border-border
+          // (1.2:1) — this box has no fill, so the outline is the only visual
+          // cue that it is typeable (SC 1.4.11).
+          // This is the project's only real text input;
+          // `components/ui/input.tsx` currently has no call sites.
           focused ? "border-ring bg-card ring-1 ring-ring" : "border-input",
         )}
       >

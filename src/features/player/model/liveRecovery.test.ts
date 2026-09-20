@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   createLiveRecoveryState,
+  type LiveRecoveryState,
   liveRecoveryDelayMs,
   MAX_LIVE_RECOVERY_ATTEMPTS,
   planLiveRecovery,
   STALL_WATCHDOG_MS,
-  type LiveRecoveryState,
 } from "./liveRecovery";
 
 const T0 = 1_700_000_000_000;

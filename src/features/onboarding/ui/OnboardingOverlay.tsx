@@ -104,11 +104,7 @@ export function OnboardingOverlay({ onDone }: OnboardingOverlayProps) {
         </div>
 
         {/* CTA */}
-        <Button
-          onClick={() => void handleStart()}
-          disabled={saving}
-          className="w-full h-9 text-md"
-        >
+        <Button onClick={() => void handleStart()} disabled={saving} className="w-full h-9 text-md">
           {saving ? "保存中…" : "开始使用"}
         </Button>
 

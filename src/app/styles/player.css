@@ -16,7 +16,7 @@
   height: 100%;
   overflow: hidden;
   background: var(--stage-bg);
-  /* 方案 B：播放器容器用最大一档 16px（全屏时由下方规则覆写为 0）*/
+  /* Option B: the player container uses the largest step, 16px (overridden to 0 by the rule below) */
   border-radius: var(--radius-lg);
 }
 
@@ -25,9 +25,9 @@
   background: var(--stage-bg);
 }
 
-/* 直角变体 —— 全出血分栏布局（ReplayPage 视频区）用。
-   必须显式声明：player.css 是未分层样式，优先级高于 Tailwind 的
-   @layer utilities，所以 .rounded-none 压不过 .player-stage。 */
+/* Square variant — for the full-bleed split layout (ReplayPage video area).
+   Must be declared explicitly: player.css is unlayered, so it outranks
+   Tailwind's @layer utilities — .rounded-none cannot beat .player-stage. */
 .player-stage--flush {
   border-radius: 0;
 }
@@ -62,9 +62,10 @@
    .ctrl-btn       → icon-only square button
    .ctrl-btn-label → text/label button — auto width, same height
    ──────────────────────────────────────────────────────────────
-   高度只由 --ctrl-btn-size 一处定义。文本按钮曾是 26px，与图标按钮的 36px
-   hover 背景并排时高度差 10px，一行里出现两种规格的圆角块 —— 共用同一个
-   变量后两者不可能再漂移。 */
+   Height is defined in one place only: --ctrl-btn-size. The text button used to
+   be 26px; next to the icon button's 36px hover background that left a 10px
+   height gap, so one row showed two different rounded-block specs — sharing
+   one variable makes drift impossible. */
 .ctrl-btn {
   --ctrl-btn-size: 36px;
   display: inline-flex;
@@ -83,8 +84,9 @@
     background var(--t-fast) var(--ease-smooth);
 }
 
-/* Text/label variant — 宽度自适应，高度与图标按钮一致。
-   否则 hover 背景会比旁边的全屏按钮矮一截。 */
+/* Text/label variant — auto width, same height as the icon button.
+   Otherwise the hover background sits shorter than the fullscreen button
+   next to it. */
 .ctrl-btn.ctrl-btn-label {
   width: auto;
   height: var(--ctrl-btn-size);

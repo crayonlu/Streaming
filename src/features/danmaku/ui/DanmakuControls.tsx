@@ -7,8 +7,9 @@ import { useDanmakuStore } from "../model/useDanmakuStore";
  * One button carries both danmaku jobs — on/off and coverage ratio — by
  * cycling through them:
  *
- *   ½ → ¾ → 全 → ¼ → 关 → ½
+ *   1/2 → 3/4 → full → 1/4 → off → 1/2
  *
+ * (The glyphs on the button are the UI copy for those steps.)
  * The icon is itself the coverage indicator, so the control stays the same
  * size as the other player buttons: a screen outline with its top portion
  * filled (danmaku occupy the top `area` of the stage, per DanmakuOverlay).

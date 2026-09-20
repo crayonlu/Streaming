@@ -52,7 +52,7 @@ export interface VideoPlayerProps {
   /** Extra buttons in the right cluster of the controls bar. */
   controlsEndSlot?: React.ReactNode;
   /** Overrides the static error-overlay text during stall recovery
-   *  (e.g. "播放失败 · 正在重新拉流（第 2 次）"). */
+   *  (e.g. the "playback failed · retrying (attempt 2)" line). */
   recoveryHint?: string;
   /** Stream identity mirrored into the OS tray / macOS menu bar.
    *  Omit (or pass null) to leave the tray untouched. */
@@ -229,7 +229,9 @@ export function VideoPlayer({
       {online && error && !codecUnsupported && streamUrl && (
         <div className="absolute inset-0 z-stage-msg pointer-events-none flex flex-col items-center justify-center gap-2 bg-stage-scrim backdrop-blur-sm">
           <AlertCircle size={28} strokeWidth={1.6} className="text-stage-fg-3" />
-          <span className="text-sm text-stage-fg-2">{recoveryHint ?? "播放失败 · 正在尝试恢复"}</span>
+          <span className="text-sm text-stage-fg-2">
+            {recoveryHint ?? "播放失败 · 正在尝试恢复"}
+          </span>
           {detectHevcSupport() === "none" && (
             <span className="text-xs text-stage-fg-4">
               当前系统可能缺少 HEVC 解码支持（Windows 请安装「HEVC 视频扩展」）

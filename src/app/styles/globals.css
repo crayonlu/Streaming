@@ -33,35 +33,37 @@
   --color-live-foreground: var(--live-foreground);
 
   /* ─────────────────────────────────────────────
-     内容阶梯 —— 文字与图标的四级对比度
-     命名与 GitHub Primer 的 fg.default / fg.muted / fg.subtle /
-     fg.disabled 同构，只是套用 shadcn 的 *-foreground 词形。
+     Content ladder — four contrast steps for text and icons
+     Naming is isomorphic with GitHub Primer's fg.default / fg.muted /
+     fg.subtle / fg.disabled, just wearing shadcn's *-foreground word form.
 
-     ⚠️ 禁止对内容 token 再加 alpha 修饰符。
-        `text-muted-foreground/60` 这类写法无法保证对比度下限：
-        实测 /70 → 3.28:1、/60 → 2.74:1、/50 → 2.50:1、
-        /40 → 1.89:1、/30 → 1.58:1 —— 除 /70 外全是硬失败，
-        而 /50 /55 /60 /70 四档在视觉上根本分辨不出来。
-        需要更低对比度就往下走一级，不要调百分比。
+     ⚠️ Never add an alpha modifier on top of a content token.
+        `text-muted-foreground/60` cannot guarantee a contrast floor:
+        measured /70 → 3.28:1, /60 → 2.74:1, /50 → 2.50:1,
+        /40 → 1.89:1, /30 → 1.58:1 — everything but /70 is a hard fail,
+        and /50 /55 /60 /70 are visually indistinguishable anyway.
+        For lower contrast, step down one level; do not tune the percentage.
 
-       实测值（对 --card，WCAG 2.2 相对亮度比）：
+       Measured (against --card, WCAG 2.2 relative luminance ratio):
                           light     dark
-       foreground        19.44:1   15.03:1   正文 / 标题
-       muted-foreground   6.96:1    7.30:1   次要说明、图标
-       subtle-foreground  4.94:1    4.98:1   三级：辅助文字、占位符
-       disabled-foreground 3.56:1   3.29:1   禁用 / 纯装饰图形
-                                              （SC 1.4.3 对禁用组件豁免，
-                                                ≥3:1 保证图形仍可辨识）
+       foreground        19.44:1   15.03:1   body text / headings
+       muted-foreground   6.96:1    7.30:1   secondary text, icons
+       subtle-foreground  4.94:1    4.98:1   tertiary: helper text, placeholders
+       disabled-foreground 3.56:1   3.29:1   disabled / purely decorative shape
+                                              (SC 1.4.3 exempts disabled
+                                                components; ≥3:1 keeps shapes
+                                                identifiable)
      ───────────────────────────────────────────── */
   --color-subtle-foreground: var(--subtle-foreground);
   --color-disabled-foreground: var(--disabled-foreground);
 
   /* ─────────────────────────────────────────────
-     状态色 —— 语义色板，取代 Tailwind 调色板硬编码。
-     原来的 emerald-500 / amber-300 / red-400 是照暗底调的，
-     在亮色主题下对 --card 只有 2.41 / 1.41 / 2.78:1，
-     是硬失败（低于 SC 1.4.3 的 4.5:1 一半还多）。
-     每色两档：文字/圆点 + 浅底（浅底只给「已登录」按钮用）。
+     Status colors — semantic palette replacing hardcoded Tailwind palette colors.
+     The old emerald-500 / amber-300 / red-400 were tuned for dark backgrounds:
+     against --card in the light theme they only reach 2.41 / 1.41 / 2.78:1,
+     a hard fail (well under half of SC 1.4.3's 4.5:1).
+     Two steps per color: text/dot + light tint (the tint is only for the
+     "Logged in" button).
      ───────────────────────────────────────────── */
   --color-success: var(--success);
   --color-success-tint: var(--success-tint);
@@ -69,18 +71,19 @@
   --color-warning: var(--warning);
 
   /* ─────────────────────────────────────────────
-     描边三档 —— 按「这条件是不是控件的唯一边界」分档
-       border-faint  装饰性分隔：列表分隔线、嵌套框、缩进线
-       border        默认分隔 / 卡片轮廓
-       input         控件边界。必须 ≥3:1（SC 1.4.11），
-                     所以刻意比 border 深得多（light 64% vs 91%）。
-                     觉得太重就把它改回 var(--border)，一行的事。
+     Three border steps — bucketed by "is this the control's only boundary"
+       border-faint  decorative separation: list dividers, nested boxes, indent rules
+       border        default separation / card outline
+       input         control boundary. Must be ≥3:1 (SC 1.4.11), so it is
+                     deliberately much darker than border (light 64% vs 91%).
+                     Too heavy? Set it back to var(--border) — one line.
      ───────────────────────────────────────────── */
   --color-border-faint: var(--border-faint);
 
-  /* 实色悬停 —— Radix Colors step 9 → step 10 的语义：
-     悬停态是「同一个实色的下一档」，不是「同色加透明度」。
-     用 alpha 做悬停会同时降低对比度，而且每处百分比都不一样。 */
+  /* Solid hover — the Radix Colors step 9 → step 10 semantics:
+     hover is "the next step of the same solid color", not "the same color
+     with transparency". Using alpha for hover lowers contrast at the same
+     time, and every call site picks a different percentage. */
   --color-primary-hover: var(--primary-hover);
   --color-secondary-hover: var(--secondary-hover);
   --color-accent-hover: var(--accent-hover);
@@ -88,37 +91,41 @@
   --color-destructive-hover: var(--destructive-hover);
   --color-primary-border: var(--primary-border);
 
-  /* 表面叠层 —— Material 3 state layer 的实色等价物。
-     M3 规定叠层是固定闭集：hover 8% / focus 10% / pressed 10% /
-     dragged 16%。这里把「前景色 8% 压在表面上」的结果直接算成实色，
-     避免 alpha 在不同底色上算出不同对比度。 */
+  /* Surface overlay — the solid-color equivalent of Material 3's state layer.
+     M3 fixes the layer set: hover 8% / focus 10% / pressed 10% /
+     dragged 16%. Here the result of "8% foreground pressed onto the surface"
+     is precomputed as a solid color, so alpha cannot yield different
+     contrast on different backdrops. */
   --color-surface-hover: var(--surface-hover);
   --color-surface-active: var(--surface-active);
 
-  /* 遮罩 */
+  /* Scrims */
   --color-overlay: var(--overlay);
   --color-media-scrim: var(--media-scrim);
   --color-media-scrim-hover: var(--media-scrim-hover);
 
-  /* 窗口按钮 —— Windows 11 规范色，原为 #c42b1c / #b0261a 硬编码。
-     关闭按钮是固定红，两个主题下都用浅色字（实测 5.50:1）。 */
+  /* Window buttons — Windows 11 spec colors, previously hardcoded as
+     #c42b1c / #b0261a. Close is a fixed red and uses light text in both
+     themes (measured 5.50:1). */
   --color-close-hover: var(--close-hover);
   --color-close-active: var(--close-active);
   --color-close-foreground: var(--close-foreground);
 
   /* ─────────────────────────────────────────────
-     播放器舞台 —— 两个主题共用同一套暗底色阶
-     舞台恒为暗色，所以不复用内容阶梯（那套会跟着主题翻转）。
-     取代原来的 text-stage-fg-1 /85 /75 /70 /60 /55 /50 /45 /40 /35 /20
-     共 11 档 —— 实测 /35 → 3.08:1、/20 → 1.72:1，后两档是硬失败。
+     Player stage — one dark scale shared by both themes
+     The stage is always dark, so it does not reuse the content ladder
+     (that one flips with the theme).
+     Replaces the old text-stage-fg-1 /85 /75 /70 /60 /55 /50 /45 /40 /35 /20,
+     11 steps in total — measured /35 → 3.08:1, /20 → 1.72:1; the last two
+     are hard fails.
 
-       实测（对 --stage-bg oklch(12%)）：
-       stage-fg-1  18.61:1  标题、主按钮文字
-       stage-fg-2  14.14:1  正文
-       stage-fg-3   9.46:1  次要：时间戳、提示
-       stage-fg-4   6.04:1  弱化图标
-       stage-danger 7.59:1  舞台上的错误文字
-       stage-warning 11.53:1 舞台上的警示文字
+       Measured (against --stage-bg oklch(12%)):
+       stage-fg-1  18.61:1  headings, primary button text
+       stage-fg-2  14.14:1  body text
+       stage-fg-3   9.46:1  secondary: timestamps, hints
+       stage-fg-4   6.04:1  de-emphasized icons
+       stage-danger 7.59:1  error text on the stage
+       stage-warning 11.53:1 warning text on the stage
      ───────────────────────────────────────────── */
   --color-stage-surface: var(--stage-surface);
   --color-stage-hover: var(--stage-hover);
@@ -132,65 +139,68 @@
   --color-stage-warning: var(--stage-warning);
 
   /* ─────────────────────────────────────────────
-     字距两档
-       tight  -0.02em  标题（16px semibold）
-       caps    0.06em  全大写微标签（12px uppercase）
-     禁用 Tailwind 的 wide(0.025) / wider(0.05) / widest(0.1) ——
-     三者当时同时用在「大写微标签」这同一个角色上，
-     视觉上不可分辨，属于纯粹的噪音。
+     Two tracking steps
+       tight  -0.02em  headings (16px semibold)
+       caps    0.06em  all-caps micro labels (12px uppercase)
+     Tailwind's wide(0.025) / wider(0.05) / widest(0.1) are disabled —
+     all three were used for the same "uppercase micro label" role,
+     visually indistinguishable, pure noise.
      ───────────────────────────────────────────── */
   --tracking-tight: -0.02em;
   --tracking-caps: 0.06em;
 
   /* ─────────────────────────────────────────────
-     行高三档。正文行高由 --text-*--line-height 承担，不在这里重复。
-       标题 1.25 / 紧凑说明 1.4 / 多行说明 1.6
-     禁用 tighter / loose；leading-none 作为「收起行盒」的原语保留。
+     Three leading steps. Body line-height lives in --text-*--line-height,
+     not repeated here.
+       headings 1.25 / tight captions 1.4 / multi-line captions 1.6
+     tighter / loose are disabled; leading-none is kept as the
+     "collapse the line box" primitive.
      ───────────────────────────────────────────── */
   --leading-tight: 1.25;
   --leading-snug: 1.4;
   --leading-relaxed: 1.6;
 
   /* ─────────────────────────────────────────────
-     阴影三档 —— 取代裸的 shadow-e1 / md / lg。
-     每一档对应一个明确的层级，而不是「随手挑一个」。
-       e1  抬起的小控件（开关滑块）
-       e2  浮层（下拉菜单、搜索建议）
-       e3  模态（首次启动对话框）
-     实色值按主题分叉，定义在 :root / .dark 的 --elev-*。
+     Three shadow steps — replacing the bare shadow-e1 / md / lg.
+     Each step maps to one explicit elevation level, not "pick one at random".
+       e1  raised small control (switch thumb)
+       e2  overlay (dropdown menu, search suggestions)
+       e3  modal (first-run dialog)
+     The solid values fork per theme, defined as --elev-* in :root / .dark.
      ───────────────────────────────────────────── */
   --shadow-e1: var(--elev-1);
   --shadow-e2: var(--elev-2);
   --shadow-e3: var(--elev-3);
 
   /* ─────────────────────────────────────────────
-     圆角刻度 —— 方案 B · Precision
-     硬性 4 档 + 播放器例外。按「语义角色」选档，
-     不按数值大小选。嵌套遵守：外圆角 − padding = 内圆角
+     Radius scale — Option B · Precision
+     Four hard steps + the player exception. Pick a step by semantic role,
+     not by numeric size. Nesting rule: outer radius − padding = inner radius
 
-       xs   4px   标签 / 徽标 / 内联小元素
-       sm   6px   控件：按钮 / 输入 / 导航项 / 菜单项
-       md  12px   卡片 / 容器 / 模态 / 浮层
-       lg  16px   播放器容器（唯一例外，依 Atlassian radius.xxlarge）
-       full       分类标签 / 头像 / pill
+       xs   4px   tags / badges / small inline elements
+       sm   6px   controls: button / input / nav item / menu item
+       md  12px   cards / containers / modals / overlays
+       lg  16px   player container (the only exception, per Atlassian radius.xxlarge)
+       full       category tags / avatars / pills
      ───────────────────────────────────────────── */
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 12px;
   --radius-lg: 16px;
-  /* 显式定义 full：Tailwind 默认的 rounded-full 是 calc(infinity * 1px)，
-     无法在 CSS 里被 var() 引用。999px 在 999px 以内的元素上完全等价。 */
+  /* full is defined explicitly: Tailwind's default rounded-full is
+     calc(infinity * 1px), which cannot be referenced via var() in CSS.
+     999px is exactly equivalent on elements smaller than 999px. */
   --radius-full: 999px;
-  /* 安全网：遗留的 xl / 2xl 归到卡片档，杜绝静默回落 Tailwind 默认值 */
+  /* Safety net: legacy xl / 2xl map to the card step so they never silently fall back to Tailwind defaults */
   --radius-xl: 12px;
   --radius-2xl: 12px;
 
   /* ─────────────────────────────────────────────
-     字号刻度 —— 6 档，12px 为硬下限
-     （Twitch 生产环境规则：界面最小字号 12px）
-     图标刻度不在 CSS 里（lucide 的 size 是数字 prop）：
+     Font-size scale — 6 steps, 12px as the hard floor
+     (Twitch production rule: 12px minimum UI font size)
+     The icon scale does not live in CSS (lucide's size is a numeric prop):
        12 / 14 / 16 / 20 / 24 / 28 / 32 / 40 / 48
-     由 scripts/check-design-tokens.mjs 的 ICON_SCALE 强制。
+     Enforced by ICON_SCALE in scripts/check-design-tokens.mjs.
      ───────────────────────────────────────────── */
   --text-xs: 12px;
   --text-xs--line-height: 1.5;
@@ -206,13 +216,14 @@
   --text-xl--line-height: 1.25;
 
   /* ─────────────────────────────────────────────
-     内容最大宽度 —— 居中由 AppShell 的 <main> 统一承担
-     每档都必须有真实消费者，否则就是死 token。
-       narrow   720  单列表单：设置
-       grid    1440  卡片网格：发现 / 搜索 / 关注
-       stage   1800  播放 / 回放：视频优先，放宽但仍设上限
-                     （依 Twitch 实测的「建议最大内容宽 ~1800px」；
-                      不设上限时 16:9 视频在宽屏上会高过视口）
+     Content max-width — centering is handled once by AppShell's <main>
+     Every step must have a real consumer, otherwise it is a dead token.
+       narrow   720  single-column forms: settings
+       grid    1440  card grid: discover / search / following
+       stage   1800  playback / replay: video-first, relaxed but still capped
+                     (per Twitch's measured "recommended max content width
+                      ~1800px"; uncapped, a 16:9 video on a wide screen
+                      grows taller than the viewport)
      ───────────────────────────────────────────── */
   --container-narrow: 720px;
   --container-grid: 1440px;
@@ -224,26 +235,27 @@
 /* ─────────────────────────────────────────────
    Root palette — Cool-slate · Cinema dark-first
    Single cool gray family (hue 250). Depth via surface lightness,
-   no warm/cool mixing. Player stage纳入 token,不再硬编码暖黑。
+   no warm/cool mixing. The player stage is tokenized now, no more hardcoded warm black.
    ───────────────────────────────────────────── */
 :root {
-  /* ── 间距刻度（方案 B · 4pt 基数，硬性 7 档 + 两个布局档）──
-     Tailwind 的间距单位是 4px，所以整数档位天然对齐网格；
-     唯一的越界来源是「半档」写法（0.5 / 1.5 / 2.5 / 3.5 → 2/6/10/14px），
-     一律禁用。`pnpm check:tokens` 会扫描并拦截。
+  /* ── Spacing scale (Option B · 4pt base, 7 hard steps + 2 layout steps) ──
+     Tailwind's spacing unit is 4px, so integer steps align to the grid for free;
+     the only out-of-scale source is "half-step" usage (0.5 / 1.5 / 2.5 / 3.5 →
+     2/6/10/14px), all banned. `pnpm check:tokens` scans and blocks them.
 
-       4px  gap-1 / p-1   图标与文字之间的最小间隙
-       8px  gap-2 / p-2   组内间距、控件内边距（Twitch 可点元素最小间距）
-      12px  gap-3 / p-3   控件横向内边距
-      16px  gap-4 / p-4   卡片内边距、网格 gutter、区块内间距
-      20px  gap-5 / p-5   中档
-      24px  gap-6 / p-6   区块内边距、组间间距
-      32px  gap-8 / p-8   大区块分隔
-     ── 布局档（页面级，不参与组件刻度）──
-      48px  p-12   页面纵向留白
-      64px  p-16   空状态纵向留白
+       4px  gap-1 / p-1   minimum gap between icon and text
+       8px  gap-2 / p-2   in-group spacing, control padding (Twitch minimum spacing for clickable elements)
+      12px  gap-3 / p-3   control horizontal padding
+      16px  gap-4 / p-4   card padding, grid gutter, in-section spacing
+      20px  gap-5 / p-5   mid step
+      24px  gap-6 / p-6   section padding, between-group spacing
+      32px  gap-8 / p-8   large section separation
+     ── Layout steps (page level, not part of the component scale) ──
+      48px  p-12   page vertical whitespace
+      64px  p-16   empty-state vertical whitespace
 
-     分组靠「间距差」表达：组内 8px，组间 24px。 */
+     Grouping is expressed by the spacing delta: 8px within a group,
+     24px between groups. */
 
   /* ── typography ── */
   --font-base:
@@ -269,106 +281,111 @@
   --muted: oklch(93% 0.005 250);
   --muted-foreground: oklch(46% 0.012 250);
 
-  /* 93% → 90%：原来 accent 与 card(99.2%) 只差 1.15:1，
-     设置页的「选中项」和回放列表的「当前行」几乎是不可见的。
-     亮色主题的表面阶梯整体压开，让每一档都有可测的亮度差。 */
+  /* 93% → 90%: accent used to differ from card(99.2%) by only 1.15:1, so the
+     "selected item" on the settings page and the "current row" in the replay
+     list were nearly invisible. The light-theme surface ladder is spread out
+     so every step has a measurable lightness difference. */
   --accent: oklch(90% 0.018 248);
   --accent-foreground: oklch(34% 0.046 248);
 
   --destructive: oklch(53% 0.19 24);
 
-  /* ── 实色填充上的文字 ──
-     规律是「亮主题用浅字、暗主题用深字」—— 因为实色本身在两个主题里
-     亮度相反（primary 55% → 70%）。原来硬写 text-white，
-     在暗色主题下对 primary/destructive/live 只有 2.66 / 3.40 / 3.97:1。
-     实测（与 --primary-foreground 同值）：
+  /* ── Text on solid fills ──
+     The rule is "light text in the light theme, dark text in the dark theme" —
+     because the solid itself has inverted lightness across themes
+     (primary 55% → 70%). The old hardcoded text-white only reached
+     2.66 / 3.40 / 3.97:1 against primary/destructive/live in the dark theme.
+     Measured (same values as --primary-foreground):
        light 99% → primary 4.83 / destructive 5.83 / live 5.29
        dark  16% → primary 7.31 / destructive 5.70 / live 4.88
      ── */
   --destructive-foreground: oklch(99% 0.002 250);
 
-  /* ── 内容阶梯补全（见 @theme 里的说明）──
-     原方案只有 foreground / muted-foreground 两档，
-     多出来的层级全靠 alpha 硬凑，于是出现 7 种 muted-foreground 透明度。 */
+  /* ── Content ladder completion (see the note in @theme) ──
+     The old scheme had only foreground / muted-foreground; every extra level
+     was faked with alpha, which produced 7 muted-foreground opacities. */
   --subtle-foreground: oklch(54% 0.012 250);
   --disabled-foreground: oklch(62% 0.011 250);
 
-  /* ── 状态色（替代 emerald-500 / amber-300 / red-400 硬编码）── */
+  /* ── Status colors (replacing hardcoded emerald-500 / amber-300 / red-400) ── */
   --success: oklch(50% 0.15 155);
   --success-tint: oklch(96% 0.03 155);
   --success-hover: oklch(90% 0.055 155);
   --warning: oklch(50% 0.13 65);
 
   --border: oklch(91% 0.006 250);
-  /* 装饰性分隔：比 border 再淡一档，取代 border-border-faint 与 /50 */
+  /* Decorative separation: one step lighter than border, replacing border-border-faint and /50 */
   --border-faint: oklch(94.5% 0.006 250);
-  /* 控件边界必须 ≥3:1（SC 1.4.11）—— 实测对 card 3.28:1。
-     原来的 91.5% 只有 1.28:1，输入框的唯一边界是不可辨识的。 */
+  /* Control boundaries must be ≥3:1 (SC 1.4.11) — measured 3.28:1 against card.
+     The old 91.5% was only 1.28:1: an input's only boundary was invisible. */
   --input: oklch(64% 0.012 250);
   --ring: oklch(55% 0.05 248);
 
   --sidebar: var(--card);
-  /* 原为 oklch(46% 0.01 250)，与 muted-foreground 只差 0.002 chroma，
-     属于同一角色的两个近乎相同的值 —— 合并。 */
+  /* Was oklch(46% 0.01 250), only 0.002 chroma away from muted-foreground —
+     two near-identical values for the same role, merged. */
   --sidebar-foreground: var(--muted-foreground);
 
   --live: oklch(55% 0.168 24);
   --live-foreground: oklch(99% 0.002 250);
 
-  /* ── 实色悬停（Radix step 9 → 10）── */
+  /* ── Solid hover (Radix step 9 → 10) ── */
   --primary-hover: oklch(48% 0.055 248);
   --secondary-hover: oklch(89% 0.006 250);
   --accent-hover: oklch(86% 0.024 248);
   --destructive-hover: oklch(47% 0.19 24);
-  /* 选中态描边。原来是 border-primary-border。
-     78% 只有 1.83:1（暗色对应档 48% 是 3.02:1）—— 两个主题不对称，
-     亮色下选中态的描边几乎看不见。64% 实测 3.07:1，与暗色对齐。
-     注意：这是「状态指示」而不是装饰，所以按 SC 1.4.11 取 3:1。 */
+  /* Selected-state border. Was border-primary-border.
+     78% is only 1.83:1 (the dark counterpart, 48%, is 3.02:1) — asymmetric
+     across themes, so the selected border was nearly invisible in light mode.
+     64% measures 3.07:1, aligned with dark.
+     Note: this is a state indicator, not decoration, so SC 1.4.11's 3:1 applies. */
   --primary-border: oklch(64% 0.05 248);
-  /* muted 表面的悬停档。--muted(93%) 与 --secondary(94%) 几乎同色，
-     但两者语义不同（surface vs 按钮实色），所以各自持有悬停档。 */
+  /* Hover step for the muted surface. --muted(93%) and --secondary(94%) are
+     nearly the same color, but they mean different things (surface vs button
+     solid), so each keeps its own hover step. */
   --muted-hover: oklch(88% 0.006 250);
 
-  /* ── 表面叠层（M3 state layer 8% / 10% 的实色等价物）──
-     侧栏底色是 97%，悬停必须压到 ~88% 才看得见（1.24:1）。
-     机械照搬 M3 的 8% 白/黑叠层在亮色下只有 1.05:1，等于没有。 */
+  /* ── Surface overlay (solid equivalent of M3's 8% / 10% state layer) ──
+     The sidebar base is 97%, so hover must be pressed down to ~88% to be
+     visible (1.24:1). Copying M3's 8% white/black layer mechanically only
+     gives 1.05:1 in light mode — as good as nothing. */
   --surface-hover: oklch(88% 0.005 250);
   --surface-active: oklch(84% 0.006 250);
 
-  /* ── 遮罩 ── */
-  /* 模态背景。原来是 bg-overlay —— 亮色下是一层白纱，
-     把内容盖住了却又不构成「模态」的视觉语言。改为压暗。 */
+  /* ── Scrims ── */
+  /* Modal backdrop. Was bg-overlay — in light mode that was a white veil that
+     covered the content without reading as "modal". Now it darkens instead. */
   --overlay: oklch(20% 0.014 250 / 0.4);
-  /* 压在封面图 / 视频画面上的遮罩（不是舞台色，是媒体上的） */
+  /* Scrim over cover images / video frames (not a stage color — it sits on media) */
   --media-scrim: oklch(0% 0 0 / 0.42);
   --media-scrim-hover: oklch(0% 0 0 / 0.6);
 
-  /* ── Windows 11 关闭按钮规范色（原 #c42b1c / #b0261a 硬编码）── */
+  /* ── Windows 11 close-button spec colors (previously hardcoded #c42b1c / #b0261a) ── */
   --close-hover: oklch(53.61% 0.1912 30.1);
   --close-active: oklch(49.54% 0.1759 29.7);
-  /* 固定红在两个主题下都用浅字（实测 5.50:1），不跟随主题翻转 */
+  /* The fixed red uses light text in both themes (measured 5.50:1); it does not flip with the theme */
   --close-foreground: oklch(99% 0.002 250);
 
-  /* ── 滚动条（自成一族，不参与内容阶梯）── */
+  /* ── Scrollbar (its own family, not part of the content ladder) ── */
   --scrollbar-thumb: oklch(86% 0.006 250);
   --scrollbar-thumb-hover: oklch(74% 0.008 250);
 
-  /* ── 阴影实色（按主题分叉）── */
+  /* ── Solid shadows (forked per theme) ── */
   --elev-1: 0 1px 2px oklch(20% 0.02 250 / 0.1);
   --elev-2: 0 4px 12px oklch(20% 0.02 250 / 0.12), 0 1px 3px oklch(20% 0.02 250 / 0.08);
   --elev-3: 0 16px 48px oklch(20% 0.02 250 / 0.18), 0 2px 8px oklch(20% 0.02 250 / 0.1);
 
-  /* ── 播放器舞台：两种主题共用一套暗底色阶 ──
-     舞台恒为暗色，所以这一族刻意不跟主题翻转。
-     原来分了两套（--player-* 给 player.css、text-white/NN 给 TSX），
-     现在合并成一套 --stage-*，TSX 与 CSS 共用。
-       实测对比度（对 --stage-bg）
+  /* ── Player stage: both themes share one dark scale ──
+     The stage is always dark, so this family deliberately does not flip with
+     the theme. It used to be split in two (--player-* for player.css,
+     text-white/NN for TSX); now it is one --stage-* set shared by TSX and CSS.
+       Measured contrast (against --stage-bg)
          fg-1 18.61:1 / fg-2 14.14:1 / fg-3 9.46:1 / fg-4 6.04:1
          danger 7.59:1 / warning 11.53:1 / accent 9.9:1
-       叠层（白色叠在舞台上）
-         surface 12% → 1.30:1（静态容器底、进度槽）
-         hover   20% → 1.72:1（悬停 / 选中 / 描边）
-         scrim   82% → 错误遮罩
+       Overlays (white laid on the stage)
+         surface 12% → 1.30:1 (static container base, progress track)
+         hover   20% → 1.72:1 (hover / selected / border)
+         scrim   82% → error scrim
      ── */
   --stage-bg: oklch(12% 0.008 250);
   --stage-fg-1: oklch(97% 0.002 250);
@@ -386,7 +403,7 @@
 }
 
 /* ─────────────────────────────────────────────
-   Dark palette — Cool-slate · Cinema night (影院级)
+   Dark palette — Cool-slate · Cinema night (cinema-grade)
    oklch(15%) base, 5-6% lightness steps between surfaces for breathing
    room. Blue-cyan chroma (0.012-0.03) gives the gray a soul without
    screaming. Player stage shares the family — no warm black break.
@@ -408,23 +425,24 @@
   --secondary-foreground: oklch(84% 0.007 250);
 
   --muted: oklch(25% 0.014 250);
-  /* 64% → 70%：内容阶梯需要档间距。64% 时 muted(5.39:1) 与
-     subtle(4.98:1) 只差 0.4 个比值，肉眼分不出来，阶梯形同虚设。
-     70% 对 card 是 6.78:1，与 subtle 的 4.98:1 拉开一档。 */
+  /* 64% → 70%: the content ladder needs distance between steps. At 64%,
+     muted(5.39:1) and subtle(4.98:1) differ by only 0.4 of a ratio —
+     indistinguishable, so the ladder was pointless.
+     70% is 6.78:1 against card, one clear step above subtle's 4.98:1. */
   --muted-foreground: oklch(70% 0.014 250);
 
   --accent: oklch(31% 0.03 248);
   --accent-foreground: oklch(80% 0.04 248);
 
-  /* 60% → 66%：原来对 card 只有 4.17:1，作为正文色是硬失败 */
+  /* 60% → 66%: it used to be only 4.17:1 against card — a hard fail as body text */
   --destructive: oklch(66% 0.19 24);
   --destructive-foreground: oklch(16% 0.012 250);
 
-  /* ── 内容阶梯补全 ── */
+  /* ── Content ladder completion ── */
   --subtle-foreground: oklch(62% 0.013 250);
   --disabled-foreground: oklch(52% 0.012 250);
 
-  /* ── 状态色 ── */
+  /* ── Status colors ── */
   --success: oklch(72% 0.15 155);
   --success-tint: oklch(26% 0.04 155);
   --success-hover: oklch(31% 0.05 155);
@@ -432,7 +450,7 @@
 
   --border: oklch(33% 0.014 250);
   --border-faint: oklch(27% 0.014 250);
-  /* 控件边界 ≥3:1（SC 1.4.11）—— 实测对 card 3.29:1，原 33% 只有 1.48:1 */
+  /* Control boundaries ≥3:1 (SC 1.4.11) — measured 3.29:1 against card; the old 33% was only 1.48:1 */
   --input: oklch(52% 0.014 250);
   --ring: oklch(58% 0.048 248);
 
@@ -442,33 +460,35 @@
   --live: oklch(62% 0.18 24);
   --live-foreground: oklch(16% 0.012 250);
 
-  /* ── 实色悬停 ── */
+  /* ── Solid hover ── */
   --primary-hover: oklch(78% 0.06 248);
   --secondary-hover: oklch(32% 0.016 250);
   --accent-hover: oklch(37% 0.032 248);
   --destructive-hover: oklch(72% 0.19 24);
-  /* 48% 对 background 是 3.02:1，但对 card 只有 2.78:1 —— 引导页的选项 chip 就落在
-     card 面板上。50% 同时过线（card 3.03:1 / background 3.30:1），取最小值。 */
+  /* 48% is 3.02:1 against background but only 2.78:1 against card — and the
+     onboarding option chips sit on a card panel. 50% clears both
+     (card 3.03:1 / background 3.30:1), so the smaller value wins. */
   --primary-border: oklch(50% 0.055 248);
   --muted-hover: oklch(31% 0.016 250);
 
-  /* ── 表面叠层 ──
-     暗色下 8% 白叠层只有 1.14:1 的可见度（几乎看不出悬停），
-     所以这两档按「实色」定，而不是机械照搬 M3 的百分比。 */
+  /* ── Surface overlay ──
+     In dark mode an 8% white overlay only has 1.14:1 visibility (hover is
+     barely perceptible), so these two steps are defined as solid colors
+     instead of copying M3's percentages mechanically. */
   --surface-hover: oklch(23% 0.014 250);
   --surface-active: oklch(26% 0.014 250);
 
-  /* ── 遮罩 ── */
+  /* ── Scrims ── */
   --overlay: oklch(0% 0 0 / 0.6);
   --media-scrim: oklch(0% 0 0 / 0.42);
   --media-scrim-hover: oklch(0% 0 0 / 0.6);
 
-  /* ── 阴影实色：暗色下需要更重才看得出层级 ── */
+  /* ── Solid shadows: dark mode needs heavier values for elevation to read ── */
   --elev-1: 0 1px 2px oklch(0% 0 0 / 0.35);
   --elev-2: 0 6px 16px oklch(0% 0 0 / 0.45), 0 1px 3px oklch(0% 0 0 / 0.3);
   --elev-3: 0 20px 56px oklch(0% 0 0 / 0.6), 0 2px 10px oklch(0% 0 0 / 0.4);
 
-  /* ── 滚动条：暗色下用中性灰，不跟内容阶梯抢注意力 ── */
+  /* ── Scrollbar: neutral gray in dark mode so it does not compete with the content ladder ── */
   --scrollbar-thumb: oklch(44% 0.014 250);
   --scrollbar-thumb-hover: oklch(56% 0.014 250);
 }
@@ -491,9 +511,10 @@
 html[data-theme-transitioning] *,
 html[data-theme-transitioning] *::before,
 html[data-theme-transitioning] *::after {
-  /* 主题切换是整棵树一起过渡，用最慢一档；
-     原来 240/200ms 交错是为了「颜色比背景早一点到位」，
-     但 40ms 的错峰肉眼不可辨，换来的是刻度外的两个魔法数字。 */
+  /* Theme switching transitions the whole tree at once, so use the slowest step;
+     the old 240/200ms stagger was meant to "land colors slightly before the
+     background", but a 40ms offset is imperceptible and bought two magic
+     numbers outside the scale. */
   transition:
     background-color var(--t-slow) var(--ease-smooth),
     color var(--t-slow) var(--ease-smooth),
@@ -546,7 +567,7 @@ body,
 :root:not(.is-mac) html,
 :root:not(.is-mac) body,
 :root:not(.is-mac) #root {
-  /* @tokens-ignore 窗口外框圆角，由 OS 合成器绘制，不是组件层级的一部分 */
+  /* @tokens-ignore window frame radius, drawn by the OS compositor — not part of the component scale */
   border-radius: 10px;
   overflow: hidden;
 }
@@ -565,23 +586,27 @@ a {
   color: inherit;
   text-decoration: none;
 }
-/* ⚠️ 这里曾经有一条 `button, input { font: inherit }`，已删除，不要再加回来。
-   它是**未分层**样式，而 Tailwind 的 text-* 在 @layer utilities 里。按 CSS
-   Cascade Layers，未分层声明永远压过分层声明 —— 与选择器权重无关。后果是
-   所有 <button> / <input> 上的 text-xs / text-sm / text-2xl 全部**静默失效**：
-   类名在 DOM 上、样式表里也生成了，算出来却还是继承来的 14px/21px。
-   实测代价：播放器的 Live 徽章高 29px 而不是设计的 20px，比同一套配方的
-   <span> 版本（发现页封面上的 Live）高出 3px。
-   Tailwind preflight 已经在 @layer base 里对 button/input/select/textarea 做了
-   同样的事，这里重复一遍只有坏处。check:tokens 的 UNLAYERED_FORM_FONT 守着。 */
+/* ⚠️ There used to be a `button, input { font: inherit }` rule here. It was
+   deleted — do not add it back.
+   It is **unlayered**, while Tailwind's text-* lives in @layer utilities. Under
+   CSS Cascade Layers an unlayered declaration always beats a layered one —
+   regardless of selector specificity. The consequence: every text-xs /
+   text-sm / text-2xl on <button> / <input> **silently did nothing** — the
+   class was on the DOM and the rule was generated, but the computed value was
+   still the inherited 14px/21px.
+   Measured cost: the player's Live badge rendered 29px tall instead of the
+   designed 20px, 3px taller than the identical <span> recipe (Live on the
+   discover-page cover).
+   Tailwind preflight already does the same thing in @layer base for
+   button/input/select/textarea; repeating it here only hurts.
+   UNLAYERED_FORM_FONT in check:tokens guards this. */
 img {
   display: block;
 }
 
-
 /* ─────────────────────────────────────────────
    Scrollbar — minimal, cool-toned
-   滚动条自成一族刻度（不在内容阶梯里：它是 OS 层装饰，不承载信息）
+   The scrollbar has its own scale (not part of the content ladder: it is OS-level decoration and carries no information)
    ───────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 4px;
@@ -606,11 +631,11 @@ img {
 }
 
 /* ─────────────────────────────────────────────
-   Transition defaults —— 方案 B · 统一为 3 档时长
-     fast  100ms  悬停 / 按下的颜色反馈
-     base  150ms  默认过渡（绝大多数交互）
-     slow  250ms  进出场、位移较大的动效
-   过渡一律走 ease 曲线；按下态统一 scale(0.97)。
+   Transition defaults — Option B · unified into 3 durations
+     fast  100ms  hover / pressed color feedback
+     base  150ms  default transition (most interactions)
+     slow  250ms  enter/exit, larger movement
+   All transitions use an ease curve; pressed state is uniformly scale(0.97).
    ───────────────────────────────────────────── */
 :root {
   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
@@ -621,17 +646,17 @@ img {
 }
 
 /* ─────────────────────────────────────────────
-   层级刻度 —— 4 档，每档一个明确角色。
-   原来散落 z-chrome / z-stage-msg / z-40（player.css）/ z-float，
-   其中 z-40 只出现在一处、没有任何文档说明，
-   属于「随手挑的数」。命名后调用点能自解释，
-   守卫脚本也会拦下裸的 z-<数字>。
+   Elevation scale — 4 steps, one explicit role each.
+   Previously scattered as z-chrome / z-stage-msg / z-40 (player.css) / z-float,
+   where z-40 appeared in exactly one place with no documentation at all —
+   a number picked at random. With names, call sites are self-explanatory,
+   and the guard script also blocks bare z-<number>.
    ───────────────────────────────────────────── */
 :root {
-  --z-chrome: 10; /* 播放器控制层（进度条、按钮条） */
-  --z-stage-msg: 20; /* 播放器内的消息遮罩（加载 / 错误 / 已播完） */
-  --z-stage-popup: 30; /* 播放器内的弹出菜单（清晰度选择）—— 由 player.css 直接 var() 消费 */
-  --z-float: 50; /* 全局浮层：下拉 / 提示 / 模态 / 全屏 */
+  --z-chrome: 10; /* Player control layer (progress bar, button bar) */
+  --z-stage-msg: 20; /* In-player message overlay (loading / error / ended) */
+  --z-stage-popup: 30; /* In-player popup menu (quality picker) — consumed directly via var() by player.css */
+  --z-float: 50; /* Global overlay: dropdown / tooltip / modal / fullscreen */
 }
 
 @utility z-chrome {
@@ -684,9 +709,9 @@ img {
 
 /* ─────────────────────────────────────────────
    Player stage — dark, full-bleed (token-driven)
-   圆角走最大一档 16px：播放器是全局层级最高的容器
-   （Atlassian 把 video player 容器单列在 radius.xxlarge）
-   全屏时由 player.css 覆写为 0。
+   Radius uses the largest step, 16px: the player is the highest-level container
+   (Atlassian lists the video player container separately under radius.xxlarge).
+   Overridden to 0 by player.css in fullscreen.
    ───────────────────────────────────────────── */
 .player-stage {
   width: 100%;

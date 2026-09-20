@@ -339,9 +339,7 @@ export function ReplayPage() {
             <div className="shrink-0 border-b border-border-faint px-3 py-3 flex items-center justify-between">
               <span className="text-xs font-semibold">直播录像</span>
               {roomQuery.data && (
-                <span className="text-xs text-muted-foreground">
-                  {roomQuery.data.streamerName}
-                </span>
+                <span className="text-xs text-muted-foreground">{roomQuery.data.streamerName}</span>
               )}
             </div>
 

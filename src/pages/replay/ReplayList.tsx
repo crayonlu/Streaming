@@ -119,9 +119,11 @@ function SessionRow({
 
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="truncate text-xs font-medium leading-tight">{session.title}</span>
-          {/* 元信息按重要性排：日期 > 时长 > 播放量。
-              前三者固定不缩，播放量作唯一可压缩项 —— 空间不够时它先截断，
-              绝不会像之前那样把日期挤成两行、又钻到右侧徽标底下。 */}
+          {/* Metadata ordered by importance: date > duration > view count.
+              The first three never shrink, so the view count is the only
+              compressible item — it truncates first when space runs out,
+              instead of squeezing the date onto two lines and sliding under
+              the badge on the right as it used to. */}
           <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
             {session.recordedAt > 0 && (
               <span className="shrink-0">{fmtDate(session.recordedAt)}</span>

@@ -65,7 +65,7 @@ export function DiscoverPage() {
   const sectionRef = useRef<HTMLElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  // Fetch first page when platform changes - Store 内部处理 categorySelection 重置
+  // Fetch first page when platform changes — the store resets categorySelection internally
   useEffect(() => {
     fetchFirstPage(currentPlatform);
     const section = sectionRef.current;

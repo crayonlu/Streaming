@@ -1,10 +1,10 @@
 /**
  * useBilibiliAuth
  *
- * Encapsulates the full B站 Cookie login flow:
+ * Encapsulates the full Bilibili Cookie login flow:
  *   1. On mount (when platform === "bilibili"), checks whether SESSDATA is
  *      already stored and sets the initial login state.
- *   2. `login()` opens the B站 login window and polls until SESSDATA arrives
+ *   2. `login()` opens the Bilibili login window and polls until SESSDATA arrives
  *      or the 120s deadline elapses.
  *
  * Returns:

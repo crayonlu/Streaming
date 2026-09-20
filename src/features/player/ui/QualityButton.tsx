@@ -10,7 +10,8 @@ interface QualityButtonProps {
 /**
  * Next selectable quality after `selectedId`, wrapping past the end.
  * Returns null when no other entry is selectable — the click is then a no-op.
- * An unknown `selectedId` (label already fell back to "画质") scans the whole
+ * An unknown `selectedId` (the label has already fallen back to the generic
+ * quality placeholder) scans the whole
  * list, since there is no current entry to skip.
  */
 function findNextQuality(items: PlayerQualityItem[], selectedId: string | null | undefined) {

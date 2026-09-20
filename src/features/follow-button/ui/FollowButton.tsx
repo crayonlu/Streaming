@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useFollowStore } from "@/features/follows/model/useFollowStore";
 import { cn } from "@/lib/utils";
 import { toggleFollow } from "@/shared/api/commands";
 import type { RoomCard } from "@/shared/types/domain";
-import { useFollowStore } from "@/features/follows/model/useFollowStore";
 
 interface FollowButtonProps {
   room: Pick<RoomCard, "platform" | "roomId" | "followed" | "title" | "streamerName" | "coverUrl">;
@@ -50,7 +50,11 @@ export function FollowButton({ room, compact = false }: FollowButtonProps) {
             : "bg-media-scrim text-stage-fg-2 hover:bg-media-scrim-hover hover:text-stage-fg-1",
         )}
       >
-        <Heart size={12} strokeWidth={2} className={room.followed ? "fill-live-foreground" : "fill-none"} />
+        <Heart
+          size={12}
+          strokeWidth={2}
+          className={room.followed ? "fill-live-foreground" : "fill-none"}
+        />
       </button>
     );
   }

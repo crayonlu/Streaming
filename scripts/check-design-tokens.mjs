@@ -1,16 +1,18 @@
 #!/usr/bin/env node
 /**
- * 设计 token 守卫 —— 方案 B · Precision
+ * Design token guard — Plan B · Precision
  * ────────────────────────────────────────────────────────────────
- * 把「圆角 / 间距 / 字号 / 过渡时长按层级统一」从口头约定变成可运行的检查。
+ * Turns "radius / spacing / font-size / transition-duration unified per tier"
+ * from a verbal convention into an executable check.
  *
- * 用法：
- *   pnpm check:tokens            校验，有违规则 exit 1（可进 CI / pre-commit）
- *   pnpm check:tokens --report   只打印各刻度的实际分布，不判错
+ * Usage:
+ *   pnpm check:tokens            verify; exit 1 on violations (CI / pre-commit ready)
+ *   pnpm check:tokens --report   only print the actual distribution per scale, no verdict
  *
- * 刻度定义见 src/app/styles/globals.css 的 @theme inline 注释块。
- * 这里刻意重复一份常量：守卫必须是「独立事实源」，否则改 token 时
- * 守卫会跟着一起漂，就失去意义了。改动刻度需同时改两处。
+ * Scale definitions live in the @theme inline comment block in src/app/styles/globals.css.
+ * The constants are duplicated here on purpose: the guard must be an independent source of
+ * truth, otherwise it drifts along with the tokens the moment they change and stops meaning
+ * anything. Changing a scale means editing both places.
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -20,98 +22,102 @@ import { fileURLToPath } from "node:url";
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SRC = join(ROOT, "src");
 
-/* ─────────────────────────────── 刻度定义 ─────────────────────────────── */
+/* ─────────────────────────────── Scale definitions ─────────────────────────────── */
 
-/** 间距节奏（padding / margin / gap）—— 硬性 7 档 + 2 个布局档 */
+/** Spacing rhythm (padding / margin / gap) — 7 hard tiers + 2 layout tiers */
 const RHYTHM_SCALE = new Set(["0", "1", "2", "3", "4", "5", "6", "8", "12", "16"]);
 const RHYTHM_LABEL = "0/1/2/3/4/5/6/8/12/16  (0/4/8/12/16/20/24/32/48/64px)";
 
-/** 圆角 —— 硬性 4 档 + full，lg 仅播放器容器 */
+/** Radius — 4 hard tiers + full; lg is player container only */
 const RADIUS_SCALE = new Set(["none", "xs", "sm", "md", "lg", "full"]);
 const RADIUS_LABEL = "none/xs/sm/md/lg/full  (0/4/6/12/16/9999px)";
 
-/** 过渡时长 —— 3 档 */
+/** Transition duration — 3 tiers */
 const DURATION_SCALE = new Set(["0", "100", "150", "250"]);
 const DURATION_LABEL = "0/100/150/250ms";
 
-/** CSS 里允许出现的字面量字号（对应 --text-* 六档，12px 为硬下限） */
+/** Literal font sizes allowed in CSS (mirrors the six --text-* tiers; 12px is a hard floor) */
 const CSS_FONT_SCALE = new Set([12, 13, 14, 16, 20, 24]);
 
-/** CSS 里允许出现的字面量圆角 px（其余必须走 var(--radius-*)） */
+/** Literal radius px allowed in CSS (everything else must go through var(--radius-*)) */
 const CSS_RADIUS_LITERALS = new Set([0, 4, 6, 12, 16, 999]);
 
 /**
- * 宽度档位命名 —— 页面级宽度只能用这三个具名 token，
- * 其余宽度一律走整数尺寸档（max-w-96 / min-w-32）。
- * 这条规则专门拦 Tailwind 默认容器名（max-w-xs / max-w-2xl），
- * 它们是「沉默的越档」：不出错、不报警，但宽度随手写。
+ * Named width tiers — page-level widths may only use these three tokens;
+ * every other width goes through integer size tiers (max-w-96 / min-w-32).
+ * This rule specifically blocks Tailwind's default container names
+ * (max-w-xs / max-w-2xl): they are silent tier escapes — no error, no warning,
+ * just widths written down ad hoc.
  */
 const WIDTH_TOKENS = new Set(["narrow", "grid", "stage"]);
-/** 允许的宽度关键字（非数值、非具名档） */
+/** Allowed width keywords (non-numeric, non-named-tier) */
 const WIDTH_KEYWORDS = new Set(["full", "none", "fit", "min", "max", "screen", "px", "auto", "svw", "lvw", "dvw"]);
 
 /**
- * 图标尺寸刻度 —— lucide 的 size 属性是数字，走不到 CSS token，所以这里定义。
- *   12  与 12px 正文同高，行内图标
- *   14  次级行内图标 / 小按钮
- *   16  默认：控件内的主图标（按钮、导航、播放控制）
- *   20  强调图标 / 卡片角标
- *   24  区块标题
- *   28/32/40/48  展示型：空状态、引导页
+ * Icon size scale — lucide's size prop is a number and never reaches a CSS token,
+ * so it is defined here.
+ *   12  same height as 12px body text, inline icon
+ *   14  secondary inline icon / small button
+ *   16  default: primary icon inside a control (button, nav, playback controls)
+ *   20  emphasis icon / card corner badge
+ *   24  section heading
+ *   28/32/40/48  display: empty states, onboarding
  */
 const ICON_SCALE = new Set([12, 14, 16, 20, 24, 28, 32, 40, 48]);
 const ICON_LABEL = "12/14/16/20/24/28/32/40/48";
 
-/* ─────────────────────── v3 配色 / 层级刻度 ─────────────────────── */
+/* ─────────────────────── v3 palette / tier scales ─────────────────────── */
 
 /**
- * Tailwind 默认调色板一律禁用。
- * 这些色是按暗底调的：emerald-500 / amber-300 / red-400 在亮色主题下
- * 对 --card 只有 2.41 / 1.41 / 2.78:1 —— 连 SC 1.4.3 的 4.5:1 一半都不到。
- * 需要状态色请用 --success / --warning / --destructive / --live。
+ * Tailwind's default palette is banned outright.
+ * These colors were tuned against a dark surface: emerald-500 / amber-300 / red-400
+ * reach only 2.41 / 1.41 / 2.78:1 against --card under the light theme — not even
+ * half of the 4.5:1 that SC 1.4.3 requires.
+ * For status colors use --success / --warning / --destructive / --live.
  */
 const PALETTE_NAMES =
   "red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|grey|zinc|neutral|stone";
 const PALETTE_LABEL = "语义色：primary / secondary / muted / accent / destructive / live / success / warning / info";
 
-/** 字重 —— 3 档。三者都在用，再加档就是噪音 */
+/** Font weight — 3 tiers. All three are in use; a fourth tier would be noise */
 const WEIGHT_SCALE = new Set(["normal", "medium", "semibold"]);
 const WEIGHT_LABEL = "normal/medium/semibold (400/500/600)";
 
-/** 阴影 —— 3 档 elevation，取代裸的 shadow-sm/md/lg */
+/** Shadow — 3 elevation tiers, replacing bare shadow-sm/md/lg */
 const SHADOW_SCALE = new Set(["none", "e1", "e2", "e3"]);
 const SHADOW_LABEL = "none/e1/e2/e3";
 
-/** 层级 —— 4 档，每档一个角色（见 globals.css 的 --z-*） */
+/** Layer — 4 tiers, one role each (see --z-* in globals.css) */
 const Z_SCALE = new Set(["auto", "chrome", "stage-msg", "stage-popup", "float"]);
 const Z_LABEL = "auto/chrome/stage-msg/stage-popup/float";
 
-/** 字距 —— 2 档。wide/wider/widest 曾同时用于同一个「大写微标签」角色 */
+/** Tracking — 2 tiers. wide/wider/widest were once all used for the same "caps micro-label" role */
 const TRACKING_SCALE = new Set(["tight", "normal", "caps"]);
 const TRACKING_LABEL = "tight(-0.02em)/normal/caps(+0.06em)";
 
-/** 行高 —— 4 档（none 是「收起行盒」的原语，不是节奏档） */
+/** Leading — 4 tiers (none is a "collapse the line box" primitive, not a rhythm tier) */
 const LEADING_SCALE = new Set(["none", "tight", "snug", "normal", "relaxed"]);
 const LEADING_LABEL = "none/tight(1.25)/snug(1.4)/normal(1.5)/relaxed(1.6)";
 
-/** 描边宽度 —— 2 档：1px 轮廓 / 2px 焦点环 */
+/** Ring width — 2 tiers: 1px outline / 2px focus ring */
 const RING_WIDTH_SCALE = new Set(["1", "2"]);
 const RING_WIDTH_LABEL = "1（轮廓）/ 2（焦点环）";
 
-/** 元素级 opacity —— 4 档。disabled 一律 40%，装饰一律 30% */
+/** Element-level opacity — 4 tiers. disabled is always 40%, decorative always 30% */
 const OPACITY_SCALE = new Set(["0", "30", "40", "60", "100"]);
 const OPACITY_LABEL = "0/30/40/60/100";
 
-/** CSS 里允许的字面量时长 */
+/** Literal durations allowed in CSS */
 const CSS_DURATION_SCALE = new Set([100, 150, 250]);
-/** CSS 时长例外：prefers-reduced-motion 把动效压到不可感知是规范做法 */
+/** CSS duration exception: crushing motion to imperceptible under prefers-reduced-motion is standard practice */
 const CSS_DURATION_EXCEPTIONS = new Map([
   ["0.01", "prefers-reduced-motion 下关闭动效（规范做法，不是设计选择）"],
 ]);
 
 /**
- * 例外清单 —— 每条都必须写明「为什么它不是设计选择」。
- * 例外越少越好；新增例外等于在刻度上开口子，review 时要能说服人。
+ * Exception list — every entry must state why it is not a design choice.
+ * The fewer exceptions the better; a new exception punches a hole in the scale,
+ * so it has to survive review.
  */
 const RHYTHM_EXCEPTIONS = new Map([
   [
@@ -120,10 +126,10 @@ const RHYTHM_EXCEPTIONS = new Map([
   ],
 ]);
 
-/** 转义舱口：该行（或上一行）出现此标记则跳过检查。用于平台/OS 级常量。 */
+/** Escape hatch: a line (or the one above it) carrying this marker is skipped. For platform/OS-level constants. */
 const IGNORE_MARK = "@tokens-ignore";
 
-/* ─────────────────────────────── 匹配器 ─────────────────────────────── */
+/* ─────────────────────────────── Matchers ─────────────────────────────── */
 
 const RHYTHM_PROPS =
   "p|px|py|pt|pb|pl|pr|ps|pe|m|mx|my|mt|mb|ml|mr|ms|me|gap|gap-x|gap-y|space-x|space-y";
@@ -132,7 +138,7 @@ const RADIUS_SIDES = "(?:t|r|b|l|s|e|tl|tr|br|bl|ss|se|es|ee)";
 
 const RE_RHYTHM = new RegExp(`^-?(?:${RHYTHM_PROPS})-(\\d+(?:\\.\\d+)?)$`);
 const RE_DIM = new RegExp(`^-?(?:${DIM_PROPS})-(\\d+(?:\\.\\d+)?)$`);
-/** 非数值宽度：max-w-xs / w-full / min-w-fit … */
+/** Non-numeric width: max-w-xs / w-full / min-w-fit … */
 const RE_WIDTH_WORD = /^(?:max-w|min-w|w|size)-([a-z][a-z0-9]*)$/;
 const RE_RADIUS = new RegExp(`^rounded(?:-${RADIUS_SIDES})?(?:-(.+))?$`);
 const RE_DURATION = /^duration-(\d+)$/;
@@ -141,20 +147,21 @@ const RE_ARBITRARY = new RegExp(
 );
 
 /**
- * 函数式任意值（w-[min(18rem,42vw)] / h-[calc(...)] / max-w-[clamp(...)]）是
- * 响应式表达式，不是魔法数字 —— 放行。只拦 [8rem] / [13px] 这类字面量。
+ * Functional arbitrary values (w-[min(18rem,42vw)] / h-[calc(...)] / max-w-[clamp(...)])
+ * are responsive expressions, not magic numbers — allowed. Only literals like
+ * [8rem] / [13px] are blocked.
  */
 const isFunctionalArbitrary = (base) => {
   const open = base.indexOf("[");
   return open !== -1 && /[(,]/.test(base.slice(open + 1));
 };
 
-/* ── v3 配色 / 层级匹配器 ── */
+/* ── v3 palette / tier matchers ── */
 const COLOR_UTILS =
   "text|bg|border|ring|fill|stroke|from|to|via|divide|outline|decoration|placeholder|caret|shadow|accent";
 const RE_PALETTE_NUM = new RegExp(`^(?:${COLOR_UTILS})-(?:${PALETTE_NAMES})-\\d{2,3}$`);
 const RE_PALETTE_BARE = new RegExp(`^(?:${COLOR_UTILS})-(?:white|black)(?:/\\d+)?$`);
-/** 语义 token 上的 alpha 修饰符：text-muted-foreground/60、bg-primary/12 … */
+/** Alpha modifier on a semantic token: text-muted-foreground/60, bg-primary/12 … */
 const RE_ALPHA_ON_TOKEN = new RegExp(`^(?:${COLOR_UTILS})-[a-z][\\w-]*/\\d+$`);
 const RE_WEIGHT = /^font-(thin|extralight|light|normal|medium|semibold|bold|extrabold|black)$/;
 const RE_SHADOW = /^shadow-(.+)$/;
@@ -164,23 +171,24 @@ const RE_LEADING = /^leading-(.+)$/;
 const RE_RING_WIDTH = /^ring-(\d+)$/;
 const RE_OPACITY = /^opacity-(\d+)$/;
 
-/** 从一行里抽出所有候选 class token（去掉变体前缀、引号、JSX 花括号）
- *  注意：不能在 ( ) , 上切分 —— 否则 w-[min(18rem,42vw)] 会被切成 "w-[min"。 */
+/** Pulls every candidate class token out of a line (strips variant prefixes, quotes, JSX braces)
+ *  Note: never split on ( ) , — otherwise w-[min(18rem,42vw)] would be cut into "w-[min". */
 function tokenize(line) {
   const out = [];
   for (const raw of line.split(/[\s"'`{}<>=;]+/)) {
     if (!raw) continue;
     const tok = raw.replace(/[.,;]+$/, "");
     if (!tok || !/^[a-zA-Z0-9_:[\]()./%#-]+$/.test(tok)) continue;
-    // 变体链：hover:focus:p-2 → 取最后一段；任意值里的冒号（如 [url(a:b)]）会被截断，
-    // 但那类 token 一定带 '[' ，交给 RE_ARBITRARY 兜底，不依赖最后一段。
+    // Variant chain: hover:focus:p-2 → take the last segment; colons inside arbitrary
+    // values (e.g. [url(a:b)]) get truncated, but those tokens always carry '[' and fall
+    // back to RE_ARBITRARY, so the last segment is not load-bearing here.
     const base = tok.includes(":") ? tok.slice(tok.lastIndexOf(":") + 1) : tok;
     out.push({ raw: tok, base });
   }
   return out;
 }
 
-/** 剥掉块注释，避免注释里写的示例被误判 */
+/** Strips block comments so examples written inside comments are not misjudged */
 function stripBlockComments(lines) {
   let inBlock = false;
   return lines.map((line) => {
@@ -207,7 +215,7 @@ function stripBlockComments(lines) {
   });
 }
 
-/* ─────────────────────────────── 文件遍历 ─────────────────────────────── */
+/* ─────────────────────────────── File walk ─────────────────────────────── */
 
 function walk(dir, exts, acc = []) {
   for (const name of readdirSync(dir)) {
@@ -218,7 +226,7 @@ function walk(dir, exts, acc = []) {
   return acc;
 }
 
-/* ─────────────────────────────── 检查逻辑 ─────────────────────────────── */
+/* ─────────────────────────────── Check logic ─────────────────────────────── */
 
 const violations = [];
 const stats = {
@@ -255,15 +263,15 @@ function checkCode(file) {
 
   lines.forEach((line, i) => {
     const lineNo = i + 1;
-    // 行注释
+    // Line comment
     const slash = line.indexOf("//");
     const code = slash === -1 ? line : line.slice(0, slash);
     const ignored =
       (rawLines[i] ?? "").includes(IGNORE_MARK) || (rawLines[i - 1] ?? "").includes(IGNORE_MARK);
     if (ignored) return;
 
-    // 图标尺寸：size={N} 只允许落在图标刻度上。
-    // 注意 tokenize 会把 {} 当分隔符切开，所以这条规则直接扫原始行。
+    // Icon size: size={N} may only land on the icon scale.
+    // Note tokenize splits on {} as a delimiter, so this rule scans the raw line directly.
     for (const im of code.matchAll(/size=\{(\d+)\}/g)) {
       const n = Number(im[1]);
       if (!ICON_SCALE.has(n)) {
@@ -280,11 +288,13 @@ function checkCode(file) {
       }
     }
 
-    /* ── 装饰性描边不能单独构成元素 ──
-     * `--border` / `--border-faint` 是 1.2–1.6:1 的装饰色，只在「元素另有视觉定义」
-     * （有填充、有文字、贴着相邻内容）时才成立。如果一个 className 字面量**只有**
-     * 这一个 token，说明描边是该元素的全部视觉定义 —— 那就是结构性边界，必须 ≥3:1，
-     * 应当改用 --input / --primary-border / --ring。GlobalSearch 的搜索框就是这么错的。
+    /* ── A decorative border must not constitute an element on its own ──
+     * `--border` / `--border-faint` are 1.2–1.6:1 decorative colors, valid only when
+     * "the element is visually defined by something else" (has a fill, has text, sits
+     * against adjacent content). If a className literal contains **only** this one
+     * token, the border is the element's entire visual definition — that is a structural
+     * boundary and must be ≥3:1; use --input / --primary-border / --ring instead.
+     * GlobalSearch's search box got this wrong exactly this way.
      */
     for (const bm of code.matchAll(/(["'`])(border-border(?:-faint)?)\1/g)) {
       report(
@@ -304,7 +314,7 @@ function checkCode(file) {
         continue;
       }
 
-      /* ── v3：配色 / 层级 / 字重 / 字距 / 行高 ── */
+      /* ── v3: palette / tier / weight / tracking / leading ── */
 
       if (RE_PALETTE_NUM.test(base) || RE_PALETTE_BARE.test(base)) {
         report(
@@ -549,7 +559,8 @@ function checkCode(file) {
   });
 }
 
-/** 扫出 JSX 开标签的结束位置 —— 跳过字符串与 {} 表达式，免得被 onChange={(e) => …} 里的 > 骗到。 */
+/** Finds the end of a JSX opening tag — skips strings and {} expressions so the > in
+ *  onChange={(e) => …} cannot fool it. */
 function jsxTagEnd(text, start) {
   let depth = 0;
   let quote = null;
@@ -569,9 +580,10 @@ function jsxTagEnd(text, start) {
 }
 
 /**
- * 文本输入类元素（input / textarea / select）的描边必须走 --input。
- * 它们通常没有填充，描边就是「这里能输入」的唯一视觉线索 —— SC 1.4.11 要求 ≥3:1，
- * 而 --border / --border-faint 只有 1.2–1.6:1（只配做分隔线与容器轮廓）。
+ * Text input elements (input / textarea / select) must take their border from --input.
+ * They usually have no fill, so the border is the only visual cue that "you can type
+ * here" — SC 1.4.11 requires ≥3:1, while --border / --border-faint sit at 1.2–1.6:1
+ * (good enough only for dividers and container outlines).
  */
 function checkFieldBorders(file) {
   const text = stripBlockComments(readFileSync(file, "utf8").split("\n")).join("\n");
@@ -635,9 +647,9 @@ function checkCss(file) {
       }
     }
 
-    /* 颜色字面量 —— 只有自定义属性定义行可以写。
-       CSS 里散落的 oklch()/#hex 是最难发现的一类漂移：
-       它们不进任何 token 统计，主题切换时也不跟着走。 */
+    /* Color literals — only custom property definition lines may carry them.
+       oklch()/#hex scattered through CSS is the hardest kind of drift to spot:
+       they never enter any token statistic and do not follow a theme switch. */
     const isTokenDef = /^\s*--[\w-]+\s*:/.test(line);
     if (!isTokenDef) {
       const lit = /#[0-9a-fA-F]{3,8}\b/.exec(line) ?? /\b(?:oklch|rgba?|hsla?)\(/.exec(line);
@@ -653,7 +665,7 @@ function checkCss(file) {
       }
     }
 
-    /* 时长字面量 —— 只允许 100/150/250ms，其余走 var(--t-*) */
+    /* Duration literals — only 100/150/250ms; anything else goes through var(--t-*) */
     for (const dm of line.matchAll(/(\d+(?:\.\d+)?)ms\b/g)) {
       const v = Number(dm[1]);
       if (CSS_DURATION_SCALE.has(v)) {
@@ -674,21 +686,23 @@ function checkCss(file) {
   });
 }
 
-/* ───────────── 未分层规则 vs @layer utilities（静默失效的一类）─────────────
- * 未分层（不在任何 @layer 里）的声明优先级**高于** @layer utilities —— 这是
- * CSS Cascade Layers 规范定的，与选择器权重无关。所以 globals.css 里一条裸的
- * `button, input { font: inherit }` 能把所有 <button>/<input> 上的 text-xs /
- * text-sm / text-2xl 全部压掉。
+/* ───────────── Unlayered rules vs @layer utilities (the silent-failure class) ─────────────
+ * An unlayered declaration (outside every @layer) ranks **higher** than @layer utilities —
+ * that is what the CSS Cascade Layers spec says, independent of selector specificity. So a
+ * bare `button, input { font: inherit }` in globals.css can wipe out text-xs / text-sm /
+ * text-2xl on every <button>/<input>.
  *
- * 这类失效的可怕之处在于它完全静默：类名在 DOM 上、样式表里也生成了，
- * 算出来却是继承值。没有报错、没有警告，只有「怎么没生效」。
- * 真实代价：播放器 Live 徽章因此是 29px 而不是设计的 20px。
+ * What makes this class of failure scary is that it is completely silent: the class name is
+ * on the DOM, the rule is generated in the stylesheet, and yet the computed value is the
+ * inherited one. No error, no warning, just "why isn't it working".
+ * Real cost: the player's Live badge was 29px instead of the designed 20px because of this.
  *
- * 这里只查「裸类型选择器 + 排版属性」这一组合 —— 它是唯一会造成静默
- * 排版漂移的形态，误报为零。类选择器（.ctrl-btn 等）不受影响。
+ * Only the "bare type selector + typography property" combination is checked here — it is
+ * the one shape that causes silent typography drift, and it has zero false positives.
+ * Class selectors (.ctrl-btn etc.) are unaffected.
  */
 
-/** 解析 CSS 规则并记录每条规则所处的 @layer 栈。够用即可，globals.css 是手写的。 */
+/** Parses CSS rules and records the @layer stack each rule sits in. Good enough — globals.css is hand-written. */
 function parseCssRules(css) {
   const rules = [];
   const stack = [];
@@ -725,7 +739,7 @@ function parseCssRules(css) {
       continue;
     }
 
-    // 选择器规则：整段 body 跳过，避免把声明里的 {} 当成作用域
+    // Selector rule: skip the whole body so {} inside declarations is not read as a scope
     let depth = 1;
     let j = i + 1;
     while (j < css.length && depth > 0) {
@@ -745,13 +759,13 @@ function parseCssRules(css) {
   return rules;
 }
 
-/** 选择器里出现裸的 button / input / select / textarea（`.btn` 这类不算） */
+/** Bare button / input / select / textarea in a selector (`.btn` and friends do not count) */
 const targetsFormControl = (selector) =>
   selector
     .split(",")
     .some((part) => /(?:^|[\s>+~])(?:button|input|select|textarea)\b/.test(part.trim()));
 
-/** 会造成排版漂移的属性 */
+/** Properties that cause typography drift */
 const FONT_DECL = /\bfont(?:-size|-family|-weight|-style|-variant)?\s*:|\bline-height\s*:/;
 
 function checkCssCascade(file) {
@@ -771,7 +785,7 @@ function checkCssCascade(file) {
   }
 }
 
-/* ─────────────────────────────── 输出 ─────────────────────────────── */
+/* ─────────────────────────────── Output ─────────────────────────────── */
 
 function fmtMap(map, order) {
   const keys = [...map.keys()].sort((a, b) => {
@@ -783,17 +797,20 @@ function fmtMap(map, order) {
   return keys.map((k) => `${k}×${map.get(k)}`).join("  ");
 }
 
-/* ─────────────── 边界 / 状态对比度断言（WCAG 2.2 SC 1.4.11） ───────────────
- * 「用来识别控件的视觉信息」必须 ≥3:1。--input / --primary-border / --ring
- * 都属于这类角色：一旦有人为了「看起来轻一点」把明度调浅，控件会静默变得
- * 不可辨识，而任何语法层检查都发现不了。所以这里直接把 oklch 换算成
- * WCAG 对比度来断言，把「为什么是这个明度」变成可执行的约束。
+/* ─────────────── Boundary / state contrast assertions (WCAG 2.2 SC 1.4.11) ───────────────
+ * "Visual information required to identify a control" must be ≥3:1. --input,
+ * --primary-border and --ring all play that role: the moment someone lightens the
+ * lightness to make it "feel lighter", the control silently becomes unidentifiable and no
+ * syntactic check can catch it. So oklch is converted straight into a WCAG contrast ratio
+ * here, turning "why this lightness" into an executable constraint.
  *
- * 换算要点：oklch → sRGB 的矩阵输出的是**线性** sRGB，算亮度时不能再做一次
- * gamma 解码（这个坑踩过两次）。alpha 合成发生在已编码的 sRGB 空间。
+ * Conversion caveat: the oklch → sRGB matrix outputs **linear** sRGB, so luminance must not
+ * be gamma-decoded a second time (this trap was hit twice). Alpha compositing happens in
+ * already-encoded sRGB space.
  *
- * ⚠️ 块切片不能靠 `indexOf("/*")` 之类的标记找结尾 —— 块内注释会提前截断切片，
- * 导致暗色 token 静默回落到亮色值，两个主题算出同一个色（踩过）。
+ * ⚠️ Block slicing must not hunt for a terminator via something like `indexOf("/*")` — comments
+ * inside the block truncate the slice early, making dark tokens silently fall back to light
+ * values so both themes compute the same color (hit before).
  */
 const CONTRAST_CSS = readFileSync(join(SRC, "app", "styles", "globals.css"), "utf8");
 
@@ -851,7 +868,7 @@ if (LIGHT_TOKENS.get("background")?.[0] === DARK_TOKENS.get("background")?.[0]) 
   throw new Error("对比度断言：亮/暗 background 相同，说明块切片或别名解析错了");
 }
 
-/** [前景 token, 背景 token, 最低比值, 说明] */
+/** [foreground token, background token, minimum ratio, note] */
 const BOUNDARY_ASSERTIONS = [
   ["input", "card", 3, "文本输入框边界（Input 组件落在 card 上）"],
   ["input", "background", 3, "文本输入框边界（顶栏搜索框落在 background 上）"],
@@ -890,10 +907,12 @@ for (const [themeName, tokens] of [["亮色", LIGHT_TOKENS], ["暗色", DARK_TOK
   }
 }
 
-/* ── 边界 token 的可见性由上面的断言保证；下面两条管「用对了没有」──
- * 静态检查查不到「某个容器其实是文本框的边框」这种语义（GlobalSearch 的搜索框
- * 就是把描边画在包裹它的 <form> 上），所以那类情况只能靠人工走查 —— 这里只做
- * 能精确判定的部分，不为了覆盖率编造误报。
+/* ── The assertions above guarantee the boundary tokens are visible;
+ * the two rules below govern whether they are used correctly ──
+ * A static check cannot see semantics like "this container is really the text field's
+ * border" (GlobalSearch's search box paints its border on the wrapping <form>), so those
+ * cases need a human pass — only the parts that can be judged exactly are checked here,
+ * and no false positives are invented for the sake of coverage.
  */
 
 const REPORT_ONLY = process.argv.includes("--report");

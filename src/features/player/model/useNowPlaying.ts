@@ -19,9 +19,9 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useEffect, useRef } from "react";
 import { clearNowPlaying, setNowPlaying } from "@/shared/api/commands";
 
-/** Emitted by the Rust tray menu when 播放/暂停 is picked. */
+/** Emitted by the Rust tray menu when play/pause is picked. */
 export const TRAY_TOGGLE_PLAY_EVENT = "tray://toggle-play";
-/** Emitted by the Rust tray menu when 静音/取消静音 is picked. */
+/** Emitted by the Rust tray menu when mute/unmute is picked. */
 export const TRAY_TOGGLE_MUTE_EVENT = "tray://toggle-mute";
 
 export interface NowPlayingInfo {

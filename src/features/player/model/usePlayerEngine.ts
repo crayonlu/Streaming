@@ -8,7 +8,6 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { os } from "@/shared/lib/os";
 import { type EngineTarget, planEngineTransition } from "./engineTransition";
 import { INITIAL_RECOVERY_STATE, planHlsRecovery, type RecoveryState } from "./recovery";
 import { planSourceCommit } from "./sourceCommit";
@@ -28,6 +27,13 @@ export interface PlayerController {
   pause(): void;
   seek(time: number): void;
   seekToLiveEdge(): void;
+  /**
+   * User-initiated re-sync to the live edge ("拉流"). Platform-appropriate:
+   * hls.js can seek to its live sync position in place, but an FLV live stream
+   * has no absolute clock to seek against, so the stream is re-requested —
+   * which is what "pulling the stream" means. Never called automatically.
+   */
+  resyncToLive(): void;
   readonly liveLatency: number;
   readonly currentTime: number;
   readonly duration: number;
@@ -83,25 +89,13 @@ function createFlvPlayer(
       enableWorker: true,
       lazyLoad: false,
       autoCleanupSourceBuffer: true,
-      // Live FLV delivery is bursty: measured against a Bilibili CDN route,
-      // chunks arrive 0–30ms apart but pause for ~625–755ms about once every
-      // 1.3s. The chaser seeks forward whenever buffered latency exceeds
-      // maxLatency, and leaves only `minRemain` buffered behind it — so
-      // `minRemain` is the entire stall budget. At 2s, two consecutive pauses
-      // (1.4s) plus continuous consumption empty the buffer, which is the
-      // periodic "watch a while → stutter" loop: chase, starve, stall, chase.
-      // Raise the floor to ~3x the longest measured pause so a burst arriving
-      // late cannot starve playback, while maxLatency still bounds the delay.
-      // Linux WebKitGTK decodes in software, so the buffered latency grows in
-      // erratic steps; the default tight cap makes the chaser yank the
-      // playhead forward every few seconds (visible jitter), so relax it there.
-      ...(isLive
-        ? {
-            liveBufferLatencyChasing: true,
-            liveBufferLatencyMaxLatency: os === "linux" ? 14 : 10,
-            liveBufferLatencyMinRemain: os === "linux" ? 6 : 4,
-          }
-        : {}),
+      // `liveBufferLatencyChasing` is deliberately NOT enabled. mpegts.js's
+      // chaser answers excess latency with a hard `currentTime` seek that
+      // discards the buffer in between — an MSE flush the user sees as a
+      // glitch. With measured bursty CDN delivery it therefore fired on a
+      // loop: chase, starve, stall, chase — the periodic stutter reported on
+      // Douyu. Latency is instead left to drift, and the user re-syncs
+      // manually via resyncToLive() (the Live chip in the progress row).
     },
   );
   player.attachMediaElement(video);
@@ -399,6 +393,46 @@ export function usePlayerEngine({
     };
   }, [isLive, ready, url]);
 
+  // ── Live buffer-gap recovery ───────────────────────────────────────────────
+  // A live FLV stream can carry a timestamp discontinuity, which mpegts.js
+  // surfaces as a hole between two buffered ranges. The playhead then sits in
+  // the hole with data on both sides: `waiting` fired once, readyState stays at
+  // 2, and nothing will ever advance it. Measured on Douyu: frozen at 25s while
+  // the buffer grew to 297s, ranges [0.2, 22] + [39, 296.8]. mpegts.js's own
+  // `_checkAndResumeStuckPlayback` only handles a playhead BEFORE the first
+  // range, so a mid-buffer gap is unrecoverable there.
+  //
+  // Seek to the start of the next range — the minimal action that resumes
+  // playback. This is not the latency chaser's periodic discard: it fires only
+  // when the playhead is wedged in a hole, and it lands at the next decodable
+  // frame rather than at (bufferedEnd - minRemain). `progress` is the trigger
+  // because `timeupdate` stops firing once the playhead is stuck.
+  // `url` re-subscribes on a source switch for the same reason as above.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `url` is a reset trigger, not a value this effect reads
+  useEffect(() => {
+    if (!isLive || !ready) return;
+    const video = videoRef.current;
+    if (!video) return;
+    const recover = () => {
+      const b = video.buffered;
+      if (b.length < 2) return;
+      const t = video.currentTime;
+      for (let i = 0; i < b.length - 1; i++) {
+        const gapEnd = b.start(i + 1);
+        if (t >= b.end(i) && t < gapEnd) {
+          video.currentTime = gapEnd;
+          return;
+        }
+      }
+    };
+    video.addEventListener("progress", recover);
+    video.addEventListener("waiting", recover);
+    return () => {
+      video.removeEventListener("progress", recover);
+      video.removeEventListener("waiting", recover);
+    };
+  }, [isLive, ready, url]);
+
   // ── Controller (stable surface for ControlsOverlay) ────────────────────────
   const getController = useCallback((): PlayerController => {
     const v = videoRef.current;
@@ -421,6 +455,21 @@ export function usePlayerEngine({
         const bufferedEdge = v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0;
         const edge = Number.isFinite(engineEdge) ? Number(engineEdge) : bufferedEdge;
         return Math.max(0, edge - v.currentTime);
+      },
+      resyncToLive: () => {
+        if (!v) return;
+        // hls.js exposes a live sync position that can be seeked to in place.
+        const engineEdge = engineRef.current?.liveSyncPosition;
+        if (Number.isFinite(engineEdge) && (engineEdge as number) > 0) {
+          v.currentTime = engineEdge as number;
+          return;
+        }
+        // FLV has no absolute timeline: "pulling the stream" means requesting
+        // it again, which lands at the CDN's current live edge. Reuses the
+        // in-place reload path, so the element and its bindings survive.
+        const url = targetRef.current?.url;
+        const load = loadSourceRef.current;
+        if (url && load) load(url);
       },
       get currentTime() {
         return v?.currentTime ?? 0;

@@ -36,14 +36,14 @@ describe("live recovery policy", () => {
     expect(liveRecoveryDelayMs(3, -1)).toBe(2000);
   });
 
-  it("nudges the same source on the first stall instead of switching", () => {
+  it("watches the same source on the first stall instead of switching or seeking", () => {
     const { action, next } = planLiveRecovery(
       { kind: "stall" },
       { ...createLiveRecoveryState(), sourceId: "a" },
       context("a"),
       T0,
     );
-    expect(action.kind).toBe("nudge");
+    expect(action.kind).toBe("watch");
     expect(next.failed.size).toBe(0);
     expect(next.stalls).toBe(1);
   });

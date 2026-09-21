@@ -139,7 +139,7 @@ export function PlayerPage() {
   const handleUserPlay = useCallback(() => {
     const query = streamQueryRef.current;
     if (query.isFetching) return;
-    // A recovery (nudge watchdog or backoff refetch) owns the ladder — a user
+    // A recovery (watchdog or backoff refetch) owns the ladder — a user
     // play must not race it with a second request.
     if (recoveryTimerRef.current) return;
     if (streamLifecycle.shouldRefresh()) {
@@ -180,14 +180,14 @@ export function PlayerPage() {
     [applyRecovery],
   );
 
-  // Stable self-reference: the nudge watchdog re-enters the stall path.
+  // Stable self-reference: the stall watchdog re-enters the stall path.
   const stallHandlerRef = useRef<(reason: "error" | "waiting-timeout") => void>(() => undefined);
 
   const handlePlaybackStall = useCallback(
     (reason: "error" | "waiting-timeout") => {
       if (streamQueryRef.current.isFetching) return;
       if (reason === "waiting-timeout") {
-        // A nudge or refetch is already in flight for this incident.
+        // A watchdog or refetch is already in flight for this incident.
         if (recoveryTimerRef.current) return;
       } else if (recoveryTimerRef.current) {
         // Hard error: the source is gone, no point waiting for the watchdog.
@@ -209,10 +209,10 @@ export function PlayerPage() {
       applyRecovery(next);
 
       switch (action.kind) {
-        case "nudge":
-          // Same source, no reload: jump back to the live edge, then give it
-          // one stall window to resume before the next stall retires it.
-          controllerRef.current?.seekToLiveEdge();
+        case "watch":
+          // No engine action — an automatic seek is itself a visible glitch,
+          // and the browser resumes playback once data arrives. Re-arm the
+          // watchdog so a stall that never recovers still escalates.
           recoveryTimerRef.current = setTimeout(() => {
             recoveryTimerRef.current = null;
             stallHandlerRef.current("waiting-timeout");

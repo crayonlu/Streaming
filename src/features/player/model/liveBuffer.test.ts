@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  type LiveRecoveryState,
   liveRecoveryDelayMs,
   MAX_LIVE_RECOVERY_ATTEMPTS,
   planLiveRecovery,
   STALL_RETIRE_THRESHOLD,
-  type LiveRecoveryState,
 } from "./liveRecovery";
 
 /**
@@ -54,7 +54,7 @@ describe("stall recovery still escalates instead of looping", () => {
       { sourceId: "s1", availableCount: 2 },
       10_000,
     );
-    expect(action.kind).toBe("nudge");
+    expect(action.kind).toBe("watch");
   });
 
   it("treats a second stall inside the dedupe window as one incident", () => {

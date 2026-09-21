@@ -10,7 +10,8 @@
  *     player into the "no source" panel.
  *
  * Policy:
- *   - the first stall on a source is answered in place (nudge to the live edge);
+ *   - the first stall on a source is only watched — no engine action, because
+ *     an automatic seek is exactly the visible glitch being avoided;
  *   - a second stall inside the same window, or any hard error, retires it;
  *   - failures are sticky until the user retries / picks a quality, or a
  *     catalogue refetch returns fresh URLs;
@@ -23,13 +24,13 @@ export const MAX_LIVE_RECOVERY_ATTEMPTS = 6;
 export const STALL_RETIRE_THRESHOLD = 2;
 
 /** Stall signals closer together than this are one incident: the engine's
- *  `waiting` timeout and the in-place nudge watchdog can fire together. */
+ *  `waiting` timeout and the stall watchdog can fire together. */
 export const STALL_DEDUPE_MS = 2000;
 
 /** Stalls further apart than this do not accumulate — the count restarts. */
 export const STALL_WINDOW_MS = 30_000;
 
-/** Time an in-place nudge gets to bring playback back before it escalates.
+/** Time a watched stall gets to recover on its own before it escalates.
  *  Mirrors the engine's 10s `waiting` timeout (usePlayerEngine). */
 export const STALL_WATCHDOG_MS = 10_000;
 
@@ -46,8 +47,9 @@ export type LiveRecoveryEvent = { kind: "stall" } | { kind: "hard-error" } | { k
 export type LiveRecoveryAction =
   /** Nothing to do (recovered, deduplicated, or the attempt budget is spent). */
   | { kind: "none" }
-  /** Recover the current source in place: seek back to the live edge. */
-  | { kind: "nudge" }
+  /** Stay on this source and watch it: no engine action, the browser resumes
+   *  playback on its own if data arrives. Escalates via the watchdog timer. */
+  | { kind: "watch" }
   /** Give up on the current source; the caller switches to another one. */
   | { kind: "retire" }
   /** Refresh the catalogue; a successful refetch resets the failure memory. */
@@ -141,7 +143,7 @@ export function planLiveRecovery(
 
   if (!hardError && nextStalls < STALL_RETIRE_THRESHOLD) {
     return {
-      action: { kind: "nudge" },
+      action: { kind: "watch" },
       next: { ...state, sourceId, attempts, stalls: nextStalls, lastStallAt: now },
     };
   }
@@ -190,7 +192,7 @@ function selfCheck() {
     ctx("a", 3),
     now,
   );
-  check(r.action.kind === "nudge", "first stall nudges in place");
+  check(r.action.kind === "watch", "first stall is watched, not seeked");
   check(r.next.failed.size === 0, "first stall retires nothing");
 
   // Second stall inside the same window retires it.

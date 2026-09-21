@@ -1,5 +1,6 @@
 import { Radio } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 
 function fmtTime(secs: number): string {
   if (!Number.isFinite(secs) || secs < 0) return "0:00";
@@ -81,25 +82,26 @@ export function PlayerProgress({ playerRef, isLive, playerReady }: PlayerProgres
   );
 
   if (isLive) {
-    // Only count as "off the live edge" once we are >3s behind. The threshold
-    // is more than a copy switch: seekToLiveEdge() sets currentTime to
-    // buffered.end(last), i.e. the very end of the buffer. Jumping there when
-    // we are only half a second behind means playing flush against the buffer
-    // edge, which rebuffers immediately. So the click is only enabled when we
-    // are genuinely behind.
+    // Always actionable: the player never re-syncs on its own any more (no
+    // latency chaser, no automatic seek), so this chip is the user's way to
+    // pull the stream back to the live edge. On hls.js that is a seek to the
+    // live sync position; on FLV it re-requests the stream, which is what
+    // "拉流" means there — and the controller picks the right one.
+    // `behindLive` only drives the styling and the announced text: it reports
+    // buffered-ahead seconds, which on FLV stays small, so it must not gate
+    // the click.
     const behindLive = liveLatency > 3;
     return (
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => playerRef.current?.seekToLiveEdge?.()}
-          disabled={!behindLive}
+          onClick={() => playerRef.current?.resyncToLive?.()}
           // The label stays "Live" — it does not swap to "back to live" when
           // behind. This chip is a status indicator, and a label that grows and
           // shrinks would shove the adjacent progress bar around. Being behind
           // is conveyed through three channels that do not affect layout: the
-          // disabled state, the cursor, and aria-label / title (screen readers
-          // and hover still announce "behind by Ns").
+          // opacity of the chip, the cursor, and aria-label / title (screen
+          // readers and hover still announce "behind by Ns").
           //
           // ⚠️ cursor-pointer is not decoration: Tailwind v4's preflight sets
           // `cursor: default` on button, so the disabled:cursor-default below
@@ -114,11 +116,16 @@ export function PlayerProgress({ playerRef, isLive, playerReady }: PlayerProgres
           // `button, input { font: inherit }` that collapsed text-xs to the
           // inherited 14px, growing the badge to 29px. Removed since, and
           // guarded by check:tokens' UNLAYERED_FORM_FONT.
-          className="shrink-0 inline-flex h-5 items-center gap-1 rounded-xs bg-live px-2 text-xs leading-none font-semibold tracking-caps text-live-foreground uppercase cursor-pointer disabled:cursor-default"
+          className={cn(
+            "shrink-0 inline-flex h-5 items-center gap-1 rounded-xs bg-live px-2 text-xs leading-none font-semibold tracking-caps text-live-foreground uppercase cursor-pointer disabled:cursor-default",
+            !behindLive && "opacity-40",
+          )}
           aria-label={
-            behindLive ? `落后直播约 ${Math.round(liveLatency)} 秒，点击回到直播` : "直播中"
+            behindLive ? `落后直播约 ${Math.round(liveLatency)} 秒，点击回到直播` : "回到直播"
           }
-          title={behindLive ? "回到直播" : "直播中"}
+          title={
+            behindLive ? `落后约 ${Math.round(liveLatency)} 秒，点击拉流回到直播` : "拉流，回到直播"
+          }
         >
           <Radio size={12} strokeWidth={2.5} />
           Live

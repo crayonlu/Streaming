@@ -342,11 +342,21 @@ ARTIFACT="${TMP_DIR}/$(basename "${ASSET_URL%%\?*}")"
 
 info "Downloading $(basename "$ARTIFACT")"
 note "$ASSET_URL"
-if ! curl -fL --retry 3 --progress-bar -o "$ARTIFACT" "$ASSET_URL"; then
-  die "download failed. Check that the release and asset still exist:
+# curl's own --retry does not cover a failure mid-transfer (curl error 56),
+# which is how GitHub's CDN surfaces a 504 on a release download: the response
+# headers arrive, then the body connection dies. So retry the whole download
+# here, discarding the partial file each time.
+download_ok=""
+for attempt in 1 2 3 4; do
+  rm -f "$ARTIFACT"
+  if curl -fL --retry 3 --progress-bar -o "$ARTIFACT" "$ASSET_URL" && [ -s "$ARTIFACT" ]; then
+    download_ok=1
+    break
+  fi
+  [ "$attempt" -lt 4 ] && warn "download attempt $attempt failed, retrying..." && sleep $((attempt * 2))
+done
+[ -n "$download_ok" ] || die "download failed. Check that the release and asset still exist:
        $ASSET_URL"
-fi
-[ -s "$ARTIFACT" ] || die "downloaded file is empty"
 
 # ------------------------------------------------------------- macos path ----
 

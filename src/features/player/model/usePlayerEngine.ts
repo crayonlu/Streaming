@@ -240,10 +240,7 @@ export function usePlayerEngine({
           const hls = new Hls({
             enableWorker: true,
             lowLatencyMode: false,
-            // Distance from the live edge, in segments. hls.js's floor is 3;
-            // live is raised to 4 so a late segment (measured pauses of
-            // 625–755ms on Bilibili CDN routes) cannot starve the buffer.
-            liveSyncDurationCount: isLive ? 4 : 3,
+            liveSyncDurationCount: 3,
             // Cap retained playback history — without this the back buffer
             // grows unbounded on long live sessions and playback stutters.
             backBufferLength: isLive ? 30 : Infinity,

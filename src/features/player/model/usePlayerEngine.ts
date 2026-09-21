@@ -83,20 +83,23 @@ function createFlvPlayer(
       enableWorker: true,
       lazyLoad: false,
       autoCleanupSourceBuffer: true,
-      // Live FLV delivery is bursty (e.g. Bilibili CDN pushes a burst
-      // every ~1.3s with 1s+ gaps — measured). Keep the stash enabled
-      // to smooth the bursts, and chase the live edge only when the
-      // buffered latency exceeds a cap, so delay stays bounded
-      // without draining the buffer into repeated stalls.
-      // Linux WebKitGTK decodes in software, so the buffered latency
-      // grows in erratic steps; the default tight cap makes the chaser
-      // yank the playhead forward every few seconds (visible jitter),
-      // so relax it there.
+      // Live FLV delivery is bursty: measured against a Bilibili CDN route,
+      // chunks arrive 0–30ms apart but pause for ~625–755ms about once every
+      // 1.3s. The chaser seeks forward whenever buffered latency exceeds
+      // maxLatency, and leaves only `minRemain` buffered behind it — so
+      // `minRemain` is the entire stall budget. At 2s, two consecutive pauses
+      // (1.4s) plus continuous consumption empty the buffer, which is the
+      // periodic "watch a while → stutter" loop: chase, starve, stall, chase.
+      // Raise the floor to ~3x the longest measured pause so a burst arriving
+      // late cannot starve playback, while maxLatency still bounds the delay.
+      // Linux WebKitGTK decodes in software, so the buffered latency grows in
+      // erratic steps; the default tight cap makes the chaser yank the
+      // playhead forward every few seconds (visible jitter), so relax it there.
       ...(isLive
         ? {
             liveBufferLatencyChasing: true,
-            liveBufferLatencyMaxLatency: os === "linux" ? 10 : 6,
-            liveBufferLatencyMinRemain: os === "linux" ? 4 : 2,
+            liveBufferLatencyMaxLatency: os === "linux" ? 14 : 10,
+            liveBufferLatencyMinRemain: os === "linux" ? 6 : 4,
           }
         : {}),
     },
@@ -237,7 +240,10 @@ export function usePlayerEngine({
           const hls = new Hls({
             enableWorker: true,
             lowLatencyMode: false,
-            liveSyncDurationCount: 3,
+            // Distance from the live edge, in segments. hls.js's floor is 3;
+            // live is raised to 4 so a late segment (measured pauses of
+            // 625–755ms on Bilibili CDN routes) cannot starve the buffer.
+            liveSyncDurationCount: isLive ? 4 : 3,
             // Cap retained playback history — without this the back buffer
             // grows unbounded on long live sessions and playback stutters.
             backBufferLength: isLive ? 30 : Infinity,

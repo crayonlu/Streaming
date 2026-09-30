@@ -4,23 +4,27 @@
 
 <h1 align="center">Streaming</h1>
 
-<p align="center">跨平台直播桌面客户端</p>
+<p align="center">A cross-platform desktop client for live-streaming sites</p>
+
+<p align="center">
+  <a href="README.zh-CN.md">简体中文</a>
+</p>
 
 <p align="center">
   <img src="assets/demo.png" alt="Streaming" width="100%" />
 </p>
 
-## 功能
+## Features
 
-- **多平台直播** -- B站、斗鱼、虎牙
-- **直播回放** -- 斗鱼全量录像
-- **智能线路** -- 多 CDN 自动择优，画质自由切换
-- **收藏同步** -- 跨平台关注列表统一管理
-- **轻量高效** -- 极低资源占用，极小包体
+- **Three platforms in one place** — Bilibili, Douyu, Huya
+- **Live replays** — every recording Douyu keeps
+- **Smart stream selection** — picks the best of several CDNs, and switches quality on the fly
+- **One follow list** — your followed rooms across all three platforms, in a single list
+- **Small and light** — low resource use and a small download
 
-## 安装
+## Install
 
-### 一键安装 / 更新（推荐）
+### One command (recommended)
 
 **macOS / Linux**
 
@@ -28,79 +32,86 @@
 curl -fsSL https://raw.githubusercontent.com/crayonlu/Streaming/main/scripts/install.sh | bash
 ```
 
-**Windows（PowerShell）**
+**Windows (PowerShell)**
 
 ```powershell
 irm https://raw.githubusercontent.com/crayonlu/Streaming/main/scripts/install.ps1 | iex
 ```
 
-脚本会自动识别系统与架构，从 GitHub Releases 下载对应安装包并装好。**重复执行同一条命令就是更新**，不需要先卸载旧版本。
+The script detects your system and architecture, downloads the matching package from GitHub Releases and installs it. **Running the same command again updates the app** — there is no need to uninstall the old version first.
 
-常用参数：
+Common options:
 
 ```bash
-bash install.sh --check        # 只检查有没有新版本，不安装
-bash install.sh --print-url    # 只打印当前平台的下载直链
-bash install.sh -v v0.6.0      # 安装指定版本
-bash install.sh --force        # 版本相同也强制重装
-bash install.sh -h             # 查看全部参数
+bash install.sh --check        # only check for a newer version
+bash install.sh --print-url    # only print the download URL for this platform
+bash install.sh -v v0.6.0      # install a specific version
+bash install.sh --force        # reinstall even if the version is the same
+bash install.sh -h             # all options
 ```
 
-| 参数 | 说明 |
+| Option | Meaning |
 | --- | --- |
-| `-v, --version <ver>` | 安装指定版本，如 `v0.6.0` 或 `0.6.0`。默认最新版 |
-| `-d, --dir <path>` | 安装目录。macOS 默认 `/Applications`（不可写时回退到 `~/Applications`）；Linux 默认 `~/.local/bin` |
-| `--deb` / `--rpm` | 仅 Linux：改装 `.deb` / `.rpm` 包（需要 sudo）。默认用 AppImage，免 sudo |
-| `--check` | 只检查更新，不安装 |
-| `--print-url` | 只打印下载直链，不安装 |
-| `--force` | 版本相同也重装 |
-| `--no-quarantine` | 仅 macOS：不自动清除 Gatekeeper 隔离属性（不推荐） |
-| `-y, --yes` | 跳过确认 |
+| `-v, --version <ver>` | Install a specific version, e.g. `v0.6.0` or `0.6.0`. Defaults to the latest |
+| `-d, --dir <path>` | Install directory. macOS defaults to `/Applications` (falls back to `~/Applications` when it is not writable); Linux defaults to `~/.local/bin` |
+| `--deb` / `--rpm` | Linux only: install the `.deb` / `.rpm` package instead (needs sudo). The AppImage is the default because it needs no sudo |
+| `--check` | Only check for updates |
+| `--print-url` | Only print the download URL |
+| `--force` | Reinstall even if the version is the same |
+| `--no-quarantine` | macOS only: do not clear the Gatekeeper quarantine flag (not recommended) |
+| `-y, --yes` | Skip the confirmation prompt |
 
-环境变量：`GITHUB_TOKEN`（提高 GitHub API 速率限制）、`STREAMING_REPO`（覆盖仓库地址）、`NO_COLOR`（关闭彩色输出）。
+Environment variables: `GITHUB_TOKEN` (raises the GitHub API rate limit), `STREAMING_REPO` (override the repository), `NO_COLOR` (disable coloured output).
 
-从本仓库克隆后也可以直接跑：`bash scripts/install.sh`。
+After cloning this repository you can also run it directly: `bash scripts/install.sh`.
 
-### 手动下载
+### Manual download
 
-到 [Releases](https://github.com/crayonlu/Streaming/releases) 选对应文件：
+Pick the file for your platform on the [Releases](https://github.com/crayonlu/Streaming/releases) page:
 
-| 平台 | 文件 |
+| Platform | File |
 | --- | --- |
-| macOS（Apple Silicon） | `streaming_<版本>_aarch64.dmg` |
-| Windows（x64） | `streaming_<版本>_x64-setup.exe` / `streaming_<版本>_x64_en-US.msi` |
-| Linux（x64） | `streaming_<版本>_amd64.AppImage` / `.deb` / `.rpm` |
+| macOS (Apple Silicon) | `streaming_<version>_aarch64.dmg` |
+| Windows (x64) | `streaming_<version>_x64-setup.exe` / `streaming_<version>_x64_en-US.msi` |
+| Linux (x64) | `streaming_<version>_amd64.AppImage` / `.deb` / `.rpm` |
 
-> 目前只发布 Apple Silicon 的 macOS 构建，以及 x64 的 Windows / Linux 构建。Intel Mac 和 Linux arm64 需要自行编译：`pnpm tauri build`。
+> Only Apple Silicon macOS builds and x64 Windows / Linux builds are published. Intel Macs and Linux arm64 need a local build: `pnpm tauri build`.
 
-想拿直链用 `--print-url` 最省事：
+The easiest way to get a direct link is `--print-url`:
 
 ```bash
 bash install.sh --print-url
 # https://github.com/crayonlu/Streaming/releases/download/v0.6.0/streaming_0.6.0_aarch64.dmg
 ```
 
-文件名里带版本号，所以 `releases/latest/download/<文件名>` 这种固定写法没法跨版本使用 —— 脚本会先解析最新 tag，再拼出对应的直链。
+File names carry the version, so `releases/latest/download/<file>` cannot work across versions — the script resolves the latest tag first and then builds the matching URL.
 
-### macOS 首次打开被拦截？
+### macOS blocks the first launch?
 
-Release 里的构建**没有做代码签名和公证（notarization）**，所以从浏览器下载的 `.dmg` 会带上隔离属性，双击时 macOS 可能提示「已损坏」或「无法验证开发者」。
+The release builds are **neither code-signed nor notarised**, so a `.dmg` downloaded through a browser carries the quarantine flag and macOS may report it as "damaged" or from an "unidentified developer".
 
-安装脚本已经处理了这一点：它用 `curl` 直接下载（不产生隔离属性），安装后还会再清一遍隔离标记。如果仍然被拦截，手动清掉再打开：
+The install script handles this: it downloads with `curl` (which sets no quarantine flag) and clears the flag again after installing. If macOS still blocks it, clear the flag manually and open the app:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/streaming.app
 ```
 
-> 如果之前已经点过一次并被拦下，macOS 会记住这个路径的拒绝结果，只清属性可能仍然打不开。换个目录重装即可：
+> If you already tried to open it once and macOS refused, it remembers that decision for that path, so clearing the flag alone may not be enough. Install it somewhere else:
 > `bash install.sh --dir ~/Applications`
+
+## Development
+
+```bash
+pnpm install
+pnpm tauri dev
+```
+
+The interface is available in English and Simplified Chinese. It follows the system language and falls back to English outside a Chinese locale; the language can also be chosen under Settings → Appearance.
 
 ## License
 
 [MIT](LICENSE)
 
-## 致谢
+## Credits
 
-菜单栏托盘图标取自 [Lucide](https://lucide.dev) 的 `radio-tower`（ISC License，Copyright © Lucide Icons and Contributors），
-源文件为 `src-tauri/icons/tray-icon.svg`，由 `src-tauri/icons/gen_tray_icon.py` 生成 template image 形式的 PNG。
-完整许可文本见该脚本头部。
+The menu-bar tray icon is `radio-tower` from [Lucide](https://lucide.dev) (ISC License, Copyright © Lucide Icons and Contributors). The source file is `src-tauri/icons/tray-icon.svg`, and `src-tauri/icons/gen_tray_icon.py` turns it into the template-image PNG. The full licence text is in the header of that script.

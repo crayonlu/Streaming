@@ -61,10 +61,11 @@ jobs:
           cache-all-crates: true
           cache-on-failure: true
 
-      - name: Update Cargo index
-        working-directory: src-tauri
-        run: cargo update
-
+      # No `cargo update` here: `tauri build` refuses to run when the Rust
+      # crates and the @tauri-apps packages in package.json are not on the same
+      # minor, and Cargo.lock pins exactly the matching versions. Updating the
+      # index pulls newer minors and fails the build the moment Tauri releases
+      # one — which is what broke the first v0.9.1 attempt.
       - name: Install Linux build dependencies (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'
         run: |

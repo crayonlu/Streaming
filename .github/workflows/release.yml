@@ -85,6 +85,27 @@ jobs:
       - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile
 
+      # tauri-bundler writes its AppRun binary into the tools cache with mode
+      # 0770 (crates/tauri-bundler/.../appimage/mod.rs, `write_and_make_executable`),
+      # copies it into the AppDir, and linuxdeploy then renames it to
+      # AppRun.wrapped without touching its mode. Mounted through FUSE the owner
+      # is remapped to the caller, so the AppImage still starts; anything that
+      # *extracts* it instead (firejail, --appimage-extract-and-run, systems
+      # without FUSE) keeps root:root 0770 and dies with
+      # "AppRun.wrapped: Permission denied".
+      #
+      # Tauri only downloads the file when it is missing, so seeding the cache
+      # with a world-executable copy is enough to fix the artifact. The URL and
+      # file name are the ones tauri-bundler itself uses; the check below fails
+      # the job if this ever stops having the intended effect.
+      - name: Make Tauri's cached AppRun world-executable
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          mkdir -p "$HOME/.cache/tauri"
+          curl -fsSL -o "$HOME/.cache/tauri/AppRun-x86_64" \
+            https://github.com/tauri-apps/binary-releases/releases/download/apprun-old/AppRun-x86_64
+          chmod 755 "$HOME/.cache/tauri/AppRun-x86_64"
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -97,3 +118,21 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+      # Extraction keeps the ownership and modes stored in the SquashFS, which
+      # is what firejail (and therefore the AppImageHub test) does. Assert that
+      # an unprivileged user could start the app that way.
+      - name: Check that the AppImage runs when extracted
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          APPIMAGE="$PWD/$(find src-tauri/target -name '*.AppImage' -path '*bundle*' | head -n 1)"
+          echo "Checking $APPIMAGE"
+          chmod +x "$APPIMAGE"
+          WORK=$(mktemp -d)
+          cd "$WORK"
+          "$APPIMAGE" --appimage-extract > /dev/null
+          stat -c '%A %a %U:%G %n' squashfs-root/AppRun squashfs-root/AppRun.wrapped
+          if [ ! -x squashfs-root/AppRun.wrapped ] ; then
+            echo "::error::AppRun.wrapped is not executable; an extracted AppImage cannot start"
+            exit 1
+          fi

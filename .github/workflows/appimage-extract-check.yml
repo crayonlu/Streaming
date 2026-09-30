@@ -71,21 +71,28 @@ jobs:
           chmod +x "$APPIMAGE"
           WORK=$(mktemp -d)
           cd "$WORK"
-          # firejail runs as root (it is setuid) and therefore keeps the stored
-          # ownership, which is what makes a 0770 AppRun.wrapped unusable for
-          # the unprivileged user the app is then started as.
+          # firejail runs as root (it is setuid), so the extracted tree keeps
+          # the ownership and modes stored in the SquashFS. The app is then
+          # started as an unprivileged user, which is what makes a 0770
+          # AppRun.wrapped unusable.
           sudo "$APPIMAGE" --appimage-extract > /dev/null
-          stat -c '%A %a %U:%G %n' squashfs-root/AppRun squashfs-root/AppRun.wrapped
-          test -x squashfs-root/AppRun.wrapped || {
-            echo "::error::AppRun.wrapped is not executable for this user"
-            exit 1
-          }
+          MODE=$(sudo stat -c '%a' squashfs-root/AppRun.wrapped)
+          sudo stat -c '%A %a %U:%G %n' squashfs-root/AppRun squashfs-root/AppRun.wrapped
+          echo "AppRun.wrapped mode: $MODE"
+          case "$MODE" in
+            *[1357]) ;;
+            *) echo "::error::AppRun.wrapped is $MODE, so users other than the owner cannot execute it"; exit 1 ;;
+          esac
           echo "$WORK" > /tmp/appdir-path
 
       - name: Start the extracted AppImage under Xvfb without network
         run: |
           sudo apt-get install -y xvfb icewm x11-utils
-          cd "$(cat /tmp/appdir-path)"
+          # Extract again as this user so the app can be started from the tree.
+          APPIMAGE="$PWD/$(find src-tauri/target -name '*.AppImage' -path '*bundle*' | head -n 1)"
+          WORK=$(mktemp -d)
+          cd "$WORK"
+          "$APPIMAGE" --appimage-extract > /dev/null
           export DISPLAY=:99
           Xvfb :99 -screen 0 800x600x24 > /dev/null 2>&1 &
           sleep 2

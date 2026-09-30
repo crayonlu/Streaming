@@ -120,8 +120,9 @@ jobs:
           args: ${{ matrix.args }}
 
       # Extraction keeps the ownership and modes stored in the SquashFS, which
-      # is what firejail (and therefore the AppImageHub test) does. Assert that
-      # an unprivileged user could start the app that way.
+      # is what firejail (and therefore the AppImageHub test) does. The app is
+      # then started as an unprivileged user, so AppRun.wrapped must be
+      # executable by users other than its owner.
       - name: Check that the AppImage runs when extracted
         if: matrix.platform == 'ubuntu-22.04'
         run: |
@@ -130,9 +131,10 @@ jobs:
           chmod +x "$APPIMAGE"
           WORK=$(mktemp -d)
           cd "$WORK"
-          "$APPIMAGE" --appimage-extract > /dev/null
-          stat -c '%A %a %U:%G %n' squashfs-root/AppRun squashfs-root/AppRun.wrapped
-          if [ ! -x squashfs-root/AppRun.wrapped ] ; then
-            echo "::error::AppRun.wrapped is not executable; an extracted AppImage cannot start"
-            exit 1
-          fi
+          sudo "$APPIMAGE" --appimage-extract > /dev/null
+          MODE=$(sudo stat -c '%a' squashfs-root/AppRun.wrapped)
+          sudo stat -c '%A %a %U:%G %n' squashfs-root/AppRun squashfs-root/AppRun.wrapped
+          case "$MODE" in
+            *[1357]) ;;
+            *) echo "::error::AppRun.wrapped is $MODE, so users other than the owner cannot execute it"; exit 1 ;;
+          esac

@@ -8,6 +8,7 @@
 import { Loader2, Maximize2, Minimize2, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { createContext, useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { useStrings } from "@/shared/i18n";
 import { useFullscreen } from "../model/useFullscreen";
 import { PlayerProgress } from "./PlayerProgress";
 import { QualityButton } from "./QualityButton";
@@ -69,6 +70,7 @@ export function ControlsOverlay({
   onUserPause,
   controlsEndSlot,
 }: ControlsOverlayProps) {
+  const s = useStrings();
   const [vol, setVol] = useState(readVol);
   const [muted, setMuted] = useState(false);
   // playing state is driven by <video> events (playing/pause/waiting/ended).
@@ -349,8 +351,10 @@ export function ControlsOverlay({
                   type="button"
                   onClick={togglePlay}
                   className="ctrl-btn"
-                  aria-label={buffering ? "暂停，正在缓冲" : playing ? "暂停" : "播放"}
-                  title={`${buffering ? "正在缓冲，点击暂停" : playing ? "暂停" : "播放"}（空格）`}
+                  aria-label={
+                    buffering ? s.player.pauseBuffering : playing ? s.player.pause : s.player.play
+                  }
+                  title={`${buffering ? s.player.bufferingPause : playing ? s.player.pause : s.player.play}${s.player.keySpace}`}
                 >
                   {buffering ? (
                     <Loader2 size={16} strokeWidth={1.9} className="animate-spin" />
@@ -364,8 +368,8 @@ export function ControlsOverlay({
                   type="button"
                   onClick={toggleMute}
                   className="ctrl-btn"
-                  aria-label={muted ? "取消静音" : "静音"}
-                  title={`${muted ? "取消静音" : "静音"}（M）`}
+                  aria-label={muted ? s.player.unmute : s.player.mute}
+                  title={`${muted ? s.player.unmute : s.player.mute}${s.player.keyMute}`}
                 >
                   {effectiveVol === 0 ? (
                     <VolumeX size={16} strokeWidth={1.8} />
@@ -380,7 +384,7 @@ export function ControlsOverlay({
                   step={0.025}
                   value={effectiveVol}
                   onChange={handleVolume}
-                  aria-label="音量"
+                  aria-label={s.player.volume}
                   aria-valuenow={Math.round(effectiveVol * 100)}
                   aria-valuemin={0}
                   aria-valuemax={100}
@@ -405,8 +409,8 @@ export function ControlsOverlay({
                   type="button"
                   onClick={toggleFullscreen}
                   className="ctrl-btn"
-                  aria-label={isFs ? "退出全屏" : "全屏"}
-                  title={`${isFs ? "退出全屏" : "全屏"}（F）`}
+                  aria-label={isFs ? s.player.exitFullscreen : s.player.fullscreen}
+                  title={`${isFs ? s.player.exitFullscreen : s.player.fullscreen}${s.player.keyFullscreen}`}
                 >
                   {isFs ? (
                     <Minimize2 size={16} strokeWidth={1.8} />

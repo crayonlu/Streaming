@@ -10,6 +10,7 @@ import { AlertCircle, Loader2, WifiOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { os } from "@/shared/lib/os";
 import "@/app/styles/player.css";
+import { useStrings } from "@/shared/i18n";
 import { detectHevcSupport } from "@/shared/lib/hevc";
 import { type NowPlayingInfo, useNowPlaying } from "../model/useNowPlaying";
 import { useOnlineStatus } from "../model/useOnlineStatus";
@@ -80,6 +81,7 @@ export function VideoPlayer({
   recoveryHint,
   nowPlaying,
 }: VideoPlayerProps) {
+  const s = useStrings();
   const { videoRef, controller, ready, error, codecUnsupported } = usePlayerEngine({
     url: streamUrl,
     format,
@@ -161,7 +163,7 @@ export function VideoPlayer({
   return (
     <section
       ref={stageRef as React.RefObject<HTMLElement | null>}
-      aria-label="视频播放器"
+      aria-label={s.player.videoPlayer}
       // biome-ignore lint/a11y/noNoninteractiveTabindex: player container needs focus for keyboard shortcuts
       tabIndex={0}
       className="player-stage relative overflow-hidden w-full h-full focus:outline-none"
@@ -201,7 +203,7 @@ export function VideoPlayer({
       {!online && streamUrl && (
         <div className="absolute inset-0 z-stage-msg pointer-events-none flex flex-col items-center justify-center gap-2 bg-stage-scrim backdrop-blur-sm">
           <WifiOff size={28} strokeWidth={1.6} className="text-stage-fg-3" />
-          <span className="text-sm text-stage-fg-2">网络已断开 · 等待重连</span>
+          <span className="text-sm text-stage-fg-2">{s.player.networkLost}</span>
         </div>
       )}
 
@@ -216,11 +218,9 @@ export function VideoPlayer({
       {online && codecUnsupported && streamUrl && (
         <div className="absolute inset-0 z-stage-msg pointer-events-none flex flex-col items-center justify-center gap-2 bg-stage-scrim backdrop-blur-sm">
           <AlertCircle size={28} strokeWidth={1.6} className="text-stage-fg-3" />
-          <span className="text-sm text-stage-fg-2">当前系统缺少视频解码器，无法播放</span>
+          <span className="text-sm text-stage-fg-2">{s.player.noDecoder}</span>
           <span className="text-xs text-stage-fg-4">
-            {os === "linux"
-              ? "请安装 gstreamer1.0-libav、gstreamer1.0-plugins-bad 后重启应用"
-              : "请检查系统或 WebView 的解码组件安装情况"}
+            {os === "linux" ? s.player.noDecoderLinux : s.player.noDecoderOther}
           </span>
         </div>
       )}
@@ -229,13 +229,9 @@ export function VideoPlayer({
       {online && error && !codecUnsupported && streamUrl && (
         <div className="absolute inset-0 z-stage-msg pointer-events-none flex flex-col items-center justify-center gap-2 bg-stage-scrim backdrop-blur-sm">
           <AlertCircle size={28} strokeWidth={1.6} className="text-stage-fg-3" />
-          <span className="text-sm text-stage-fg-2">
-            {recoveryHint ?? "播放失败 · 正在尝试恢复"}
-          </span>
+          <span className="text-sm text-stage-fg-2">{recoveryHint ?? s.player.recovering}</span>
           {detectHevcSupport() === "none" && (
-            <span className="text-xs text-stage-fg-4">
-              当前系统可能缺少 HEVC 解码支持（Windows 请安装「HEVC 视频扩展」）
-            </span>
+            <span className="text-xs text-stage-fg-4">{s.player.hevcHint}</span>
           )}
         </div>
       )}

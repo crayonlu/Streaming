@@ -25,6 +25,7 @@ import {
   getRoomDetail,
   loadPreferences,
 } from "@/shared/api/commands";
+import { useStrings } from "@/shared/i18n";
 import { fmtDuration } from "@/shared/lib/dom";
 import { isPlatform } from "@/shared/lib/platform";
 import type { PlatformId, ReplayItem, ReplayQuality } from "@/shared/types/domain";
@@ -33,6 +34,7 @@ import { ReplayList } from "./ReplayList";
 // ── ReplayPage ────────────────────────────────────────────────────────────────
 
 export function ReplayPage() {
+  const s = useStrings();
   const params = useParams();
   const navigate = useNavigate();
   const platform = params.platform;
@@ -187,7 +189,7 @@ export function ReplayPage() {
   if (!isPlatform(platform) || !roomId) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-        无效的回放链接
+        {s.route.invalidReplayLink}
       </div>
     );
   }
@@ -201,8 +203,8 @@ export function ReplayPage() {
           size="icon-sm"
           onClick={() => navigate(-1)}
           className="-ml-1 shrink-0"
-          aria-label="返回"
-          title="返回"
+          aria-label={s.common.back}
+          title={s.common.back}
         >
           <ArrowLeft size={16} />
         </Button>
@@ -215,7 +217,9 @@ export function ReplayPage() {
           ) : (
             <span className="truncate text-sm font-medium">
               {room?.streamerName ?? roomId}
-              <span className="ml-2 text-xs font-normal text-muted-foreground">的直播录像</span>
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                {s.replay.ofStreamer}
+              </span>
             </span>
           )}
         </div>
@@ -229,9 +233,9 @@ export function ReplayPage() {
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label={listOpen ? "隐藏回放列表" : "显示回放列表"}
+          aria-label={listOpen ? s.replay.hideList : s.replay.showList}
           aria-pressed={listOpen}
-          title={listOpen ? "隐藏回放列表" : "显示回放列表"}
+          title={listOpen ? s.replay.hideList : s.replay.showList}
           onClick={() => setListOpen((open) => !open)}
         >
           <ListVideo size={14} />
@@ -269,7 +273,7 @@ export function ReplayPage() {
                 {urlLoading ? (
                   <>
                     <div className="h-6 w-6 animate-spin rounded-full border-2 border-stage-border border-t-stage-fg-2" />
-                    <span className="text-xs text-stage-fg-3">加载回放地址…</span>
+                    <span className="text-xs text-stage-fg-3">{s.replay.loadingUrl}</span>
                   </>
                 ) : urlError ? (
                   <>
@@ -280,23 +284,25 @@ export function ReplayPage() {
                         onClick={() => handlePlay(activeItem)}
                         className="rounded-xs border border-stage-border px-3 py-2 text-xs text-stage-fg-3 hover:text-stage-fg-1 transition-colors"
                       >
-                        重试
+                        {s.common.retry}
                       </button>
                     )}
                   </>
                 ) : (
                   <>
                     <Film size={48} strokeWidth={1.2} className="text-stage-fg-4" />
-                    <p className="text-sm text-stage-fg-4">从右侧选择一段录播开始播放</p>
+                    <p className="text-sm text-stage-fg-4">{s.replay.pickOne}</p>
                   </>
                 )}
               </div>
             )}
             {ended && streamUrl && (
               <div className="absolute inset-0 z-stage-msg flex flex-col items-center justify-center gap-3 bg-stage-scrim backdrop-blur-sm">
-                <span className="text-xs uppercase tracking-caps text-stage-fg-3">已播完</span>
+                <span className="text-xs uppercase tracking-caps text-stage-fg-3">
+                  {s.replay.finished}
+                </span>
                 <span className="text-base font-medium text-stage-fg-1">
-                  {nextPart ? "已暂停自动连播" : "最后一段"}
+                  {nextPart ? s.replay.autoPlayPaused : s.replay.lastPart}
                 </span>
                 {activeItem && (
                   <button
@@ -305,7 +311,7 @@ export function ReplayPage() {
                     className="flex items-center gap-2 rounded-full border border-stage-border bg-stage-surface px-4 py-2 text-xs font-medium text-stage-fg-1 transition-colors hover:bg-stage-hover"
                   >
                     <RotateCcw size={12} strokeWidth={2} />
-                    重播
+                    {s.replay.restart}
                   </button>
                 )}
               </div>
@@ -337,7 +343,7 @@ export function ReplayPage() {
           <aside className="flex w-[min(24rem,40vw)] shrink-0 flex-col border-l border-border bg-card">
             {/* Sidebar header */}
             <div className="shrink-0 border-b border-border-faint px-3 py-3 flex items-center justify-between">
-              <span className="text-xs font-semibold">直播录像</span>
+              <span className="text-xs font-semibold">{s.replay.title}</span>
               {roomQuery.data && (
                 <span className="text-xs text-muted-foreground">{roomQuery.data.streamerName}</span>
               )}

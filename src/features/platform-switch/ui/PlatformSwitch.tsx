@@ -1,13 +1,10 @@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { loadPreferences, savePreferences } from "@/shared/api/commands";
+import { platformLabel } from "@/shared/lib/platform";
 import type { PlatformId } from "@/shared/types/domain";
 import { usePlatformStore } from "../model/usePlatformStore";
 
-const OPTIONS: { value: PlatformId; label: string }[] = [
-  { value: "bilibili", label: "Bilibili" },
-  { value: "douyu", label: "斗鱼" },
-  { value: "huya", label: "虎牙" },
-];
+const OPTIONS: PlatformId[] = ["bilibili", "douyu", "huya"];
 
 export function PlatformSwitch() {
   const currentPlatform = usePlatformStore((s) => s.currentPlatform);
@@ -39,9 +36,9 @@ export function PlatformSwitch() {
         if (v) void onSwitch(v as PlatformId);
       }}
     >
-      {OPTIONS.map((opt) => (
-        <ToggleGroupItem key={opt.value} value={opt.value} className="text-xs h-7 px-3">
-          {opt.label}
+      {OPTIONS.map((value) => (
+        <ToggleGroupItem key={value} value={value} className="text-xs h-7 px-3">
+          {platformLabel(value)}
         </ToggleGroupItem>
       ))}
     </ToggleGroup>

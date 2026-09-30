@@ -2,6 +2,7 @@ import { Heart, RefreshCw } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useFollowStore } from "@/features/follows/model/useFollowStore";
 import { RoomCard } from "@/features/room-card/ui/RoomCard";
+import { useStrings } from "@/shared/i18n";
 import { CardSkeleton } from "@/shared/ui/CardSkeleton";
 import { EmptyState } from "@/shared/ui/EmptyState";
 import { StatusView } from "@/shared/ui/StatusView";
@@ -9,6 +10,7 @@ import { StatusView } from "@/shared/ui/StatusView";
 const FOLLOW_SKELETON_KEYS = Array.from({ length: 8 }, (_, i) => `follow-skeleton-${i}`);
 
 export function FollowsPage() {
+  const s = useStrings();
   const follows = useFollowStore((s) => s.follows);
   const liveStatusMap = useFollowStore((s) => s.liveStatusMap);
   const isLoading = useFollowStore((s) => s.isLoading);
@@ -40,7 +42,7 @@ export function FollowsPage() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Heart size={16} strokeWidth={1.8} className="text-muted-foreground" />
-          <h1 className="text-base font-semibold tracking-tight">关注</h1>
+          <h1 className="text-base font-semibold tracking-tight">{s.follows.title}</h1>
         </div>
         {follows.length > 0 && (
           <button
@@ -48,8 +50,8 @@ export function FollowsPage() {
             onClick={() => void refreshLiveStatus()}
             disabled={isRefreshingStatus}
             className="inline-flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted-hover hover:text-foreground disabled:pointer-events-none disabled:opacity-60"
-            aria-label="刷新直播状态"
-            title="刷新直播状态"
+            aria-label={s.common.refreshLiveStatus}
+            title={s.common.refreshLiveStatus}
           >
             <RefreshCw size={14} className={isRefreshingStatus ? "animate-spin" : undefined} />
           </button>
@@ -64,17 +66,21 @@ export function FollowsPage() {
         </div>
       ) : error && !follows.length ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 py-16">
-          <StatusView title="加载失败" tone="error" />
+          <StatusView title={s.common.loadFailed} tone="error" />
           <button
             type="button"
             onClick={() => loadFollows()}
             className="text-xs text-primary hover:underline cursor-pointer"
           >
-            点击重试
+            {s.common.clickToRetry}
           </button>
         </div>
       ) : !follows.length ? (
-        <EmptyState title="暂无关注" description="在发现或搜索页点击 ♥" icon={Heart} />
+        <EmptyState
+          title={s.follows.emptyTitle}
+          description={s.follows.emptyDescription}
+          icon={Heart}
+        />
       ) : (
         <ul className="cards-grid">
           {sorted.map((follow) => (

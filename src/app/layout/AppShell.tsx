@@ -20,6 +20,7 @@ import { usePlatformStore } from "@/features/platform-switch/model/usePlatformSt
 import { type ThemeMode, useThemeStore } from "@/features/theme/model/useThemeStore";
 import { cn } from "@/lib/utils";
 import { loadPreferences, savePreferences } from "@/shared/api/commands";
+import { type Dict, useI18nStore, useStrings } from "@/shared/i18n";
 import { isMac } from "@/shared/lib/os";
 import type { PlatformId } from "@/shared/types/domain";
 import appIcon from "../../../assets/app-icon.png";
@@ -27,6 +28,7 @@ import appIcon from "../../../assets/app-icon.png";
 // ── Window controls ───────────────────────────────────────────────────────────
 
 function WindowControls() {
+  const s = useStrings();
   const [fullscreen, setFullscreenState] = useState(false);
 
   useEffect(() => {
@@ -80,7 +82,7 @@ function WindowControls() {
       <button
         type="button"
         onClick={minimize}
-        aria-label="最小化"
+        aria-label={s.window.minimize}
         className="flex border-0 h-full w-11 items-center p-2 rounded-none justify-center text-muted-foreground transition-colors duration-150 hover:bg-surface-hover hover:text-foreground active:bg-surface-active"
       >
         <Minus size={12} strokeWidth={1.8} />
@@ -90,7 +92,7 @@ function WindowControls() {
       <button
         type="button"
         onClick={toggleFullscreen}
-        aria-label={fullscreen ? "退出全屏" : "全屏"}
+        aria-label={fullscreen ? s.window.exitFullscreen : s.window.fullscreen}
         className="flex border-0 h-full w-11 items-center p-2 rounded-none justify-center text-muted-foreground transition-colors duration-150 hover:bg-surface-hover hover:text-foreground active:bg-surface-active"
       >
         {fullscreen ? (
@@ -104,7 +106,7 @@ function WindowControls() {
       <button
         type="button"
         onClick={close}
-        aria-label="关闭"
+        aria-label={s.window.close}
         className={cn(
           "flex h-full border-0 w-11 items-center p-2 rounded-none justify-center transition-colors duration-150",
           "text-muted-foreground",
@@ -120,13 +122,20 @@ function WindowControls() {
 
 // ── Nav ───────────────────────────────────────────────────────────────────────
 
-const NAV_ITEMS = [
-  { to: "/", label: "发现", icon: Compass, end: true },
-  { to: "/search", label: "搜索", icon: Search, end: false },
-  { to: "/follows", label: "关注", icon: Heart, end: false },
+const NAV_ITEMS: ReadonlyArray<{
+  to: string;
+  labelKey: keyof Dict["nav"];
+  icon: typeof Compass;
+  end: boolean;
+}> = [
+  { to: "/", labelKey: "discover", icon: Compass, end: true },
+  { to: "/search", labelKey: "search", icon: Search, end: false },
+  { to: "/follows", labelKey: "follows", icon: Heart, end: false },
 ];
 
-function NavItem({ to, label, icon: Icon, end }: (typeof NAV_ITEMS)[0]) {
+function NavItem({ to, labelKey, icon: Icon, end }: (typeof NAV_ITEMS)[number]) {
+  const s = useStrings();
+  const label = s.nav[labelKey];
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -165,6 +174,7 @@ function NavItem({ to, label, icon: Icon, end }: (typeof NAV_ITEMS)[0]) {
 // ── ThemeToggle ───────────────────────────────────────────────────────────────
 
 function ThemeToggle() {
+  const s = useStrings();
   const { theme, toggle } = useThemeStore();
   const isDark = theme === "dark";
 
@@ -174,7 +184,7 @@ function ThemeToggle() {
         <button
           type="button"
           onClick={toggle}
-          aria-label={isDark ? "切换为亮色模式" : "切换为暗色模式"}
+          aria-label={isDark ? s.theme.toLight : s.theme.toDark}
           className={cn(
             "relative flex h-7 w-7 items-center justify-center rounded-xs",
             "text-muted-foreground transition-colors duration-150",
@@ -202,7 +212,7 @@ function ThemeToggle() {
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" className="text-xs">
-        {isDark ? "亮色模式" : "暗色模式"}
+        {isDark ? s.theme.light : s.theme.dark}
       </TooltipContent>
     </Tooltip>
   );
@@ -229,6 +239,7 @@ function resolveWidthTier(pathname: string): string {
 }
 
 export function AppShell() {
+  const s = useStrings();
   const location = useLocation();
   const hydratePlatform = usePlatformStore((s) => s.hydratePlatform);
   const syncTheme = useThemeStore((s) => s.syncFromPreference);
@@ -244,6 +255,7 @@ export function AppShell() {
         if (!ok) return;
         hydratePlatform(p.defaultPlatform);
         syncTheme(p.appearance as ThemeMode);
+        useI18nStore.getState().hydrate(p.language);
         setOnboardingDone(p.onboardingDone === true);
       })
       .catch(() => {
@@ -328,7 +340,7 @@ export function AppShell() {
               </TooltipContent>
             </Tooltip>
 
-            <nav className="flex flex-1 flex-col items-center gap-1" aria-label="主导航">
+            <nav className="flex flex-1 flex-col items-center gap-1" aria-label={s.nav.main}>
               {NAV_ITEMS.map((item) => (
                 <NavItem key={item.to} {...item} />
               ))}
@@ -355,7 +367,7 @@ export function AppShell() {
                 </NavLink>
               </TooltipTrigger>
               <TooltipContent side="right" className="text-xs">
-                设置
+                {s.nav.settings}
               </TooltipContent>
             </Tooltip>
           </aside>

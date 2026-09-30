@@ -7,6 +7,7 @@ import { usePlatformStore } from "@/features/platform-switch/model/usePlatformSt
 import { PlatformSwitch } from "@/features/platform-switch/ui/PlatformSwitch";
 import { RoomCard } from "@/features/room-card/ui/RoomCard";
 import { loadPreferences } from "@/shared/api/commands";
+import { useStrings } from "@/shared/i18n";
 import { findScrollParent } from "@/shared/lib/dom";
 import type { AppPreferences } from "@/shared/types/domain";
 import { CardSkeleton } from "@/shared/ui/CardSkeleton";
@@ -23,25 +24,26 @@ function ResumeBanner({
   lastVisited: NonNullable<AppPreferences["lastVisited"]>;
   onDismiss: () => void;
 }) {
+  const s = useStrings();
   if (lastVisited.type !== "room" || !lastVisited.platform || !lastVisited.roomId) return null;
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-accent px-4 py-2">
       <div className="flex items-center gap-2 min-w-0">
         <Play size={12} className="shrink-0 text-accent-foreground" strokeWidth={2.2} />
-        <p className="text-xs text-foreground truncate">上次观看</p>
+        <p className="text-xs text-foreground truncate">{s.discover.lastWatched}</p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <Link
           to={`/player/${lastVisited.platform}/${lastVisited.roomId}`}
           className="text-xs font-medium text-accent-foreground hover:underline underline-offset-2"
         >
-          继续
+          {s.discover.resume}
         </Link>
         <button
           type="button"
           onClick={onDismiss}
           className="flex h-4 w-4 items-center justify-center rounded-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-          aria-label="关闭"
+          aria-label={s.window.close}
         >
           <X size={12} />
         </button>
@@ -51,6 +53,7 @@ function ResumeBanner({
 }
 
 export function DiscoverPage() {
+  const s = useStrings();
   const currentPlatform = usePlatformStore((s) => s.currentPlatform);
   const rooms = useDiscoverStore((s) => s.rooms);
   const isLoading = useDiscoverStore((s) => s.isLoading);
@@ -110,7 +113,7 @@ export function DiscoverPage() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Flame size={16} strokeWidth={1.8} className="text-muted-foreground" />
-          <h1 className="text-base font-semibold tracking-tight">发现</h1>
+          <h1 className="text-base font-semibold tracking-tight">{s.discover.title}</h1>
         </div>
         <PlatformSwitch />
       </div>
@@ -132,9 +135,13 @@ export function DiscoverPage() {
           ))}
         </div>
       ) : error ? (
-        <StatusView title="加载失败" tone="error" hint="请稍后重试" />
+        <StatusView title={s.common.loadFailed} tone="error" hint={s.common.tryLater} />
       ) : isEmpty ? (
-        <EmptyState title="暂无内容" description="可切换平台或稍后刷新" icon={Flame} />
+        <EmptyState
+          title={s.discover.emptyTitle}
+          description={s.discover.emptyDescription}
+          icon={Flame}
+        />
       ) : (
         <>
           <ul className="cards-grid">
@@ -145,7 +152,7 @@ export function DiscoverPage() {
           <div ref={sentinelRef} className="h-1 w-full shrink-0" aria-hidden />
           {hasData && isLoading && <LoadingIndicator />}
           {!hasNextPage && hasData && !isLoading && (
-            <p className="text-center text-xs text-muted-foreground py-4">已加载全部内容</p>
+            <p className="text-center text-xs text-muted-foreground py-4">{s.discover.loadedAll}</p>
           )}
         </>
       )}

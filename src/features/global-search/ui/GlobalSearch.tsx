@@ -2,6 +2,7 @@ import { Clock, Search, X } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { fill, useStrings } from "@/shared/i18n";
 
 // ── Search history (localStorage) ─────────────────────────────────────────────
 const HISTORY_KEY = "streaming_search_history";
@@ -40,6 +41,7 @@ function removeHistoryItem(keyword: string): string[] {
 }
 
 export function GlobalSearch() {
+  const s = useStrings();
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -145,8 +147,8 @@ export function GlobalSearch() {
               if (mountedRef.current) setFocused(false);
             }, 150);
           }}
-          placeholder="搜索直播间…"
-          aria-label="搜索直播间"
+          placeholder={s.globalSearch.placeholder}
+          aria-label={s.globalSearch.label}
           className={cn(
             "min-w-0 w-44 bg-transparent text-sm text-foreground",
             "placeholder:text-subtle-foreground",
@@ -171,7 +173,10 @@ export function GlobalSearch() {
             >
               <Search size={12} className="shrink-0 text-muted-foreground" />
               <span className="flex-1 truncate">
-                搜索 "<span className="font-medium">{value.trim()}</span>"
+                {/* Split rather than fill() so the keyword keeps its emphasis. */}
+                {s.globalSearch.submit.split("{keyword}")[0]}
+                <span className="font-medium">{value.trim()}</span>
+                {s.globalSearch.submit.split("{keyword}")[1]}
               </span>
             </button>
           )}
@@ -182,7 +187,7 @@ export function GlobalSearch() {
               {value.trim() && <div className="my-1 border-t border-border-faint" />}
               <div className="px-3 py-1">
                 <span className="text-xs font-medium text-subtle-foreground uppercase tracking-caps">
-                  搜索历史
+                  {s.globalSearch.history}
                 </span>
               </div>
               {history.map((item) => (
@@ -203,7 +208,7 @@ export function GlobalSearch() {
                   </button>
                   <button
                     type="button"
-                    aria-label={`删除 "${item}"`}
+                    aria-label={fill(s.globalSearch.removeHistory, { keyword: item })}
                     className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-all"
                     onMouseDown={(e) => {
                       e.preventDefault();

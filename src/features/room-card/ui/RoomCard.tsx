@@ -3,7 +3,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { FollowButton } from "@/features/follow-button/ui/FollowButton";
 import { cn } from "@/lib/utils";
-import { PLATFORM_LABEL } from "@/shared/lib/platform";
+import { useStrings } from "@/shared/i18n";
+import { platformLabel } from "@/shared/lib/platform";
 import type { RoomCard as RoomCardModel } from "@/shared/types/domain";
 
 interface RoomCardProps {
@@ -11,6 +12,7 @@ interface RoomCardProps {
 }
 
 export function RoomCard({ room }: RoomCardProps) {
+  const s = useStrings();
   const [imgFailed, setImgFailed] = useState(false);
 
   return (
@@ -40,7 +42,7 @@ export function RoomCard({ room }: RoomCardProps) {
           ) : (
             <div className="h-full w-full bg-muted flex flex-col items-center justify-center gap-1">
               <ImageIcon size={20} strokeWidth={1.2} className="text-disabled-foreground" />
-              <span className="text-xs text-subtle-foreground">暂无封面</span>
+              <span className="text-xs text-subtle-foreground">{s.roomCard.noCover}</span>
             </div>
           )}
 
@@ -53,7 +55,7 @@ export function RoomCard({ room }: RoomCardProps) {
 
           {/* Platform chip */}
           <span className="absolute right-2 top-2 rounded-full bg-media-scrim px-2 py-1 text-xs font-medium text-stage-fg-1 backdrop-blur-sm">
-            {PLATFORM_LABEL[room.platform] ?? room.platform}
+            {platformLabel(room.platform)}
           </span>
 
           {/* Follow button — floats bottom-right of cover */}

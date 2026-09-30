@@ -97,6 +97,7 @@ export const appPreferencesSchema = z.object({
   proxy: z.enum(["none", "system"]).default("none"),
   autoPlayNextReplay: z.boolean().default(true),
   onboardingDone: z.boolean().optional(),
+  language: z.enum(["system", "zh", "en"]).default("system"),
   lastVisited: z
     .object({
       type: z.enum(["discover", "search", "room"]),

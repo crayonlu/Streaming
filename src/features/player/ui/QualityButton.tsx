@@ -1,4 +1,5 @@
 import { Repeat } from "lucide-react";
+import { fill, useStrings } from "@/shared/i18n";
 import type { PlayerQualityItem } from "./VideoPlayer";
 
 interface QualityButtonProps {
@@ -25,12 +26,13 @@ function findNextQuality(items: PlayerQualityItem[], selectedId: string | null |
 }
 
 export function QualityButton({ items, selectedId, onSelect }: QualityButtonProps) {
+  const s = useStrings();
   const selected = items.find((i) => i.id === selectedId);
   const next = findNextQuality(items, selectedId);
-  const label = selected?.label ?? "画质";
+  const label = selected?.label ?? s.player.quality;
   const action = next
-    ? `切换画质：当前 ${label}，下一档 ${next.label}`
-    : `切换画质：当前 ${label}，暂无其他画质`;
+    ? fill(s.player.qualityNext, { current: label, next: next.label })
+    : fill(s.player.qualityOnly, { current: label });
 
   return (
     <button

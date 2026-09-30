@@ -7,6 +7,7 @@ import { SearchPage } from "@/pages/search/SearchPage";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { ErrorBoundary } from "@/shared/ui/ErrorBoundary";
 import { StatusView } from "@/shared/ui/StatusView";
+import { useStrings } from "@/shared/i18n";
 
 const PlayerPage = lazy(() =>
   import("@/pages/player/PlayerPage").then((m) => ({ default: m.PlayerPage })),
@@ -24,6 +25,21 @@ const ReplayPage = lazy(() =>
 function RouteErrorBoundary({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
   return <ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary>;
+}
+
+// The route table is built once at module load, so the copy it needs has to be
+// read inside components rather than at that point.
+function PlayerLoading() {
+  return <StatusView title={useStrings().route.playerLoading} tone="loading" />;
+}
+
+function ReplayLoading() {
+  return <StatusView title={useStrings().route.replayLoading} tone="loading" />;
+}
+
+function NotFound() {
+  const s = useStrings();
+  return <StatusView title={s.route.pageNotFound} hint={s.route.pageNotFoundHint} tone="empty" />;
 }
 
 export const appRouter = createBrowserRouter([
@@ -59,7 +75,7 @@ export const appRouter = createBrowserRouter([
         path: "player/:platform/:roomId",
         element: (
           <RouteErrorBoundary>
-            <Suspense fallback={<StatusView title="播放器加载中" tone="loading" />}>
+            <Suspense fallback={<PlayerLoading />}>
               <PlayerPage />
             </Suspense>
           </RouteErrorBoundary>
@@ -69,7 +85,7 @@ export const appRouter = createBrowserRouter([
         path: "replay/:platform/:roomId",
         element: (
           <RouteErrorBoundary>
-            <Suspense fallback={<StatusView title="录播加载中" tone="loading" />}>
+            <Suspense fallback={<ReplayLoading />}>
               <ReplayPage />
             </Suspense>
           </RouteErrorBoundary>
@@ -85,7 +101,7 @@ export const appRouter = createBrowserRouter([
       },
       {
         path: "*",
-        element: <StatusView title="页面不存在" hint="请检查地址是否正确" tone="empty" />,
+        element: <NotFound />,
       },
     ],
   },

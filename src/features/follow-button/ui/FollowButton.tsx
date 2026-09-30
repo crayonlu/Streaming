@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useFollowStore } from "@/features/follows/model/useFollowStore";
 import { cn } from "@/lib/utils";
 import { toggleFollow } from "@/shared/api/commands";
+import { useStrings } from "@/shared/i18n";
 import type { RoomCard } from "@/shared/types/domain";
 
 interface FollowButtonProps {
@@ -12,6 +13,7 @@ interface FollowButtonProps {
 }
 
 export function FollowButton({ room, compact = false }: FollowButtonProps) {
+  const s = useStrings();
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: (next: boolean) =>
@@ -41,7 +43,7 @@ export function FollowButton({ room, compact = false }: FollowButtonProps) {
           mutation.mutate(!room.followed);
         }}
         disabled={mutation.isPending}
-        aria-label={room.followed ? "取消关注" : "关注"}
+        aria-label={room.followed ? s.follow.unfollow : s.follow.follow}
         className={cn(
           "absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded-full cursor-pointer",
           "transition-all duration-100",
@@ -72,7 +74,7 @@ export function FollowButton({ room, compact = false }: FollowButtonProps) {
         strokeWidth={2}
         className={room.followed ? "fill-accent-foreground" : "fill-none"}
       />
-      {room.followed ? "已关注" : "关注"}
+      {room.followed ? s.follow.following : s.follow.follow}
     </Button>
   );
 }

@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { getReplayProgress, replayProgressKey } from "@/features/replay/model/progress";
 import { cn } from "@/lib/utils";
 import { getReplayList, getReplayParts } from "@/shared/api/commands";
+import { fill, useStrings } from "@/shared/i18n";
 import { fmtDate, fmtDuration } from "@/shared/lib/dom";
 import type { PlatformId, ReplayItem } from "@/shared/types/domain";
 
@@ -84,6 +85,7 @@ function SessionRow({
   onToggle: () => void;
   onPlay: (item: ReplayItem) => void;
 }) {
+  const s = useStrings();
   const hasParts = session.totalParts > 1;
   const progress = !hasParts
     ? getReplayProgress(replayProgressKey(session.platform, session.roomId, session.id))
@@ -141,10 +143,12 @@ function SessionRow({
               </span>
             )}
             {progress?.completed ? (
-              <span className="shrink-0 text-accent-foreground">已看完</span>
+              <span className="shrink-0 text-accent-foreground">{s.replay.watched}</span>
             ) : progress && progress.duration > 0 ? (
               <span className="shrink-0 text-accent-foreground">
-                继续观看 {Math.round((progress.position / progress.duration) * 100)}%
+                {fill(s.replay.continueWatching, {
+                  percent: Math.round((progress.position / progress.duration) * 100),
+                })}
               </span>
             ) : null}
           </div>
@@ -171,7 +175,7 @@ function SessionRow({
         <div className="ml-2 mt-1 mb-1 border-l border-border-faint pl-2">
           {partsLoading ? (
             <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground animate-pulse">
-              加载中…
+              {s.common.loadingDots}
             </div>
           ) : (
             parts?.map((part) => (
@@ -201,6 +205,7 @@ export function ReplayList({
   onPlay: (item: ReplayItem) => void;
   onPartsChange?: (parts: ReplayItem[]) => void;
 }) {
+  const s = useStrings();
   const [expandedShowId, setExpandedShowId] = useState<number | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
@@ -275,14 +280,14 @@ export function ReplayList({
     return (
       <div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center text-muted-foreground">
         <PlayCircle size={32} strokeWidth={1.2} className="opacity-30" />
-        <span className="text-xs text-foreground">无法加载回放</span>
+        <span className="text-xs text-foreground">{s.replay.loadFailed}</span>
         <span className="text-xs leading-relaxed">{msg}</span>
         <button
           type="button"
           onClick={() => void infinite.refetch()}
           className="mt-1 text-xs text-primary hover:underline"
         >
-          重试
+          {s.common.retry}
         </button>
       </div>
     );
@@ -292,7 +297,7 @@ export function ReplayList({
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
         <PlayCircle size={32} strokeWidth={1.2} className="opacity-30" />
-        <span className="text-xs">暂无回放录像</span>
+        <span className="text-xs">{s.replay.empty}</span>
       </div>
     );
   }
@@ -322,7 +327,7 @@ export function ReplayList({
         {infinite.isFetchingNextPage ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse">
             <div className="h-4 w-4 animate-spin rounded-full border border-disabled-foreground border-t-muted-foreground" />
-            加载更多…
+            {s.common.loadMoreDots}
           </div>
         ) : infinite.hasNextPage ? (
           <button
@@ -330,11 +335,11 @@ export function ReplayList({
             onClick={() => void infinite.fetchNextPage()}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
-            加载更多
+            {s.common.loadMore}
           </button>
         ) : sessions.length > PAGE_SIZE ? (
           <span className="text-xs text-subtle-foreground">
-            已加载全部 {sessions.length} 场录播
+            {fill(s.replay.loadedAll, { count: sessions.length })}
           </span>
         ) : null}
       </div>

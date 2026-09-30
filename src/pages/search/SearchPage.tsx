@@ -4,7 +4,9 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { RoomCard } from "@/features/room-card/ui/RoomCard";
 import { useSearchStore } from "@/features/search/model/useSearchStore";
+import { type Dict, fill, useStrings } from "@/shared/i18n";
 import { findScrollParent } from "@/shared/lib/dom";
+import { platformLabel } from "@/shared/lib/platform";
 import type { PlatformId } from "@/shared/types/domain";
 import { CardSkeleton } from "@/shared/ui/CardSkeleton";
 import { EmptyState } from "@/shared/ui/EmptyState";
@@ -13,15 +15,15 @@ import { StatusView } from "@/shared/ui/StatusView";
 
 type SearchScope = "all" | PlatformId;
 
-const SCOPE_OPTIONS: { value: SearchScope; label: string }[] = [
-  { value: "all", label: "全部" },
-  { value: "bilibili", label: "Bilibili" },
-  { value: "douyu", label: "斗鱼" },
-  { value: "huya", label: "虎牙" },
-];
+const SCOPE_OPTIONS: SearchScope[] = ["all", "bilibili", "douyu", "huya"];
+
+function scopeLabel(s: Dict, scope: SearchScope): string {
+  return scope === "all" ? s.search.all : platformLabel(scope);
+}
 const SEARCH_SKELETON_KEYS = Array.from({ length: 8 }, (_, i) => `search-skeleton-${i}`);
 
 export function SearchPage() {
+  const s = useStrings();
   const [params] = useSearchParams();
   const keyword = params.get("q")?.trim() ?? "";
   const scope = (params.get("scope") as SearchScope | null) ?? "all";
@@ -76,17 +78,14 @@ export function SearchPage() {
             <span className="text-foreground font-medium">"{keyword}"</span>
           </p>
           <div className="flex items-center gap-1">
-            {SCOPE_OPTIONS.map((opt) => (
-              <Link
-                key={opt.value}
-                to={`/search?q=${encodeURIComponent(keyword)}&scope=${opt.value}`}
-              >
+            {SCOPE_OPTIONS.map((value) => (
+              <Link key={value} to={`/search?q=${encodeURIComponent(keyword)}&scope=${value}`}>
                 <Button
-                  variant={scope === opt.value ? "muted" : "ghost"}
+                  variant={scope === value ? "muted" : "ghost"}
                   size="sm"
                   className="text-xs h-7 px-3"
                 >
-                  {opt.label}
+                  {scopeLabel(s, value)}
                 </Button>
               </Link>
             ))}
@@ -95,7 +94,7 @@ export function SearchPage() {
       )}
 
       {!keyword ? (
-        <EmptyState title="输入关键词开始搜索" icon={SearchX} />
+        <EmptyState title={s.search.emptyPrompt} icon={SearchX} />
       ) : !hasData && isLoading ? (
         <div className="cards-grid">
           {SEARCH_SKELETON_KEYS.map((key) => (
@@ -103,9 +102,13 @@ export function SearchPage() {
           ))}
         </div>
       ) : error ? (
-        <StatusView title="搜索失败" tone="error" />
+        <StatusView title={s.search.failed} tone="error" />
       ) : isEmpty ? (
-        <EmptyState title={`"${keyword}" 无结果`} description="换个关键词试试" icon={SearchX} />
+        <EmptyState
+          title={fill(s.search.noResults, { keyword })}
+          description={s.search.noResultsHint}
+          icon={SearchX}
+        />
       ) : (
         <>
           <ul className="cards-grid">
@@ -116,7 +119,7 @@ export function SearchPage() {
           <div ref={sentinelRef} className="h-1 w-full shrink-0" aria-hidden />
           {hasData && isLoading && <LoadingIndicator />}
           {!hasNextPage && hasData && !isLoading && (
-            <p className="text-center text-xs text-muted-foreground py-4">已加载全部结果</p>
+            <p className="text-center text-xs text-muted-foreground py-4">{s.search.loadedAll}</p>
           )}
         </>
       )}

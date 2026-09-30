@@ -31,7 +31,8 @@ import {
   getStreamSources,
   recordLastVisited,
 } from "@/shared/api/commands";
-import { isPlatform, PLATFORM_LABEL } from "@/shared/lib/platform";
+import { fill, type Language, useLanguage, useStrings } from "@/shared/i18n";
+import { isPlatform, platformLabel } from "@/shared/lib/platform";
 import { supportsReplay as canReplay } from "@/shared/lib/replay";
 import type { PlatformId, StreamSource } from "@/shared/types/domain";
 import { StatusView } from "@/shared/ui/StatusView";
@@ -40,11 +41,17 @@ import { type ManualSelection, selectionOf, selectStreamSource } from "./selectS
 
 // ── PlayerPage ────────────────────────────────────────────────────────────────
 
-function formatOnline(n: number): string {
-  return n >= 10_000 ? `${(n / 10_000).toFixed(1)}万` : String(n);
+/** Viewer counts are abbreviated with the unit the language actually uses. */
+function formatOnline(n: number, lang: Language): string {
+  if (lang === "zh") return n >= 10_000 ? `${(n / 10_000).toFixed(1)}万` : String(n);
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
 }
 
 export function PlayerPage() {
+  const s = useStrings();
+  const lang = useLanguage();
   const params = useParams();
   const navigate = useNavigate();
   const platform = params.platform;
@@ -252,7 +259,7 @@ export function PlayerPage() {
 
   // ── Early return after all hooks ──────────────────────────────────────────
   if (!validRoute) {
-    return <StatusView title="无效的播放链接" tone="error" />;
+    return <StatusView title={s.route.invalidPlayerLink} tone="error" />;
   }
 
   const isLoading = detailQuery.isLoading || streamQuery.isLoading;
@@ -308,8 +315,8 @@ export function PlayerPage() {
             size="icon-sm"
             onClick={() => navigate(-1)}
             className="shrink-0 -ml-1"
-            aria-label="返回"
-            title="返回"
+            aria-label={s.common.back}
+            title={s.common.back}
           >
             <ArrowLeft size={16} />
           </Button>
@@ -329,7 +336,7 @@ export function PlayerPage() {
                   variant="outline"
                   className="text-xs px-2 py-0 h-4 rounded-xs shrink-0 font-normal"
                 >
-                  {PLATFORM_LABEL[room.platform] ?? room.platform}
+                  {platformLabel(room.platform)}
                 </Badge>
                 {room.areaName && (
                   <>
@@ -340,21 +347,23 @@ export function PlayerPage() {
                 {room.isLoop ? (
                   <>
                     <span className="text-disabled-foreground shrink-0">·</span>
-                    <span className="shrink-0 text-warning">轮播回放</span>
+                    <span className="shrink-0 text-warning">{s.player.carousel}</span>
                   </>
                 ) : room.isLive ? (
                   <>
                     <span className="text-disabled-foreground shrink-0">·</span>
                     <span className="shrink-0 inline-flex items-center gap-1 text-live">
                       <span className="h-2 w-2 rounded-full bg-live animate-pulse" />
-                      直播中
+                      {s.player.live}
                     </span>
                   </>
                 ) : null}
                 {room.isLive && onlineCount != null && (
                   <>
                     <span className="text-disabled-foreground shrink-0">·</span>
-                    <span className="shrink-0">{formatOnline(onlineCount)} 人在看</span>
+                    <span className="shrink-0">
+                      {fill(s.player.viewers, { count: formatOnline(onlineCount, lang) })}
+                    </span>
                   </>
                 )}
               </div>
@@ -380,7 +389,7 @@ export function PlayerPage() {
                 {bilibiliLoginState === "logging-in" ? (
                   <>
                     <div className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
-                    登录中…
+                    {s.player.loggingIn}
                   </>
                 ) : bilibiliLoginState === "logged-in" ? (
                   <>
@@ -400,10 +409,10 @@ export function PlayerPage() {
                         strokeLinejoin="round"
                       />
                     </svg>
-                    已登录
+                    {s.player.loggedIn}
                   </>
                 ) : (
-                  "登录Bilibili"
+                  s.player.loginBilibili
                 )}
               </button>
             )}
@@ -411,7 +420,7 @@ export function PlayerPage() {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                aria-label="查看录播"
+                aria-label={s.player.viewReplay}
                 onClick={() => navigate(`/replay/${platform}/${roomId}`)}
               >
                 <Film size={14} strokeWidth={1.8} />
@@ -448,11 +457,11 @@ export function PlayerPage() {
                 className="gap-2 text-xs"
               >
                 <RefreshCw size={12} />
-                重试
+                {s.common.retry}
               </Button>
               <Button variant="ghost" size="sm" onClick={openExternal} className="gap-2 text-xs">
                 <ExternalLink size={12} />
-                外部打开
+                {s.common.externalOpen}
               </Button>
             </div>
           </div>
@@ -490,7 +499,7 @@ export function PlayerPage() {
                 nowPlaying={room ? { title: room.title, streamer: room.streamerName } : null}
                 recoveryHint={
                   recovery.attempts > 0
-                    ? `播放失败 · 正在重新拉流（第 ${recovery.attempts} 次）`
+                    ? fill(s.player.recoveringAttempt, { attempt: recovery.attempts })
                     : undefined
                 }
                 overlaySlot={
@@ -519,7 +528,7 @@ export function PlayerPage() {
                   {allFailed
                     ? playbackStatus.title
                     : streamQuery.isLoading
-                      ? "获取播放源…"
+                      ? s.player.fetchingSource
                       : playbackStatus.title}
                 </p>
                 {!streamQuery.isLoading && (
@@ -531,7 +540,7 @@ export function PlayerPage() {
                       className="gap-2 text-xs text-stage-fg-2 hover:text-stage-fg-1 hover:bg-stage-surface border-stage-border border"
                     >
                       <RefreshCw size={12} />
-                      重试
+                      {s.common.retry}
                     </Button>
                     <Button
                       variant="ghost"
@@ -540,7 +549,7 @@ export function PlayerPage() {
                       className="gap-2 text-xs text-stage-fg-3 hover:text-stage-fg-2 hover:bg-stage-surface"
                     >
                       <ExternalLink size={12} />
-                      外部打开
+                      {s.common.externalOpen}
                     </Button>
                   </div>
                 )}
@@ -554,7 +563,7 @@ export function PlayerPage() {
           <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-4 py-3">
             <div className="flex items-center gap-3 text-muted-foreground">
               <Film size={16} strokeWidth={1.6} className="shrink-0" />
-              <span className="text-xs">主播当前未开播，可查看历史录播</span>
+              <span className="text-xs">{s.player.offlineHint}</span>
             </div>
             <Button
               variant="outline"
@@ -563,7 +572,7 @@ export function PlayerPage() {
               onClick={() => navigate(`/replay/${platform}/${roomId}`)}
             >
               <Film size={12} />
-              查看录播
+              {s.player.viewReplay}
             </Button>
           </div>
         )}

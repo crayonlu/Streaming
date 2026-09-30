@@ -91,6 +91,10 @@ export interface Category {
   shortName?: string;
 }
 
+/** UI language. "system" follows the OS locale; see shared/i18n/locale.ts. */
+export type Language = "zh" | "en";
+export type LanguagePreference = "system" | Language;
+
 export interface AppPreferences {
   defaultPlatform: PlatformId;
   resumeLastSession: boolean;
@@ -100,6 +104,8 @@ export interface AppPreferences {
   /** Auto-play the next replay part when the current one ends. */
   autoPlayNextReplay?: boolean;
   onboardingDone?: boolean;
+  /** Defaults to "system", i.e. English unless the system locale is Chinese. */
+  language?: LanguagePreference;
   lastVisited?: {
     type: "discover" | "search" | "room";
     platform?: PlatformId;

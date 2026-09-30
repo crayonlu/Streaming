@@ -2,6 +2,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { getCategories } from "@/shared/api/commands";
+import { useStrings } from "@/shared/i18n";
 import type { Category, PlatformId } from "@/shared/types/domain";
 
 const SUB_COLLAPSED_COUNT = 8;
@@ -27,6 +28,7 @@ interface CategoryFilterProps {
 }
 
 export function CategoryFilter({ platform, selection, onSelect }: CategoryFilterProps) {
+  const s = useStrings();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [subExpanded, setSubExpanded] = useState(false);
@@ -131,7 +133,7 @@ export function CategoryFilter({ platform, selection, onSelect }: CategoryFilter
           )}
           aria-pressed={!selectedId}
         >
-          推荐
+          {s.category.featured}
         </button>
         {sortedParents.map((cat) => (
           <button
@@ -175,11 +177,11 @@ export function CategoryFilter({ platform, selection, onSelect }: CategoryFilter
               >
                 {subExpanded ? (
                   <>
-                    收起 <ChevronUp size={12} />
+                    {s.category.collapse} <ChevronUp size={12} />
                   </>
                 ) : (
                   <>
-                    更多 <ChevronDown size={12} />
+                    {s.category.more} <ChevronDown size={12} />
                   </>
                 )}
               </button>

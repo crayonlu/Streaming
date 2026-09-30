@@ -2,7 +2,8 @@ import { useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { loadPreferences, savePreferences } from "@/shared/api/commands";
-import { PLATFORM_LABEL } from "@/shared/lib/platform";
+import { useStrings } from "@/shared/i18n";
+import { platformLabel } from "@/shared/lib/platform";
 import type { PlatformId } from "@/shared/types/domain";
 import appIcon from "../../../../assets/app-icon.png";
 
@@ -12,15 +13,16 @@ interface OnboardingOverlayProps {
 
 const PLATFORMS: PlatformId[] = ["bilibili", "douyu", "huya"];
 
-const PLATFORM_DESC: Record<PlatformId, string> = {
-  bilibili: "游戏 · 虚拟 · 综合",
-  douyu: "游戏 · 体育 · 综艺",
-  huya: "游戏 · 电竞 · 娱乐",
-};
-
 export function OnboardingOverlay({ onDone }: OnboardingOverlayProps) {
+  const s = useStrings();
   const [selected, setSelected] = useState<PlatformId>("bilibili");
   const [saving, setSaving] = useState(false);
+
+  const PLATFORM_DESC: Record<PlatformId, string> = {
+    bilibili: s.onboarding.bilibiliTagline,
+    douyu: s.onboarding.douyuTagline,
+    huya: s.onboarding.huyaTagline,
+  };
 
   const handleStart = useCallback(async () => {
     if (saving) return;
@@ -45,7 +47,7 @@ export function OnboardingOverlay({ onDone }: OnboardingOverlayProps) {
       className="fixed inset-0 z-float flex items-center justify-center bg-overlay backdrop-blur-sm"
       aria-modal="true"
       role="dialog"
-      aria-label="欢迎使用 Streaming"
+      aria-label={s.onboarding.welcome}
     >
       {/* Card */}
       <div className="w-full max-w-96 rounded-md border border-border bg-card shadow-e3  px-8 py-8 flex flex-col gap-6">
@@ -61,10 +63,10 @@ export function OnboardingOverlay({ onDone }: OnboardingOverlayProps) {
           </div>
           <div>
             <h1 className="text-base font-semibold tracking-tight text-foreground">
-              欢迎使用 Streaming
+              {s.onboarding.welcome}
             </h1>
             <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-              一个入口，同时浏览三个平台的直播。
+              {s.onboarding.intro}
             </p>
           </div>
         </div>
@@ -72,7 +74,7 @@ export function OnboardingOverlay({ onDone }: OnboardingOverlayProps) {
         {/* Platform picker */}
         <div className="flex flex-col gap-2">
           <p className="text-xs font-medium text-subtle-foreground uppercase tracking-caps">
-            选择你常看的平台
+            {s.onboarding.pickPlatform}
           </p>
           <div className="flex flex-col gap-2">
             {PLATFORMS.map((p) => (
@@ -89,7 +91,7 @@ export function OnboardingOverlay({ onDone }: OnboardingOverlayProps) {
                     : "border-border-faint bg-transparent text-muted-foreground hover:bg-accent-hover hover:text-foreground hover:border-border",
                 )}
               >
-                <span className="text-md font-medium">{PLATFORM_LABEL[p]}</span>
+                <span className="text-md font-medium">{platformLabel(p)}</span>
                 <span
                   className={cn(
                     "text-xs",
@@ -105,12 +107,12 @@ export function OnboardingOverlay({ onDone }: OnboardingOverlayProps) {
 
         {/* CTA */}
         <Button onClick={() => void handleStart()} disabled={saving} className="w-full h-9 text-md">
-          {saving ? "保存中…" : "开始使用"}
+          {saving ? s.common.saving : s.onboarding.start}
         </Button>
 
         {/* Fine print */}
         <p className="text-center text-xs text-subtle-foreground leading-relaxed -mt-2">
-          支持 Bilibili · 斗鱼 · 虎牙 · 随时可在设置中更改
+          {s.onboarding.footnote}
         </p>
       </div>
     </div>

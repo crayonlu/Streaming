@@ -1,6 +1,7 @@
 import { Radio } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { fill, useStrings } from "@/shared/i18n";
 
 function fmtTime(secs: number): string {
   if (!Number.isFinite(secs) || secs < 0) return "0:00";
@@ -20,6 +21,7 @@ interface PlayerProgressProps {
 }
 
 export function PlayerProgress({ playerRef, isLive, playerReady }: PlayerProgressProps) {
+  const s = useStrings();
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [liveLatency, setLiveLatency] = useState(0);
@@ -121,10 +123,14 @@ export function PlayerProgress({ playerRef, isLive, playerReady }: PlayerProgres
             !behindLive && "opacity-40",
           )}
           aria-label={
-            behindLive ? `落后直播约 ${Math.round(liveLatency)} 秒，点击回到直播` : "回到直播"
+            behindLive
+              ? fill(s.player.behindLive, { seconds: Math.round(liveLatency) })
+              : s.player.backToLive
           }
           title={
-            behindLive ? `落后约 ${Math.round(liveLatency)} 秒，点击拉流回到直播` : "拉流，回到直播"
+            behindLive
+              ? fill(s.player.behindLiveResync, { seconds: Math.round(liveLatency) })
+              : s.player.resyncLive
           }
         >
           <Radio size={12} strokeWidth={2.5} />
@@ -165,7 +171,7 @@ export function PlayerProgress({ playerRef, isLive, playerReady }: PlayerProgres
           seeking.current = false;
         }}
         onChange={handleSeek}
-        aria-label="播放进度"
+        aria-label={s.player.playbackProgress}
         className="vol-slider flex-1"
         style={{
           background: `linear-gradient(90deg, oklch(96% 0.004 250 / 0.75) ${progress}%, oklch(96% 0.004 250 / 0.15) ${progress}%)`,

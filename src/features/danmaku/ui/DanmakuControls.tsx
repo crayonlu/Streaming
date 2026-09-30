@@ -1,6 +1,7 @@
 import { MessageSquareOff } from "lucide-react";
 import { useEffect, useId } from "react";
 import { cn } from "@/lib/utils";
+import { type Dict, fill, useStrings } from "@/shared/i18n";
 import { useDanmakuStore } from "../model/useDanmakuStore";
 
 /**
@@ -18,19 +19,22 @@ import { useDanmakuStore } from "../model/useDanmakuStore";
 
 interface AreaStep {
   area: number;
-  /** Fallback text for tooltips / screen readers. */
-  label: string;
 }
 
-const AREA_STEPS: AreaStep[] = [
-  { area: 0.5, label: "1/2 屏" },
-  { area: 0.75, label: "3/4 屏" },
-  { area: 1, label: "全屏" },
-  { area: 0.25, label: "1/4 屏" },
-];
+const AREA_STEPS: AreaStep[] = [{ area: 0.5 }, { area: 0.75 }, { area: 1 }, { area: 0.25 }];
 
 /** Position after the last ratio: danmaku switched off. */
 const OFF_INDEX = AREA_STEPS.length;
+
+const DEFAULT_AREA = 0.5;
+
+/** Fallback text for tooltips / screen readers. */
+function areaLabel(s: Dict, area: number): string {
+  if (area === 0.25) return s.danmaku.screenQuarter;
+  if (area === 0.5) return s.danmaku.screenHalf;
+  if (area === 0.75) return s.danmaku.screenThreeQuarter;
+  return s.danmaku.screenFull;
+}
 
 /** A screen with its top `fraction` filled — how much of the stage danmaku cover. */
 function AreaIcon({ fraction }: { fraction: number }) {
@@ -59,6 +63,7 @@ function AreaIcon({ fraction }: { fraction: number }) {
 }
 
 export function DanmakuControls() {
+  const s = useStrings();
   const enabled = useDanmakuStore((s) => s.enabled);
   const connectionState = useDanmakuStore((s) => s.connectionState);
   const area = useDanmakuStore((s) => s.area);
@@ -75,12 +80,18 @@ export function DanmakuControls() {
       )
     : OFF_INDEX;
   const nextIndex = (currentIndex + 1) % (OFF_INDEX + 1);
-  const current = AREA_STEPS[currentIndex];
-  const next = AREA_STEPS[nextIndex];
+  const currentArea = AREA_STEPS[currentIndex]?.area ?? DEFAULT_AREA;
+  const nextArea = AREA_STEPS[nextIndex]?.area;
 
   const label = enabled
-    ? `弹幕覆盖 ${current?.label ?? "1/2 屏"}，点击${next ? `切到 ${next.label}` : "关闭弹幕"}`
-    : `弹幕已关闭，点击开启（覆盖 ${AREA_STEPS[0]?.label ?? "1/2 屏"}）`;
+    ? fill(s.danmaku.onHint, {
+        area: areaLabel(s, currentArea),
+        action:
+          nextArea === undefined
+            ? s.danmaku.turnOff
+            : fill(s.danmaku.switchTo, { area: areaLabel(s, nextArea) }),
+      })
+    : fill(s.danmaku.offHint, { area: areaLabel(s, AREA_STEPS[0]?.area ?? DEFAULT_AREA) });
 
   useEffect(() => {
     const toggle = () => {
@@ -112,10 +123,10 @@ export function DanmakuControls() {
         unavailable && "text-stage-warning",
       )}
       aria-label={label}
-      title={`${label}（D 键开关）`}
+      title={fill(s.danmaku.toggleTitle, { area: label })}
     >
       {enabled ? (
-        <AreaIcon fraction={current?.area ?? 0.5} />
+        <AreaIcon fraction={currentArea} />
       ) : (
         <MessageSquareOff size={16} strokeWidth={1.9} />
       )}

@@ -11,6 +11,7 @@ import { ChevronRight, Clock, Eye, Film, PlayCircle } from "lucide-react";
 import { useCallback, useState } from "react";
 import { cn } from "@/lib/utils";
 import { getReplayList, getReplayParts } from "@/shared/api/commands";
+import { useStrings } from "@/shared/i18n";
 import { fmtDate, fmtDuration } from "@/shared/lib/dom";
 import type { PlatformId, ReplayItem } from "@/shared/types/domain";
 
@@ -70,6 +71,7 @@ function SessionRow({
   onToggle,
   onPlay,
 }: SessionRowProps) {
+  const s = useStrings();
   const date = fmtDate(session.recordedAt);
   const hasParts = session.totalParts > 1;
 
@@ -143,7 +145,7 @@ function SessionRow({
           {partsLoading ? (
             <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground animate-pulse">
               <Film size={12} />
-              加载中…
+              {s.common.loadingDots}
             </div>
           ) : (
             parts?.map((part) => (
@@ -166,6 +168,7 @@ interface ReplayPanelProps {
 }
 
 export function ReplayPanel({ platform, roomId, onPlay, activeReplayId }: ReplayPanelProps) {
+  const s = useStrings();
   const [expandedShowId, setExpandedShowId] = useState<number | null>(null);
 
   const listQuery = useQuery({
@@ -215,7 +218,7 @@ export function ReplayPanel({ platform, roomId, onPlay, activeReplayId }: Replay
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-8 text-muted-foreground">
         <PlayCircle size={28} strokeWidth={1.4} className="opacity-30" />
-        <span className="text-xs">暂无回放录像</span>
+        <span className="text-xs">{s.replay.empty}</span>
       </div>
     );
   }

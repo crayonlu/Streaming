@@ -19,6 +19,8 @@ import { useDanmakuStore } from "@/features/danmaku/model/useDanmakuStore";
 import { type ThemeMode, useThemeStore } from "@/features/theme/model/useThemeStore";
 import { cn } from "@/lib/utils";
 import { loadPreferences, savePreferences } from "@/shared/api/commands";
+import { type Dict, type LanguagePreference, useI18nStore, useStrings } from "@/shared/i18n";
+import { platformLabel } from "@/shared/lib/platform";
 import type { AppPreferences, PlatformId, ProxyMode } from "@/shared/types/domain";
 import { StatusView } from "@/shared/ui/StatusView";
 
@@ -90,23 +92,23 @@ function Switch({ checked, onToggle }: { checked: boolean; onToggle: () => void 
 
 const PROXY_OPTIONS: {
   value: ProxyMode;
-  label: string;
-  description: string;
   icon: React.ElementType;
 }[] = [
   {
     value: "none",
-    label: "不代理",
-    description: "直接连接，忽略系统代理设置",
     icon: Network,
   },
   {
     value: "system",
-    label: "系统代理",
-    description: "使用 OS 或环境变量中的代理配置",
     icon: Globe,
   },
 ];
+
+function proxyCopy(s: Dict, value: ProxyMode) {
+  return value === "none"
+    ? { label: s.settings.proxyNone, description: s.settings.proxyNoneHint }
+    : { label: s.settings.proxySystem, description: s.settings.proxySystemHint };
+}
 
 function ProxySelector({
   value,
@@ -115,11 +117,13 @@ function ProxySelector({
   value: ProxyMode;
   onChange: (v: ProxyMode) => void;
 }) {
+  const s = useStrings();
   return (
     <div className="grid grid-cols-2 gap-2 p-1">
       {PROXY_OPTIONS.map((opt) => {
         const Icon = opt.icon;
         const active = value === opt.value;
+        const { label, description } = proxyCopy(s, opt.value);
         return (
           <button
             type="button"
@@ -142,9 +146,9 @@ function ProxySelector({
               {active && <Check size={12} strokeWidth={2.4} className="text-accent-foreground" />}
             </div>
             <p className={cn("text-xs font-medium leading-none", active && "text-foreground")}>
-              {opt.label}
+              {label}
             </p>
-            <p className="text-xs leading-snug text-subtle-foreground">{opt.description}</p>
+            <p className="text-xs leading-snug text-subtle-foreground">{description}</p>
           </button>
         );
       })}
@@ -167,13 +171,18 @@ function createDefault(): AppPreferences {
 
 const APPEARANCE_OPTIONS: {
   value: ThemeMode;
-  label: string;
   icon: React.ElementType;
 }[] = [
-  { value: "system", label: "跟随系统", icon: Monitor },
-  { value: "light", label: "亮色", icon: Sun },
-  { value: "dark", label: "暗色", icon: Moon },
+  { value: "system", icon: Monitor },
+  { value: "light", icon: Sun },
+  { value: "dark", icon: Moon },
 ];
+
+function appearanceLabel(s: Dict, value: ThemeMode): string {
+  if (value === "system") return s.theme.system;
+  if (value === "light") return s.theme.lightOption;
+  return s.theme.darkOption;
+}
 
 function AppearanceSelector({
   value,
@@ -182,6 +191,7 @@ function AppearanceSelector({
   value: ThemeMode;
   onChange: (v: ThemeMode) => void;
 }) {
+  const s = useStrings();
   return (
     <div className="grid grid-cols-3 gap-2 p-1">
       {APPEARANCE_OPTIONS.map((opt) => {
@@ -206,7 +216,7 @@ function AppearanceSelector({
               className={active ? "text-accent-foreground" : "text-muted-foreground"}
             />
             <p className={cn("text-xs font-medium leading-none", active && "text-foreground")}>
-              {opt.label}
+              {appearanceLabel(s, opt.value)}
             </p>
           </button>
         );
@@ -215,9 +225,43 @@ function AppearanceSelector({
   );
 }
 
+const LANGUAGE_OPTIONS: LanguagePreference[] = ["system", "zh", "en"];
+
+function languageLabel(s: Dict, value: LanguagePreference): string {
+  if (value === "system") return s.language.system;
+  if (value === "zh") return s.language.zh;
+  return s.language.en;
+}
+
+function LanguageSelector({
+  value,
+  onChange,
+}: {
+  value: LanguagePreference;
+  onChange: (v: LanguagePreference) => void;
+}) {
+  const s = useStrings();
+  return (
+    <ToggleGroup
+      type="single"
+      value={value}
+      onValueChange={(v) => {
+        if (v === "system" || v === "zh" || v === "en") onChange(v);
+      }}
+    >
+      {LANGUAGE_OPTIONS.map((option) => (
+        <ToggleGroupItem key={option} value={option} className="text-xs h-7 px-3">
+          {languageLabel(s, option)}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  );
+}
+
 // ── SettingsPage ─────────────────────────────────────────────────────────────
 
 export function SettingsPage() {
+  const s = useStrings();
   const [prefs, setPrefs] = useState<AppPreferences>(createDefault);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -256,8 +300,8 @@ export function SettingsPage() {
     };
   }, []);
 
-  if (loading) return <StatusView title="加载中" tone="loading" />;
-  if (error) return <StatusView title="读取失败" tone="error" />;
+  if (loading) return <StatusView title={s.common.loading} tone="loading" />;
+  if (error) return <StatusView title={s.common.readFailed} tone="error" />;
 
   const onSave = async () => {
     setSaving(true);
@@ -284,7 +328,7 @@ export function SettingsPage() {
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Settings2 size={16} strokeWidth={1.8} className="text-muted-foreground" />
-            <h1 className="text-base font-semibold tracking-tight">设置</h1>
+            <h1 className="text-base font-semibold tracking-tight">{s.settings.title}</h1>
           </div>
 
           {/* Save action — top right */}
@@ -292,20 +336,23 @@ export function SettingsPage() {
             {saved && (
               <span className="flex items-center gap-1 text-xs text-muted-foreground animate-in fade-in-0 duration-150">
                 <Check size={12} strokeWidth={2.4} />
-                已保存
+                {s.common.saved}
               </span>
             )}
-            {saveError && <span className="text-xs text-destructive">保存失败，请重试</span>}
+            {saveError && <span className="text-xs text-destructive">{s.common.saveFailed}</span>}
             <Button onClick={onSave} disabled={saving} size="sm" className="h-7 text-xs px-3">
-              {saving ? "保存中…" : "保存"}
+              {saving ? s.common.saving : s.common.save}
             </Button>
           </div>
         </div>
 
         <div>
-          <SectionLabel icon={MessageSquare} label="弹幕" />
+          <SectionLabel icon={MessageSquare} label={s.danmaku.section} />
           <div className="rounded-md bg-card ring-1 ring-border overflow-hidden">
-            <Row label="不透明度" description={`${Math.round(danmakuOpacity * 100)}%`}>
+            <Row
+              label={s.danmaku.opacity}
+              description={`${Math.round(danmakuOpacity * 100)}%`}
+            >
               <input
                 type="range"
                 min={0.2}
@@ -313,11 +360,11 @@ export function SettingsPage() {
                 step={0.05}
                 value={danmakuOpacity}
                 onChange={(e) => setDanmakuOpacity(Number(e.target.value))}
-                aria-label="弹幕不透明度"
+                aria-label={s.danmaku.opacityLabel}
                 className="w-32"
               />
             </Row>
-            <Row label="字号" last>
+            <Row label={s.danmaku.fontSize} last>
               <ToggleGroup
                 type="single"
                 value={danmakuFontSize}
@@ -325,18 +372,18 @@ export function SettingsPage() {
                   if (v === "small" || v === "medium" || v === "large") setDanmakuFontSize(v);
                 }}
               >
-                <ToggleGroupItem value="small">小</ToggleGroupItem>
-                <ToggleGroupItem value="medium">中</ToggleGroupItem>
-                <ToggleGroupItem value="large">大</ToggleGroupItem>
+                <ToggleGroupItem value="small">{s.danmaku.sizeSmall}</ToggleGroupItem>
+                <ToggleGroupItem value="medium">{s.danmaku.sizeMedium}</ToggleGroupItem>
+                <ToggleGroupItem value="large">{s.danmaku.sizeLarge}</ToggleGroupItem>
               </ToggleGroup>
             </Row>
           </div>
         </div>
 
         <div>
-          <SectionLabel icon={Tv2} label="观看偏好" />
+          <SectionLabel icon={Tv2} label={s.settings.viewing} />
           <div className="rounded-md bg-card ring-1 ring-border overflow-hidden">
-            <Row label="默认平台" description="启动时默认浏览的平台">
+            <Row label={s.settings.defaultPlatform} description={s.settings.defaultPlatformHint}>
               <ToggleGroup
                 type="single"
                 value={prefs.defaultPlatform}
@@ -345,18 +392,21 @@ export function SettingsPage() {
                 }}
               >
                 <ToggleGroupItem value="bilibili" className="text-xs h-7 px-3">
-                  Bilibili
+                  {platformLabel("bilibili")}
                 </ToggleGroupItem>
                 <ToggleGroupItem value="douyu" className="text-xs h-7 px-3">
-                  斗鱼
+                  {platformLabel("douyu")}
                 </ToggleGroupItem>
                 <ToggleGroupItem value="huya" className="text-xs h-7 px-3">
-                  虎牙
+                  {platformLabel("huya")}
                 </ToggleGroupItem>
               </ToggleGroup>
             </Row>
 
-            <Row label="恢复上次浏览" description="启动时显示继续上次观看的提示">
+            <Row
+              label={s.settings.resumeLastSession}
+              description={s.settings.resumeLastSessionHint}
+            >
               <Switch
                 checked={prefs.resumeLastSession}
                 onToggle={() =>
@@ -365,7 +415,11 @@ export function SettingsPage() {
               />
             </Row>
 
-            <Row label="回放自动连播" description="一段录像结束后自动播放下一段" last>
+            <Row
+              label={s.settings.autoPlayNextReplay}
+              description={s.settings.autoPlayNextReplayHint}
+              last
+            >
               <Switch
                 checked={prefs.autoPlayNextReplay ?? true}
                 onToggle={() =>
@@ -380,13 +434,11 @@ export function SettingsPage() {
         </div>
 
         <div>
-          <SectionLabel icon={Paintbrush} label="外观" />
+          <SectionLabel icon={Paintbrush} label={s.settings.appearance} />
           <div className="rounded-md bg-card ring-1 ring-border overflow-hidden">
             <div className="px-4 pt-4 pb-1">
-              <p className="text-sm font-medium leading-none">主题模式</p>
-              <p className="mt-1 text-xs text-muted-foreground leading-snug">
-                选择亮色、暗色或跟随系统设置，立即生效。
-              </p>
+              <p className="text-sm font-medium leading-none">{s.theme.mode}</p>
+              <p className="mt-1 text-xs text-muted-foreground leading-snug">{s.theme.modeHint}</p>
             </div>
             <AppearanceSelector
               value={prefs.appearance as ThemeMode}
@@ -396,16 +448,26 @@ export function SettingsPage() {
                 useThemeStore.getState().setMode(v);
               }}
             />
+            <Row label={s.language.label} description={s.language.hint} last>
+              <LanguageSelector
+                value={prefs.language ?? "system"}
+                onChange={(v) => {
+                  setPrefs((p) => ({ ...p, language: v }));
+                  // Live-apply, like the theme selector above.
+                  useI18nStore.getState().setPreference(v);
+                }}
+              />
+            </Row>
           </div>
         </div>
 
         <div>
-          <SectionLabel icon={Monitor} label="网络" />
+          <SectionLabel icon={Monitor} label={s.settings.network} />
           <div className="rounded-md bg-card ring-1 ring-border overflow-hidden">
             <div className="px-4 pt-4 pb-1">
-              <p className="text-sm font-medium leading-none">代理设置</p>
+              <p className="text-sm font-medium leading-none">{s.settings.proxy}</p>
               <p className="mt-1 text-xs text-muted-foreground leading-snug">
-                影响直播封面、搜索等所有后台请求。切换后立即生效，无需重启。
+                {s.settings.proxyHint}
               </p>
             </div>
             <ProxySelector
@@ -416,13 +478,12 @@ export function SettingsPage() {
         </div>
 
         <div>
-          <SectionLabel icon={Film} label="平台能力说明" />
+          <SectionLabel icon={Film} label={s.settings.capabilities} />
           <div className="rounded-md bg-card ring-1 ring-border overflow-hidden">
             <div className="px-4 py-4">
-              <p className="text-sm font-medium leading-none">直播回放</p>
+              <p className="text-sm font-medium leading-none">{s.settings.replayCapability}</p>
               <p className="mt-2 text-xs text-muted-foreground leading-snug">
-                斗鱼支持全量录像；Bilibili
-                官方接口不面向普通观众，暂不支持；虎牙公开视频与直播回放不同，暂不支持。
+                {s.settings.replayCapabilityHint}
               </p>
             </div>
           </div>
@@ -433,7 +494,7 @@ export function SettingsPage() {
         <div className="flex items-center justify-between text-xs text-subtle-foreground">
           <div className="space-y-1">
             <p>Streaming · v{__APP_VERSION__}</p>
-            <p>支持 Bilibili · 斗鱼 · 虎牙</p>
+            <p>{s.settings.supported}</p>
           </div>
           <div className="text-right space-y-1 text-xs">
             <p>Tauri 2 · React 19</p>
